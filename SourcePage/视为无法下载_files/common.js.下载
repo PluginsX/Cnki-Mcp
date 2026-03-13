@@ -1,0 +1,75 @@
+var BaseUrl = {
+    //ecpbeta.cnki.net/bar
+    //bar.cnki.net/bar
+    //saml.oversea.cnki.net/bar
+    //ec.dev.cnki.net/bar
+    //o.oversea.cnki.net/barnew
+    //lss.cnki.net:12995
+    api: '//bar.cnki.net/bar',
+}
+
+ BaseUrl.api = window.location.origin + "/bar";
+
+function QueryString(item) {
+    var reg = new RegExp("(^|&)" + item + "=([^&]*)(&|$)", "i");
+    var r = window.location.search.substr(1).match(reg);
+    if (r != null) {
+        return decodeURIComponent(r[2]);
+    } else {
+        return null;
+    }
+}
+
+function getCookie(cname) {
+    var name = cname + "=";
+    var ca = document.cookie.split(";");
+    for (var i = 0; i < ca.length; i++) {
+        var c = ca[i].trim();
+        if (c.indexOf(name) == 0) {
+            return c.substring(name.length, c.length);
+        }
+    }
+    return null;
+}
+
+(function ($) {
+
+    $.extend({
+
+        backTop: function () {
+            backBtn = $(".back-top");
+            var y = 100;
+            $(window).on("load scroll", function () {//滚动页面时
+                if ($(window).scrollTop() > y) backBtn.show();
+                else backBtn.hide();
+            });
+            backBtn.click(function () {//当点击跳转链接后，回到页面顶部位置
+                $('body,html').animate({ scrollTop: 0 }, 500);
+                return false;
+            });
+        },
+
+        // 版权日期
+        copyRight: function () {
+            var date = new Date;
+            document.getElementById('copyright').innerHTML = "© 1998-" + date.getFullYear() + " 中国知网（CNKI）";
+        },
+
+    });
+})(jQuery);
+
+$(function () {
+    var url = window.location.href;
+    if (url.indexOf("#") < 0) {
+        $("html,body").scrollTop(0).animate({ scrollTop: 0 }); // 每次刷新都回到页面顶部
+    }
+
+    var frameHashStr = window.location.hash;
+    // 功能：返回顶部
+    !frameHashStr && $.backTop();
+
+
+});
+
+
+

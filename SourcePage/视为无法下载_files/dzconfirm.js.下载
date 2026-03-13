@@ -1,0 +1,152 @@
+﻿//#中心网站发布#
+
+var buycardUrl = 'https://icard.cnki.net/kcenter/zk/buy?type=';
+var Ecp_topLoginUrl = 'https://login.cnki.net/TopLoginnew/';
+var memurl = "https://member.cnki.net/";
+var barfreereadadurl = 'https://ad.cnki.net/gadssource/js/barfreereadad.js';
+
+// var Ecp_topLoginUrl = 'http://e.dev.cnki.net/TopLogin/';
+// var buycardUrl = 'http://64230.cnki.net:8195/zscsdoc/zk/buy?type=';
+// var memurl = "http://e.member.cnki.net/";
+// var barfreereadadurl = 'http://10.120.67.112:8091/test/bar/translatea.js';
+
+$(function () {
+	window.addEventListener("message", receiveMessageFromIframePage, false);
+})
+isNull = function (str) {
+	if (typeof (str) === "undefined" || str === null || str === "")
+		return true;
+	else
+		return false;
+};
+
+function receiveMessageFromIframePage(event) {
+	var eo = event.origin.toLowerCase();
+	if (eo !== "https://icard.cnki.net" && eo !== "https://pay.cnki.net" && eo !== "http://local.cnki.net" && eo !== "http://64230.cnki.net:8195" && eo !== "http://e.dev.cnki.net" && eo !== "https://e.dev.cnki.net")
+		return;
+
+	if (!event.data || typeof event.data !== "object") {
+		return;
+	}
+
+
+	if (event.data !== undefined && event.data.data !== undefined && event.data.data.from !== undefined && event.data.data.from === 'dzfw' && event.data.data.code !== undefined) {
+		var vd = event.data.data;
+		ClosePay();
+		if (vd.code === 0) {
+			return;
+		}
+		if (vd.code === 1) {
+			$.messager.alert({ title: '提示', msg: "购卡提交中，请稍后刷新页面查看。" });
+			return;
+		}
+		if (vd.code === 2) {
+			location.reload();
+			return;
+		}
+		if (vd.code === 10) {
+			$.messager.alert({
+				title: '提示', msg: "登录超时,请重新登录。", fn: function () {
+					setTimeout('location.reload();', 3000);
+				}
+			});
+			return;
+		}
+	}
+
+	if (event.data !== undefined && event.data.from !== undefined && event.data.from === 'dzfw' && event.data.code !== undefined) {
+		var vd2 = event.data;
+		if (vd2.plat === "readpacket") {
+			$("#receiveCardIframediv").hide()
+			if (vd2.code === 0) {
+				return;
+			}
+			if (vd2.code === 1) {
+				$.messager.alert({ title: '提示', msg: "阅读包领取中，请稍后刷新页面查看。" });
+				return;
+			}
+			if (vd2.code === 2) {
+				location.reload();
+				return;
+			}
+			if (vd2.code === 10) {
+				$.messager.alert({
+					title: '提示', msg: "登录超时,请重新登录。", fn: function () {
+						setTimeout('location.reload();', 3000);
+					}
+				});
+				return;
+			}
+		}
+	}
+
+	return;
+}
+
+function ClosePay() {
+	$("#buyCardIframediv").hide();
+	$('#buyCardIframe').attr("src", "");
+}
+
+
+
+function reloadlocal() {
+	if (!htmlSign == "") {
+		var url = LocalUrl + 'order?id=' + orderid + '&zmref=' + zmref + '&htmlSign=' + htmlSign;
+	} else {
+		var url = LocalUrl + 'order?id=' + orderid + '&zmref=' + zmref;
+	}
+
+	window.location.href = url + "&tr=" + Math.random();
+}
+
+function swithuser(iswarn) {
+	if (iswarn) {
+		if (!confirm("确认退出当前用户登录新用户？")) {
+			return;
+		}
+	}
+	var url1 = Ecp_topLoginUrl + "api/loginapi/Logout?platform=" + platform;
+	$.ajax({
+		url: url1,
+		dataType: "jsonp",
+		cache: false,
+		async: false,
+		success: function (result) {
+			// 后台跳转登录页
+		},
+		error: function (XMLHttpRequest, textStatus, errorThrown) {
+			$("#Ecp_LoginUid").val(textStatus + ":" + errorThrown);
+		},
+		complete: function (XMLHttpRequest, textStatus) {
+			reloadlocal();
+		}
+	});
+
+}
+
+function devusetemp() {
+
+	var daZhongCheckDto = {
+		tempCardId: TempCardId,
+		cacheID: cacheID,
+		tempuse: 1
+	}
+	$.ajax({
+		url: BaseUrl.api + "/downloadDaZhong/Devusetemp",
+		type: "post",
+		async: false,
+		data: JSON.stringify(daZhongCheckDto),
+		contentType: "application/json",
+		dataType: "json",
+		success: function (result) {
+			if (result.success) {
+				reloadlocal();
+			} else {
+				alert(result.message);
+			}
+		}
+	})
+
+}
+

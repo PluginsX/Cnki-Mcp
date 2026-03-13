@@ -22,6 +22,22 @@ SEARCH_TYPE_NAMES = {
 }
 
 
+class InitState(str, Enum):
+    """浏览器初始化状态枚举"""
+    NOT_STARTED = "not_started"  # 未开始
+    IN_PROGRESS = "in_progress"  # 进行中
+    COMPLETED = "completed"      # 已完成
+    FAILED = "failed"            # 失败
+
+
+class PageState(str, Enum):
+    """页面状态枚举"""
+    HOME = "home"              # 知网首页
+    SEARCH_RESULT = "search"   # 搜索结果页
+    PAPER_DETAIL = "detail"    # 论文详情页
+    UNKNOWN = "unknown"        # 未知页面
+
+
 class CNKIQueryRequest(BaseModel):
     keyword: str = Field(..., description="检索关键词")
     search_type: SearchType = Field(default=SearchType.SU, description="检索类型: SU=主题, TI=篇名, AU=作者, KY=关键词, AB=摘要, FT=全文")
@@ -48,11 +64,26 @@ class CNKIPaper(BaseModel):
     citation_gbt: str = Field(default="", description="GB/T 7714-2015格式引用")
     citation_cnki: str = Field(default="", description="知网研学格式引用")
     citation_endnote: str = Field(default="", description="EndNote格式引用")
-    link: str = Field(default="", description="链接")
+    link: str = Field(default="", description="详情页链接")
+    # 下载相关字段
+    download_url: str = Field(default="", description="搜索列表中的下载链接（bar.cnki.net）")
+    caj_url: str = Field(default="", description="详情页CAJ格式下载链接")
+    pdf_url: str = Field(default="", description="详情页PDF格式下载链接")
+    can_download: bool = Field(default=False, description="是否可下载（有下载链接则为True，实际能否下载取决于用户权限）")
+
+
+class CNKIDownloadResult(BaseModel):
+    """下载结果"""
+    success: bool = Field(default=False, description="是否下载成功")
+    file_path: str = Field(default="", description="下载文件的本地路径")
+    file_name: str = Field(default="", description="文件名")
+    format: str = Field(default="", description="下载格式：pdf 或 caj")
+    message: str = Field(default="", description="结果说明")
 
 
 class CNKIQueryResult(BaseModel):
-    total: int = Field(default=0, description="结果总数")
+    total: int = Field(default=0, description="结果总数（从知网页面获取的真实总数）")
     page_num: int = Field(default=1, description="当前页码")
     page_size: int = Field(default=10, description="每页条数")
-    results: list[CNKIPaper] = Field(default_factory=list, description="论文列表")
+    category_counts: dict[str, int] = Field(default_factory=dict, description="各分类的结果数量（如：学术期刊、学位论文等）")
+    results: list[CNKIPaper] = Field(default_factory=list, description="当前页的论文列表")

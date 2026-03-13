@@ -6,10 +6,11 @@ import atexit
 import sys
 import re
 from typing import Optional
+from threading import Lock
 
 from playwright.sync_api import sync_playwright, Browser, Page, TimeoutError, Playwright
 
-from .models import CNKIQueryRequest, CNKIQueryResult, CNKIPaper, SEARCH_TYPE_NAMES, SearchType
+from .models import CNKIQueryRequest, CNKIQueryResult, CNKIPaper, SEARCH_TYPE_NAMES, SearchType, PageState, InitState
 
 
 def safe_print(msg: str):
@@ -48,6 +49,10 @@ class CNKIBrowser:
 
     _instance: Optional['CNKIBrowser'] = None
     _initialized: bool = False
+    
+    # 类级别的初始化状态管理
+    _init_state: InitState = InitState.NOT_STARTED
+    _init_lock = Lock()  # 线程锁，防止并发初始化
 
     def __new__(cls):
         if cls._instance is None:
@@ -148,64 +153,567 @@ class CNKIBrowser:
         return False
 
     def initialize(self) -> bool:
-        safe_print("\n" + "=" * 60)
-        safe_print("[*] 初始化知网检索服务")
-        safe_print("=" * 60)
-        safe_print("\n    正在启动浏览器...")
+        """初始化浏览器（带锁保护，防止重复初始化）"""
         
-        try:
-            page = self._init_browser()
+        # 快速路径：如果已完成，直接返回
+        if CNKIBrowser._init_state == InitState.COMPLETED and self._ready:
+            return True
+        
+        # 如果正在初始化中，返回 False（让调用者等待）
+        if CNKIBrowser._init_state == InitState.IN_PROGRESS:
+            safe_print("⏳ 初始化正在进行中，请稍候...")
+            return False
+        
+        # 获取锁，防止并发初始化
+        with CNKIBrowser._init_lock:
+            # 双重检查（可能在等待锁期间已完成）
+            if CNKIBrowser._init_state == InitState.COMPLETED and self._ready:
+                return True
             
-            safe_print("    正在打开知网首页...")
-            page.goto(self.BASE_URL, wait_until="networkidle", timeout=60000)
-            self._random_delay(2, 3)
+            if CNKIBrowser._init_state == InitState.IN_PROGRESS:
+                return False
+            
+            # 标记为初始化中
+            CNKIBrowser._init_state = InitState.IN_PROGRESS
+            
+            try:
+                safe_print("\n" + "=" * 60)
+                safe_print("[*] 初始化知网检索服务")
+                safe_print("=" * 60)
+                safe_print("\n    正在启动浏览器...")
+                
+                page = self._init_browser()
+                
+                safe_print("    正在打开知网首页...")
+                page.goto(self.BASE_URL, wait_until="networkidle", timeout=60000)
+                self._random_delay(2, 3)
 
-            max_attempts = 5
-            for attempt in range(max_attempts):
-                if self._check_captcha(page):
-                    safe_print("\n    [!] 检测到安全验证，请完成验证...")
-                    if not self._wait_for_captcha(page):
-                        safe_print("    [X] 初始化失败：验证超时")
-                        return False
-                    self._random_delay(2, 3)
-                    continue
-                
-                try:
-                    search_input = page.locator("input[type='text'], input.search-input, #txt_SearchText, .search-input").first
-                    if search_input and search_input.is_visible(timeout=3000):
-                        safe_print("    [OK] 页面加载成功，检测到搜索框")
-                        break
-                except Exception:
-                    pass
-                
-                if attempt < max_attempts - 1:
-                    safe_print(f"    等待页面加载... ({attempt + 1}/{max_attempts})")
-                    self._random_delay(2, 3)
+                max_attempts = 5
+                for attempt in range(max_attempts):
                     if self._check_captcha(page):
                         safe_print("\n    [!] 检测到安全验证，请完成验证...")
                         if not self._wait_for_captcha(page):
                             safe_print("    [X] 初始化失败：验证超时")
+                            CNKIBrowser._init_state = InitState.FAILED
                             return False
                         self._random_delay(2, 3)
+                        continue
+                    
+                    try:
+                        search_input = page.locator("input[type='text'], input.search-input, #txt_SearchText, .search-input").first
+                        if search_input and search_input.is_visible(timeout=3000):
+                            safe_print("    [OK] 页面加载成功，检测到搜索框")
+                            break
+                    except Exception:
+                        pass
+                    
+                    if attempt < max_attempts - 1:
+                        safe_print(f"    等待页面加载... ({attempt + 1}/{max_attempts})")
+                        self._random_delay(2, 3)
+                        if self._check_captcha(page):
+                            safe_print("\n    [!] 检测到安全验证，请完成验证...")
+                            if not self._wait_for_captcha(page):
+                                safe_print("    [X] 初始化失败：验证超时")
+                                CNKIBrowser._init_state = InitState.FAILED
+                                return False
+                            self._random_delay(2, 3)
 
-            try:
-                page.wait_for_load_state("domcontentloaded", timeout=5000)
-            except Exception:
-                pass
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except Exception:
+                    pass
 
-            self._ready = True
-            safe_print("\n" + "=" * 60)
-            safe_print("[OK] 知网检索服务初始化完成！")
-            safe_print("    浏览器窗口将保持打开，后续查询将复用此会话")
-            safe_print("=" * 60 + "\n")
-            return True
+                self._ready = True
+                CNKIBrowser._init_state = InitState.COMPLETED
+                
+                safe_print("\n" + "=" * 60)
+                safe_print("[OK] 知网检索服务初始化完成！")
+                safe_print("    浏览器窗口将保持打开，后续查询将复用此会话")
+                safe_print("=" * 60 + "\n")
+                return True
 
-        except Exception as e:
-            safe_print(f"    [X] 初始化失败：{str(e)}")
-            return False
+            except Exception as e:
+                safe_print(f"    [X] 初始化失败：{str(e)}")
+                CNKIBrowser._init_state = InitState.FAILED
+                return False
 
     def is_ready(self) -> bool:
         return self._ready and self._page is not None
+
+    # ==================== 状态感知方法 ====================
+    
+    def _get_current_page_type(self) -> PageState:
+        """通过URL判断当前页面类型"""
+        if not self._page:
+            return PageState.UNKNOWN
+        
+        try:
+            url = self._page.url
+            if "kns8s/defaultresult" in url or "kns8s/search" in url:
+                return PageState.SEARCH_RESULT
+            elif "kcms/detail" in url or "kcms2/article" in url:
+                return PageState.PAPER_DETAIL
+            elif "kns.cnki.net" in url and url.count('/') <= 3:
+                return PageState.HOME
+        except Exception:
+            pass
+        
+        return PageState.UNKNOWN
+    
+    def _extract_result_count(self) -> int:
+        """提取搜索结果总数（从知网页面直接获取）"""
+        try:
+            # 方法1: 从 pagerTitleCell 提取 "共找到 671 条结果"
+            elem = self._page.locator("span.pagerTitleCell em").first
+            if elem and elem.is_visible(timeout=2000):
+                text = elem.inner_text().strip()
+                count = int(text.replace(',', ''))
+                safe_print(f"从页面标题获取结果总数: {count}")
+                return count
+        except Exception as e:
+            safe_print(f"方法1失败: {str(e)}")
+        
+        try:
+            # 方法2: 从 pagerTitleCell 的完整文本提取
+            elem = self._page.locator("span.pagerTitleCell").first
+            if elem and elem.is_visible(timeout=2000):
+                text = elem.inner_text()
+                # 提取 "共找到 1,557 条结果" 中的数字
+                match = re.search(r'(\d+(?:,\d+)*)', text)
+                if match:
+                    count = int(match.group(1).replace(',', ''))
+                    safe_print(f"从页面标题文本获取结果总数: {count}")
+                    return count
+        except Exception as e:
+            safe_print(f"方法2失败: {str(e)}")
+        
+        safe_print("警告：无法获取结果总数，返回0")
+        return 0
+    
+    def _extract_category_counts(self) -> dict[str, int]:
+        """提取各分类的结果数量
+        
+        知网页面上数字有两种格式：
+          - 纯数字：如 "7429"
+          - 万为单位：如 "24.98万"、"41.20万"
+        同一 resource 会出现多次（父级 + 子级展开），
+        只保留每个 resource 的第一条（即顶级分类）。
+        
+        Returns:
+            dict: 分类名称 -> 结果数量的映射（去重后，按页面顺序）
+        """
+        category_counts = {}
+        seen_resources = set()
+
+        def parse_count(text: str) -> int:
+            """解析数字，支持 '万' 单位"""
+            text = text.strip().replace(',', '')
+            if not text:
+                return -1  # 空值（如专利），标记为 -1 跳过
+            if '万' in text:
+                # "24.98万" -> 249800
+                num_str = text.replace('万', '').strip()
+                try:
+                    return int(float(num_str) * 10000)
+                except ValueError:
+                    return -1
+            try:
+                return int(text)
+            except ValueError:
+                return -1
+
+        try:
+            all_links = self._page.locator('a[resource][name="classify"]').all()
+            for link in all_links:
+                try:
+                    resource = link.get_attribute("resource") or ""
+                    if not resource or resource in seen_resources:
+                        continue
+                    seen_resources.add(resource)
+
+                    span = link.locator("span").first
+                    em = link.locator("em").first
+
+                    name = span.inner_text(timeout=500).strip() if span else ""
+                    em_text = em.inner_text(timeout=500).strip() if em else ""
+
+                    if not name or not em_text:
+                        continue
+
+                    count = parse_count(em_text)
+                    if count < 0:
+                        continue  # 空值跳过
+
+                    category_counts[name] = count
+                    safe_print(f"  {name}: {count}")
+                except Exception:
+                    continue
+
+        except Exception as e:
+            safe_print(f"提取分类统计失败: {str(e)}")
+
+        return category_counts
+    
+    def _extract_page_info(self) -> tuple[int, int]:
+        """提取当前页码和总页数"""
+        try:
+            # 方法1: 从 span.countPageMark 提取 "1/78"
+            elem = self._page.locator("span.countPageMark").first
+            if elem and elem.is_visible(timeout=2000):
+                text = elem.inner_text()
+                match = re.search(r'(\d+)/(\d+)', text)
+                if match:
+                    return int(match.group(1)), int(match.group(2))
+        except Exception:
+            pass
+        
+        try:
+            # 方法2: 从分页按钮推断 - 当前页用 class="cur"
+            cur_link = self._page.locator("div.pagesnums a.cur[data-curpage]").first
+            if cur_link and cur_link.is_visible(timeout=1000):
+                cur = int(cur_link.get_attribute("data-curpage") or "1")
+                # 总页数取最后一个 data-curpage
+                all_links = self._page.locator("div.pagesnums a[data-curpage]").all()
+                pages = []
+                for lnk in all_links:
+                    try:
+                        val = lnk.get_attribute("data-curpage")
+                        if val:
+                            pages.append(int(val))
+                    except Exception:
+                        pass
+                total = max(pages) if pages else cur
+                return cur, total
+        except Exception:
+            pass
+        
+        return 1, 1
+    
+    def _wait_for_page_loaded(self, timeout: int = 10000) -> bool:
+        """等待搜索结果页加载完成"""
+        try:
+            # 使用 Playwright 原生等待，避免轮询中的 greenlet 问题
+            self._page.wait_for_selector(
+                "span.pagerTitleCell",
+                state="visible",
+                timeout=timeout
+            )
+            self._page.wait_for_selector(
+                "table.result-table-list tbody tr",
+                state="visible",
+                timeout=timeout
+            )
+            return True
+        except Exception:
+            pass
+        
+        # 备用：等待任意结果行出现
+        try:
+            self._page.wait_for_selector(
+                "tbody tr",
+                state="visible",
+                timeout=timeout
+            )
+            return True
+        except Exception:
+            return False
+    
+    def get_page_status(self) -> dict:
+        """获取当前页面完整状态
+        
+        Returns:
+            dict: 页面状态信息
+        """
+        if not self.is_ready():
+            return {"error": "浏览器未初始化"}
+        
+        page_type = self._get_current_page_type()
+        status = {
+            "page_type": page_type.value,
+            "url": self._page.url,
+            "title": self._page.title(),
+            "is_loading": False,
+            "has_error": False,
+        }
+        
+        # 如果是搜索结果页，提取详细信息
+        if page_type == PageState.SEARCH_RESULT:
+            status["result_count"] = self._extract_result_count()
+            current_page, total_pages = self._extract_page_info()
+            status["current_page"] = current_page
+            status["total_pages"] = total_pages
+            
+            # 获取当前每页显示数量
+            status["current_page_size"] = self.get_current_page_size()
+            
+            # 获取分类统计
+            status["category_counts"] = self._extract_category_counts()
+            
+            # 检测当前搜索类型
+            try:
+                sort_default = self._page.locator("div.sort-default span").first
+                if sort_default and sort_default.is_visible(timeout=1000):
+                    status["search_type"] = sort_default.get_attribute("title") or ""
+            except Exception:
+                status["search_type"] = ""
+            
+            # 检测当前筛选条件
+            try:
+                active_filter = self._page.locator("a[resource].active, a[resource].cur").first
+                if active_filter and active_filter.is_visible(timeout=1000):
+                    status["filter_active"] = active_filter.get_attribute("resource") or ""
+                else:
+                    status["filter_active"] = ""
+            except Exception:
+                status["filter_active"] = ""
+        
+        return status
+    
+    # ==================== 导航控制方法 ====================
+    
+    def get_current_page_size(self) -> int:
+        """获取当前每页显示数量
+        
+        Returns:
+            int: 当前每页显示数量（10/20/50），默认10
+        """
+        if self._get_current_page_type() != PageState.SEARCH_RESULT:
+            return 10
+        
+        try:
+            elem = self._page.locator("#perPageDiv .sort-default span").first
+            if elem and elem.is_visible(timeout=2000):
+                text = elem.inner_text().strip()
+                page_size = int(text)
+                if page_size in [10, 20, 50]:
+                    return page_size
+        except Exception:
+            pass
+        
+        return 10  # 默认值
+    
+    def set_page_size(self, page_size: int) -> bool:
+        """设置每页显示数量
+        
+        Args:
+            page_size: 每页显示数量（10/20/50）
+            
+        Returns:
+            bool: 是否设置成功
+        """
+        if page_size not in [10, 20, 50]:
+            safe_print(f"错误：page_size 必须是 10、20 或 50，当前值：{page_size}")
+            return False
+        
+        if self._get_current_page_type() != PageState.SEARCH_RESULT:
+            safe_print("错误：当前不在搜索结果页，无法设置每页显示数量")
+            return False
+        
+        # 检查是否已经是目标值
+        current_size = self.get_current_page_size()
+        if current_size == page_size:
+            safe_print(f"当前已经是每页显示 {page_size} 条，无需修改")
+            return True
+        
+        try:
+            safe_print(f"正在设置每页显示数量：{current_size} → {page_size}...")
+            
+            # 1. 点击下拉菜单
+            dropdown = self._page.locator("#perPageDiv .sort-default").first
+            if not dropdown or not dropdown.is_visible(timeout=2000):
+                safe_print("未找到每页显示数量下拉菜单")
+                return False
+            
+            dropdown.click()
+            self._random_delay(0.5, 1)
+            safe_print("已打开下拉菜单")
+            
+            # 2. 选择对应数量
+            option = self._page.locator(f"#perPageDiv ul.sort-list li[data-val='{page_size}'] a").first
+            if not option or not option.is_visible(timeout=2000):
+                safe_print(f"未找到选项：{page_size}")
+                return False
+            
+            option.click()
+            safe_print(f"已点击选项：{page_size}")
+            self._random_delay(3, 5)
+            
+            # 3. 等待页面重新加载，多次尝试验证
+            if self._wait_for_page_loaded(timeout=15000):
+                # 额外等待确保下拉菜单数值已更新
+                self._random_delay(1, 2)
+                new_size = self.get_current_page_size()
+                if new_size == page_size:
+                    safe_print(f"成功设置每页显示 {page_size} 条")
+                    return True
+                # 再等一次重试
+                self._random_delay(2, 3)
+                new_size = self.get_current_page_size()
+                if new_size == page_size:
+                    safe_print(f"成功设置每页显示 {page_size} 条")
+                    return True
+                # 验证失败但页面已加载，检查实际结果行数作为辅助判断
+                row_count = self._page.locator("tbody tr").count()
+                if row_count > 0:
+                    safe_print(f"页面已加载（{row_count} 行），视为设置成功（当前读取值 {new_size}）")
+                    return True
+                safe_print(f"设置后验证失败：期望 {page_size}，实际 {new_size}")
+                return False
+            else:
+                safe_print("页面加载超时")
+                return False
+            
+        except Exception as e:
+            safe_print(f"设置每页显示数量失败：{str(e)}")
+            return False
+    
+    def next_page(self) -> bool:
+        """跳转到下一页
+        
+        Returns:
+            bool: 是否成功跳转
+        """
+        if self._get_current_page_type() != PageState.SEARCH_RESULT:
+            safe_print("错误：当前不在搜索结果页")
+            return False
+        
+        try:
+            # 获取当前页码
+            current_page, total_pages = self._extract_page_info()
+            safe_print(f"当前页码: {current_page}/{total_pages}")
+            
+            if current_page >= total_pages:
+                safe_print(f"已经是最后一页 ({current_page}/{total_pages})")
+                return False
+            
+            # 查找下一页按钮（真实选择器: #PageNext）
+            next_btn = self._page.locator("#PageNext").first
+            if not next_btn or not next_btn.is_visible(timeout=3000):
+                # 备用：data-curpage 指向下一页的链接
+                next_btn = self._page.locator(f"a[data-curpage='{current_page + 1}']").first
+                if not next_btn or not next_btn.is_visible(timeout=2000):
+                    safe_print("未找到下一页按钮")
+                    return False
+            
+            # 检查按钮是否被禁用
+            btn_class = next_btn.get_attribute("class") or ""
+            if "disabled" in btn_class or "disable" in btn_class:
+                safe_print("下一页按钮已禁用")
+                return False
+            
+            safe_print(f"正在跳转到第 {current_page + 1} 页...")
+            
+            # 点击按钮
+            next_btn.click()
+            safe_print("已点击下一页按钮")
+            
+            # 等待页面开始加载
+            self._random_delay(2, 3)
+            
+            # 等待新页面加载完成（增加超时时间）
+            safe_print("等待页面加载...")
+            if self._wait_for_page_loaded(timeout=20000):
+                # 再次等待确保页码更新
+                self._random_delay(1, 2)
+                
+                new_page, _ = self._extract_page_info()
+                safe_print(f"加载后页码: {new_page}/{total_pages}")
+                
+                if new_page == current_page + 1:
+                    safe_print(f"成功跳转到第 {new_page} 页")
+                    return True
+                elif new_page == current_page:
+                    # 页码未变化，再等一次重试读取
+                    self._random_delay(2, 3)
+                    new_page, _ = self._extract_page_info()
+                    if new_page == current_page + 1:
+                        safe_print(f"成功跳转到第 {new_page} 页")
+                        return True
+                    safe_print(f"警告：页码未变化，可能翻页失败")
+                    return False
+                else:
+                    safe_print(f"警告：页码异常（期望{current_page + 1}，实际{new_page}）")
+                    return False
+            else:
+                safe_print("页面加载超时")
+                return False
+            
+        except Exception as e:
+            safe_print(f"翻页失败：{str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
+    def prev_page(self) -> bool:
+        """跳转到上一页
+        
+        Returns:
+            bool: 是否成功跳转
+        """
+        if self._get_current_page_type() != PageState.SEARCH_RESULT:
+            safe_print("错误：当前不在搜索结果页")
+            return False
+        
+        try:
+            # 获取当前页码
+            current_page, total_pages = self._extract_page_info()
+            safe_print(f"当前页码: {current_page}/{total_pages}")
+            
+            if current_page <= 1:
+                safe_print("已经是第一页")
+                return False
+            
+            # 查找上一页按钮（用 data-curpage 定位前一页）
+            prev_btn = self._page.locator(f"a[data-curpage='{current_page - 1}']").first
+            if not prev_btn or not prev_btn.is_visible(timeout=3000):
+                # 备用：id=PagePrev
+                prev_btn = self._page.locator("#PagePrev").first
+                if not prev_btn or not prev_btn.is_visible(timeout=2000):
+                    safe_print("未找到上一页按钮")
+                    return False
+            
+            # 检查按钮是否被禁用
+            btn_class = prev_btn.get_attribute("class") or ""
+            if "disabled" in btn_class or "disable" in btn_class:
+                safe_print("上一页按钮已禁用")
+                return False
+            
+            safe_print(f"正在跳转到第 {current_page - 1} 页...")
+            
+            # 点击按钮
+            prev_btn.click()
+            safe_print("已点击上一页按钮")
+            
+            # 等待页面开始加载
+            self._random_delay(2, 3)
+            
+            # 等待新页面加载完成（增加超时时间）
+            safe_print("等待页面加载...")
+            if self._wait_for_page_loaded(timeout=20000):
+                # 再次等待确保页码更新
+                self._random_delay(1, 2)
+                
+                new_page, _ = self._extract_page_info()
+                safe_print(f"加载后页码: {new_page}/{total_pages}")
+                
+                if new_page == current_page - 1:
+                    safe_print(f"✓ 成功跳转到第 {new_page} 页")
+                    return True
+                elif new_page == current_page:
+                    safe_print(f"警告：页码未变化，可能翻页失败")
+                    return False
+                else:
+                    safe_print(f"警告：页码异常（期望{current_page - 1}，实际{new_page}）")
+                    return False
+            else:
+                safe_print("页面加载超时")
+                return False
+            
+        except Exception as e:
+            safe_print(f"翻页失败：{str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     def switch_search_type(self, page: Page, search_type: SearchType) -> bool:
         """切换搜索类型
@@ -361,6 +869,15 @@ class CNKIBrowser:
             
             self._random_delay(2, 3)
             
+            # 如果需要设置每页显示数量
+            if request.page_size != self.get_current_page_size():
+                safe_print(f"需要调整每页显示数量为 {request.page_size} 条...")
+                if self.set_page_size(request.page_size):
+                    # 设置成功后，页面已重新加载
+                    self._random_delay(2, 3)
+                else:
+                    safe_print("警告：设置每页显示数量失败，将使用当前设置")
+            
             # 如果需要筛选资源类型
             if request.filter_resource:
                 if self.filter_by_resource(page, request.filter_resource):
@@ -382,17 +899,30 @@ class CNKIBrowser:
                         safe_print("警告：筛选后结果可能未完全加载")
 
             safe_print("正在解析检索结果...")
-            results = self._parse_results(page, request.page_size, request.search_type)
+            # 获取实际的每页显示数量
+            actual_page_size = self.get_current_page_size()
+            
+            # 获取真实的结果总数（从知网页面）
+            total_count = self._extract_result_count()
+            safe_print(f"知网显示结果总数: {total_count}")
+            
+            # 获取分类统计
+            safe_print("获取分类统计:")
+            category_counts = self._extract_category_counts()
+            
+            # 解析当前页的结果
+            results = self._parse_results(page, actual_page_size, request.search_type)
             
             if not results:
                 safe_print("标准解析失败，尝试备用解析方法...")
-                results = self._try_alternative_parse(page, request.page_size)
+                results = self._try_alternative_parse(page, actual_page_size)
 
-            safe_print(f"检索完成，共获取 {len(results)} 条结果\n")
+            safe_print(f"检索完成，总数 {total_count} 条，当前页获取 {len(results)} 条\n")
             return CNKIQueryResult(
-                total=len(results),
+                total=total_count,  # 使用知网的真实总数
                 page_num=request.page_num,
-                page_size=request.page_size,
+                page_size=actual_page_size,
+                category_counts=category_counts,  # 添加分类统计
                 results=results
             )
 
@@ -527,6 +1057,7 @@ class CNKIBrowser:
         publish_time = ""
         abstract = ""
         link = ""
+        download_url = ""
 
         try:
             title_link = item.locator("td.name a, a[href*='kcms'], a[href*='detail'], a.fz14").first
@@ -557,13 +1088,25 @@ class CNKIBrowser:
         except Exception:
             pass
 
+        # 提取搜索结果列表中的下载链接
+        try:
+            dl_btn = item.locator("td.operat a.downloadlink").first
+            if dl_btn:
+                href = dl_btn.get_attribute("href") or ""
+                if "bar.cnki.net" in href or "download" in href:
+                    download_url = href
+        except Exception:
+            pass
+
         return CNKIPaper(
             title=title,
             author=author,
             source=source,
             publish_time=publish_time,
             abstract=abstract,
-            link=link
+            link=link,
+            download_url=download_url,
+            can_download=bool(download_url)
         )
 
     def get_paper_detail(self, paper_url: str) -> Optional[CNKIPaper]:
@@ -611,18 +1154,27 @@ class CNKIBrowser:
         
         try:
             title_selectors = [
-                "h1",
-                ".doc-title h1",
-                ".title h1",
+                ".wx-tit h1",      # 知网详情页主标题容器（最精准）
+                "div.doc h1",
+                "div.main h1",
+                "h1",              # 兜底：遍历所有 h1，取可见且有内容的
             ]
             for selector in title_selectors:
                 try:
-                    elem = page.locator(selector).first
-                    if elem:
-                        text = elem.inner_text(timeout=2000).strip()
-                        if text and len(text) > 5:
-                            paper.title = text
-                            break
+                    elems = page.locator(selector).all()
+                    for elem in elems:
+                        try:
+                            # 只取可见元素，避免拿到隐藏的"自动登录"等干扰项
+                            if not elem.is_visible(timeout=500):
+                                continue
+                            text = elem.inner_text(timeout=2000).strip()
+                            if text and len(text) > 5:
+                                paper.title = text
+                                break
+                        except Exception:
+                            continue
+                    if paper.title:
+                        break
                 except Exception:
                     continue
         except Exception:
@@ -765,6 +1317,29 @@ class CNKIBrowser:
         except Exception:
             pass
         
+        # 提取详情页 CAJ / PDF 下载链接
+        try:
+            caj_elem = page.locator("#cajDown").first
+            if caj_elem:
+                href = caj_elem.get_attribute("href") or ""
+                if href:
+                    paper.caj_url = href
+        except Exception:
+            pass
+        
+        try:
+            pdf_elem = page.locator("#pdfDown").first
+            if pdf_elem:
+                href = pdf_elem.get_attribute("href") or ""
+                if href:
+                    paper.pdf_url = href
+        except Exception:
+            pass
+        
+        # 只要有任意下载链接就标记为可下载
+        if paper.caj_url or paper.pdf_url:
+            paper.can_download = True
+        
         return paper
 
     def _get_citation_formats(self, page: Page, paper: CNKIPaper) -> CNKIPaper:
@@ -839,6 +1414,215 @@ class CNKIBrowser:
             safe_print(f"获取引用格式时出错：{str(e)}")
         
         return paper
+    
+    # ==================== 下载方法 ====================
+
+    def download_paper(
+        self,
+        paper_url: str,
+        fmt: str = "pdf",
+        save_dir: str = ""
+    ) -> "CNKIDownloadResult":
+        """下载论文文件
+
+        策略：
+        1. 先访问详情页，获取 CAJ / PDF 下载链接
+        2. 用 Playwright 监听文件下载事件，点击对应按钮
+        3. 若点击后未触发下载（跳转到付费页面），视为无权限，返回失败
+
+        Args:
+            paper_url: 论文详情页 URL
+            fmt:       下载格式，'pdf' 或 'caj'（默认 pdf）
+            save_dir:  本地保存目录；为空时自动使用用户 Downloads 目录
+
+        Returns:
+            CNKIDownloadResult
+        """
+        from .models import CNKIDownloadResult
+        import os
+
+        if not self.is_ready():
+            if not self.initialize():
+                return CNKIDownloadResult(success=False, message="服务未初始化")
+
+        fmt = fmt.lower().strip()
+        if fmt not in ("pdf", "caj"):
+            fmt = "pdf"
+
+        # save_dir 为空时自动回退到用户 Downloads 目录
+        if not save_dir or not save_dir.strip():
+            save_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            safe_print(f"未指定保存目录，自动使用：{save_dir}")
+        else:
+            save_dir = os.path.expanduser(save_dir.strip())
+
+        page = self._page
+        safe_print(f"\n正在准备下载（{fmt.upper()}）：{paper_url}")
+
+        try:
+            # 1. 访问详情页
+            page.goto(paper_url, wait_until="networkidle", timeout=60000)
+            self._random_delay(2, 3)
+
+            if self._check_captcha(page):
+                if not self._wait_for_captcha(page):
+                    return CNKIDownloadResult(success=False, message="验证码超时")
+
+            # 2. 定位下载按钮
+            btn_id = "#pdfDown" if fmt == "pdf" else "#cajDown"
+            btn = page.locator(btn_id).first
+
+            try:
+                btn_visible = btn.is_visible(timeout=5000)
+            except Exception:
+                btn_visible = False
+
+            if not btn_visible:
+                # 备用：在 .download-btns 里按文本查找
+                try:
+                    btn = page.locator(
+                        f".download-btns a:has-text('{'PDF' if fmt == 'pdf' else 'CAJ'}下载')"
+                    ).first
+                    btn_visible = btn.is_visible(timeout=3000)
+                except Exception:
+                    btn_visible = False
+
+            if not btn_visible:
+                return CNKIDownloadResult(
+                    success=False,
+                    format=fmt,
+                    message=f"未找到 {fmt.upper()} 下载按钮，该文章可能不支持此格式"
+                )
+
+            # 3. 获取下载链接 href，提前判断
+            download_href = btn.get_attribute("href") or ""
+            if not download_href:
+                return CNKIDownloadResult(
+                    success=False, format=fmt, message="下载按钮没有链接"
+                )
+
+            # 4. 用 expect_download 监听文件下载事件
+            safe_print(f"正在点击 {fmt.upper()} 下载按钮...")
+            os.makedirs(save_dir, exist_ok=True)
+
+            try:
+                with page.expect_download(timeout=30000) as dl_info:
+                    btn.click()
+
+                download = dl_info.value
+                suggested = download.suggested_filename or f"paper.{fmt}"
+                save_path = os.path.join(save_dir, suggested)
+                download.save_as(save_path)
+
+                safe_print(f"[OK] 下载成功：{save_path}")
+                return CNKIDownloadResult(
+                    success=True,
+                    file_path=os.path.abspath(save_path),
+                    file_name=suggested,
+                    format=fmt,
+                    message=f"下载成功"
+                )
+
+            except Exception as dl_err:
+                # expect_download 超时 = 没有触发文件下载，说明跳转到了付费页面
+                safe_print(f"未触发文件下载（可能跳转到付费页面）：{str(dl_err)}")
+
+                # 检查当前 URL 是否还在 bar.cnki.net
+                cur_url = page.url
+                safe_print(f"当前页面：{cur_url}")
+
+                if "bar.cnki.net" in cur_url or "download" in cur_url:
+                    msg = "点击后仍在下载域名，但未收到文件，可能网络问题"
+                else:
+                    msg = "无下载权限：点击后跳转到付费页面，请确认账号已登录且有下载权限"
+
+                # 回退到详情页，避免影响后续操作
+                try:
+                    page.go_back(timeout=5000)
+                    self._random_delay(1, 2)
+                except Exception:
+                    pass
+
+                return CNKIDownloadResult(
+                    success=False, format=fmt, message=msg
+                )
+
+        except Exception as e:
+            safe_print(f"下载失败：{str(e)}")
+            import traceback
+            traceback.print_exc()
+            return CNKIDownloadResult(
+                success=False, format=fmt, message=f"下载异常：{str(e)}"
+            )
+
+    # ==================== 批量操作方法 ====================
+    
+    def batch_get_details_across_pages(
+        self,
+        max_count: int = 20,
+        max_pages: int = 5
+    ) -> list[CNKIPaper]:
+        """跨页批量获取论文详情
+        
+        Args:
+            max_count: 最大获取数量
+            max_pages: 最大翻页数
+            
+        Returns:
+            list[CNKIPaper]: 论文详情列表
+        """
+        if self._get_current_page_type() != PageState.SEARCH_RESULT:
+            safe_print("错误：当前不在搜索结果页")
+            return []
+        
+        all_papers = []
+        pages_visited = 0
+        
+        safe_print(f"\n开始批量获取，目标 {max_count} 篇，最多翻 {max_pages} 页")
+        safe_print("=" * 60)
+        
+        while len(all_papers) < max_count and pages_visited < max_pages:
+            # 获取当前页结果
+            current_page, total_pages = self._extract_page_info()
+            safe_print(f"\n[页 {current_page}/{total_pages}] 正在解析...")
+            
+            results = self._parse_results(self._page, page_size=20)
+            safe_print(f"  当前页找到 {len(results)} 条结果")
+            
+            # 获取详情
+            for i, paper in enumerate(results):
+                if len(all_papers) >= max_count:
+                    break
+                
+                if paper.link:
+                    safe_print(f"  [{len(all_papers)+1}/{max_count}] {paper.title[:40]}...")
+                    detail = self.get_paper_detail(paper.link)
+                    if detail:
+                        all_papers.append(detail)
+                    self._random_delay(3, 5)  # 避免请求过快
+            
+            # 检查是否需要翻页
+            if len(all_papers) >= max_count:
+                break
+            
+            pages_visited += 1
+            if pages_visited >= max_pages:
+                break
+            
+            # 翻到下一页
+            if current_page < total_pages:
+                safe_print(f"\n准备翻到下一页...")
+                if not self.next_page():
+                    safe_print("无法翻页，停止批量获取")
+                    break
+            else:
+                safe_print("已到最后一页")
+                break
+        
+        safe_print("\n" + "=" * 60)
+        safe_print(f"批量获取完成！共获取 {len(all_papers)} 篇")
+        safe_print("=" * 60 + "\n")
+        return all_papers
 
     def _cleanup(self):
         if self._browser:
