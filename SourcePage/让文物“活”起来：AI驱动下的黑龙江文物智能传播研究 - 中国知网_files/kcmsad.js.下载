@@ -1,0 +1,743 @@
+var __adContainer__1773351924364 = {
+    _obj: null,
+    _showtype: 1,
+    _name: "",
+    _kw: "",
+    _maga: "",
+    _slide: null,
+    _width: 0,
+    _height: 80,
+    _use_server_width: false,
+    _use_server_heigth: false,
+    _parentElmentId: '',
+    _recommendId: "recommend",
+    _ztCode: '',
+    _writeCssType: '',
+    _rotationIntervalTime: 4,
+    adpotCode: '0502001',
+    adpotSize: 10,
+    zhuantiParamsName: "zt",
+    enableClose: true,
+    currentExposure: 0,
+    maxExposure: 0,
+    maxExposureRound: 1,
+    closeTipXText: '&nbsp;X',
+    _browser: { msie: false, version: 11 },
+    apiUrl: "https://a.cnki.net/spot/",
+    hasloadAD: false,
+    config: function (options) {
+        var that = this;
+        // $(window).scroll(function () {
+        //     try {
+        //         if(that.hasloadAD){
+        //             return false;
+        //         }
+                // var t = 0;
+                // document.documentElement && document.documentElement.scrollTop ? t = document.documentElement.scrollTop: document.body && (t = document.body.scrollTop);
+                // if (t > 2 && !that.hasloadAD) {
+                    that.hasloadAD = true;
+                    if (typeof options == undefined) {
+                        return false;
+                    }
+                    if (options.debuggerflag && options.debuggerflag == 'true') {
+                        debugger
+                    }
+                    if (options.pe && options.pe.length > 0) {
+                        that._parentElmentId = options.pe;
+                    }
+                    if (options.zt && options.zt.length > 0) {
+                        // var currZTCodes = options.zt;
+                        // if (currZTCodes) {
+                        //     that.tpcode = currZTCodes.split(';')[0];
+                        // }
+                        that._ztCode = options.zt;
+                    }
+                    if (options.adpot && options.adpot.length > 0) {
+                        that.adpotCode = options.adpot.split(';')[0];
+                    }
+                    if (options.w && options.w.length > 0) {
+                        if (options.w.length > 1) {
+                            that._width = options.w;
+                        } else if (options.w == "1") {
+                            that._use_server_width = true;
+                        }
+                    }
+                    if (options.h && options.h.length > 0) {
+                        if (options.h.length > 1) {
+                            that._height = options.h;
+                        } else if (options.h == "1") {
+                            that._use_server_heigth = true;
+                        }
+                    }
+                    if (options.s && options.s.length > 0 && !isNaN(parseInt(options.s))) {
+                        var sizeValueNumber = parseInt(options.s);
+                        if (sizeValueNumber < 20) {
+                            that.adpotSize = sizeValueNumber;
+                        }
+                    }
+                    if (options.wcss && options.wcss.length > 0) {
+                        that._writeCssType = options.wcss;
+                    }
+                    var tpkw = "";
+                    if (options.kw && options.kw.length > 0) {
+                        tpkw = options.kw.replace(/(<([^>]+)>)/ig, "").replace(/\ +/g, "").replace(/[\r\n]/g, "");
+                    } else {
+                        //tpkw = $(".row .keywords").text() == undefined ? "" : $(".row .keywords").text();
+                    }
+                    that._kw = decodeURIComponent(tpkw);
+                    if (options.maga && options.maga.length > 0) {
+                        that._maga = options.maga;
+                    }
+                    if (options.name && options.name.length > 0) {
+                        that._name = decodeURIComponent(options.name);
+                    }
+                    if (options.apiurl && options.apiurl.length > 10) {
+                        that.apiUrl = decodeURIComponent(options.apiurl);
+                    }
+                    if (options.enableclose && 'false' == options.enableclose) {
+                        that.enableClose = false;
+                    }
+                    if (options.intertime != undefined && options.intertime != null) {
+                        var intertime = parseInt(options.intertime);
+                        if (!isNaN(intertime)) {
+                            that._rotationIntervalTime = intertime;
+                        }
+                    }
+                    that.parsetIEBrowser();
+                    that.initRecommendId();
+                    that.addcss();
+                    that.intervalLoadAds();
+            //     }
+            // } catch (e) {
+            //     return false;
+            // }
+        // });
+    },
+    RenderAdHtml: function (adsHtml, parentElmentId) {
+        //使用正则，替换多次
+        var reg1 = new RegExp('{#1}', "g");
+        var isUseWrite = true;
+        if (parentElmentId.length > 0) {
+            isUseWrite = false;
+            var parentElment = document.getElementById(parentElmentId);
+            if (parentElment) {
+                $("#" + parentElmentId).append(adsHtml.replace(reg1, '\n'));
+            }
+        }
+        if (isUseWrite) {
+            document.write(adsHtml.replace(reg1, '\n'));
+        }
+    },
+    init: function (obj) {
+        var that = this;
+        if (obj == null || typeof(obj.attr) != 'function') {
+            return false;
+        }
+        var carousel = document.getElementById(obj.attr("id"));
+        if (carousel == null || typeof (carousel.querySelector) != 'function') {
+            return false;
+        }
+        var carouselInner = carousel.querySelector('.carousel-inner');
+        var carouselItems = carousel.querySelectorAll('.carousel-item');
+        if (carouselInner == null || carouselItems == null) {
+            return false;
+        }
+        var prevBtn = carousel.querySelector('.adbutprev-btn');
+        var nextBtn = carousel.querySelector('.adbutnext-btn');
+        var closeBtn = carousel.querySelector('.adbutclose a');
+        var carouselDots = carousel.querySelector('.carousel-dots');
+        var carouselDotItems = [];
+
+        // Initialize carousel
+        var currentSlide = 0;
+        if (that._browser.msie && that._browser.version < 11) {
+            for (var i = 0; i < carouselItems.length; i++) {
+                carouselItems[i].style.width = carousel.style.width;
+            }
+            carouselInner.style.width = carouselItems.length * 100 + '%';
+            carouselInner.style.left = '-' + currentSlide * 100 + '%';
+        }
+        function showSlide(slideIndex) {
+            if (slideIndex < 0) {
+                slideIndex = carouselItems.length - 1;
+            } else if (slideIndex > carouselItems.length - 1) {
+                slideIndex = 0;
+            } else {
+                currentSlide = slideIndex;
+            }
+            currentSlide = slideIndex;
+            if (that._browser.msie && that._browser.version < 11) {
+                carouselInner.style.left = '-' + currentSlide * 100 + '%';
+            } else {
+                carouselInner.style.transform = 'translateX(-' + currentSlide * 100 + '%)';
+            }
+            // update close tip
+            that.resetAdCloseTip(carouselItems[slideIndex].getAttribute("data-tipicon"));
+            // Update active dot
+            for (var i = 0; i < carouselDotItems.length; i++) {
+                carouselDotItems[i].classList.remove("active");
+                if (i === currentSlide) {
+                    carouselDotItems[i].classList.add("active");
+                }
+            }
+            that.WirteShowLog();
+        }
+
+        function nextSlide() {
+            if ($(that._obj).is(':visible')) {
+                showSlide(currentSlide + 1);
+            }
+        }
+
+        // Render dots
+        if (carouselItems.length > 1) {
+            for (var i = 0; i < carouselItems.length; i++) {
+                var dot = document.createElement('span');
+                dot.classList.add('carousel-dot');
+                dot.setAttribute("id", "dot" + i);
+                dot.setAttribute("data-index", + i);
+                dot.addEventListener('click', function () {
+                    var slideIndexTemp = parseInt($(this).attr("data-index"));
+                    showSlide(slideIndexTemp);
+                });
+                carouselDotItems.push(dot);
+                if (carouselDots != null) {
+                    carouselDots.appendChild(dot);
+                }
+            }
+            if(carousel != null){
+                carousel.addEventListener('mouseover', function(){
+                    if(prevBtn != null){
+                        prevBtn.style.display = 'block';
+                    }
+                    if (nextBtn != null) {
+                        nextBtn.style.display = 'block';
+                    }
+                });
+                carousel.addEventListener('mouseout', function(){
+                    if(prevBtn != null){
+                        prevBtn.style.display = 'none';
+                    }
+                    if (nextBtn != null) {
+                        nextBtn.style.display = 'none';
+                    }
+                });
+            }
+        }
+
+        showSlide(currentSlide);
+
+        if (prevBtn != null) {
+            prevBtn.addEventListener('click', function () {
+                showSlide(currentSlide - 1);
+            });
+        }
+        if (nextBtn != null) {
+            nextBtn.addEventListener('click', nextSlide);
+        }
+        // window.addEventListener('resize', function () {
+        // Adjust carousel item dimensions according to screen size
+        // var itemWidth = carousel.offsetWidth;
+        // var itemHeight = carousel.offsetHeight;
+        // carouselItems.forEach(function (item) {
+        //     var media = item.querySelector('img, video');
+        //     if (media) {
+        //         var mediaAspect = media.clientWidth / media.clientHeight;
+        //         var itemAspect = itemWidth / itemHeight;
+        //         if (mediaAspect > itemAspect) {
+        //             media.style.width = '100%';
+        //             media.style.height = 'auto';
+        //         } else {
+        //             media.style.width = 'auto';
+        //             media.style.height = '100%';
+        //         }
+        //     }
+        // });
+        // Go to current slide to refresh carousel layout
+        // showSlide(currentSlide);
+        // });
+
+        // Start autoscroll
+        var intervalTimes = 4000;
+        if (carouselItems.length > 1) {
+            if (that._rotationIntervalTime == 0) {
+            } else {
+                if (that._rotationIntervalTime > 0) {
+                    intervalTimes = that._rotationIntervalTime * 1000;
+                }
+                var intervalId = setInterval(nextSlide, intervalTimes);
+                carousel.addEventListener('mouseenter', function () {
+                    clearInterval(intervalId);
+                });
+                carousel.addEventListener('mouseleave', function () {
+                    intervalId = setInterval(nextSlide, intervalTimes);
+                });
+            }
+        }
+        if (this.enableClose && closeBtn != null) {
+            closeBtn.addEventListener('click', function () {
+                carousel.remove();
+                //测试
+                // adsContainer.cache("ad_close", 1, {
+                //     domain: "cnki.net",
+                //     expires: 1,
+                //     session: 1
+                // })
+            });
+        }
+    },
+    includeCss: function (url) {
+        var head = document.getElementsByTagName("head")[0];
+        var link = document.createElement("link");
+        link.href = url;
+        link.rel = "stylesheet";
+        link.type = "text/css";
+        head.appendChild(link)
+    },
+    includeJs: function (url) {
+        var head = document.getElementsByTagName("head")[0];
+        var script = document.createElement("script");
+        script.src = url;
+        script.type = "text/javascript";
+        head.appendChild(script)
+    },
+    resetAdCloseTip: function (tipicon) {
+        if (tipicon == undefined || $.trim(tipicon).length == 0) {
+            $("#" + this._recommendId + " .adbutclose").hide();
+        } else {
+            $("#" + this._recommendId + " .adbutclose a").html(tipicon + this.closeTipXText);
+            $("#" + this._recommendId + " .adbutclose").show();
+        }
+    },
+    createAdMainItemsContent: function (adlist) {
+        var html = "";
+        if (adlist != null && adlist.length > 0) {
+            if (adlist.length == 1) {
+                html += this.createAdMainItem(adlist[0]);
+            } else {
+                var sortedArr = adlist.slice();
+                if("0302003" != this.adpotCode){
+                    this.randomSort(sortedArr);
+                }
+                for (var i = 0; i < sortedArr.length; i++) {
+                    html += this.createAdMainItem(sortedArr[i]);
+                }
+            }
+        }
+        return html;
+    },
+    createAdMainItem: function (adobj) {
+        var tipicon = '';
+        if (adobj.tipIcon != undefined) {
+            tipicon = $.trim(adobj.tipIcon);
+        }
+        var html = "<div class=\"carousel-item\" data-tipicon=\"" + tipicon + "\">";
+        if (adobj.clickUrl && adobj.clickUrl.length > 5) {
+            html += "<a class=\"but-ad-item-click\" href=\"" + adobj.clickUrl + "\" target=\"_blank\" dataid=\"" + adobj.workerId + "\" datatitle=\"" + adobj.workerId + "\">";
+        } else {
+            html += "<a class=\"but-ad-item-click\" dataid=\"" + adobj.workerId + "\" datatitle=\"" + adobj.workerId + "\">";
+        }
+        html += "<img src=\"" + adobj.fileName + "\" alt=\"" + adobj.workerId + "\" isshowfont=\"0\" >";
+        html += "</a>";
+        html += "</div>";
+        return html;
+    },
+    createAdTotalContent: function (objadList) {
+        if (objadList == null || objadList.length == 0) {
+            return '';
+        }
+        this.maxExposure = objadList.length == 1 ? 1 : objadList.length * this.maxExposureRound;
+        var tipiconText = '';
+        var closeTipStyle = '';
+        if (objadList[0].tipIcon != undefined) {
+            var tipicon = $.trim(objadList[0].tipIcon);
+            if (tipicon.length == 0) {
+                closeTipStyle = "style='display:none;'";
+            } else {
+                tipiconText = tipicon + this.closeTipXText;
+            }
+        } else {
+            tipiconText = "广告" + this.closeTipXText;
+        }
+        var html = "<div id=\"carousel\" class=\"carousel\">";
+        if (this.enableClose) {
+            html += "<div class=\"adbutclose\" " + closeTipStyle + "><a title=\"关闭\">" + tipiconText + "</a><div></div></div>";
+        } else {
+            html += "<div class=\"adbutclose\" " + closeTipStyle + "><a>" + tipiconText + "</a><div></div></div>";
+        }
+        html += "<div class=\"carousel-inner\">";
+        html += this.createAdMainItemsContent(objadList);
+        html += "</div>";
+        html += "<div class=\"carousel-dots\"></div>";
+        html += "<a class=\"adbutprev-btn\"></a>";
+        html += "<a class=\"adbutnext-btn\"></a>";
+        html += "</div>";
+        html += "</div>";
+        return html;
+    },
+    randomSort: function (arr) {
+        for (var i = arr.length - 1; i > 0; i--) {
+            var j = Math.floor(Math.random() * (i + 1));
+            //[arr[i], arr[j]] = [arr[j], arr[i]];
+            var temp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = temp;
+        }
+    },
+    consoleLog: function (msg) {
+        try {
+            console.log(msg);
+        } catch (e) { }
+    },
+    initRecommendId: function () {
+        var timestamp = Date.parse(new Date());
+        var adDivId = "recommend" + timestamp + Math.round(Math.random() * 100000);
+        this._recommendId = adDivId;
+    },
+    intervalLoadAds: function () {
+        if (this._parentElmentId && this._parentElmentId.length > 0) {
+            var that = this
+            var timer = setInterval(function () {
+                var target = document.getElementById(that._parentElmentId)
+                // that.consoleLog(target)
+                if (target) {
+                    clearInterval(timer)
+                    that.loadAds()
+                }
+            }, 1000)
+        } else {
+            this.loadAds()
+        }
+    },
+    parseDefaultUnit: function (value, defaultUnit = 'px') {
+        if (!value && value !== 0) return defaultUnit;
+        const str = String(value).trim();
+        match = str.match(/^[-+]?\d*\.?\d+(px|em|rem|%|vh|vw|pt|cm|mm|in)$/i);
+        return match ? match[1] : defaultUnit;
+    },
+    parseDefaultSize: function (value, defaultUnit = 'px') {
+        if (!value && value !== 0) return null;
+        const str = String(value).trim();
+        return /^-?\d+(\.\d+)?(px|em|rem|%|vh|vw|pt|cm|mm|in)$/i.test(str) ? str : str + defaultUnit;
+    },
+    resetSizeUseData: function (parentObj, data) {
+        var that = this;
+        if (that._use_server_width || that._use_server_heigth) {
+            if (data.data == null || data.data.length == 0) {
+                return;
+            }
+            var firstItem = data.data[0];
+            if (that._use_server_width && firstItem.width && firstItem.width.length > 0) {
+                var widthTemp = that.parseDefaultSize(firstItem.width, 'px');
+                if (widthTemp) {
+                    $(parentObj).css({ "width": widthTemp });
+                }
+            }
+            if (that._use_server_heigth && firstItem.height && firstItem.height.length > 0) {
+                var heightTemp = that.parseDefaultSize(firstItem.height, 'px');
+                if (heightTemp) {
+                    $(parentObj).css({ "height": heightTemp });
+                }
+            }
+        }
+    },
+    setElementSize: function(_obj, _width, _height) {
+        const that = this;
+
+        // 使用 ensureUnit 统一处理宽度和高度
+        const widthWithUnit = that.parseDefaultSize(_width, 'px');
+        const heightWithUnit = that.parseDefaultSize(_height, 'px');
+
+        // 构建样式对象（一次性设置，避免多次 reflow）
+        const styles = {
+            "margin": "2px 0"
+        };
+
+        // 只有当 width 有效时才设置 width；height 始终尝试设置
+        if (widthWithUnit) {
+            styles.width = widthWithUnit;
+        }
+        if (heightWithUnit) {
+            styles.height = heightWithUnit;
+        }
+
+        // 批量设置样式
+        $(_obj).css(styles);
+    },
+    loadAds: function () {
+        var that = this;
+        // var timestamp = Date.parse(new Date());
+        // var adDivId = "recommend" + Math.round(Math.random() * 100000);
+        var adDivId = this._recommendId;
+        this.RenderAdHtml("<div id=\"" + adDivId + "\"></div>", this._parentElmentId);
+        var _obj = $("#" + adDivId, window.parent.document).length == 1 ? $("#" + adDivId, window.parent.document) : $("#" + adDivId);
+        if (_obj && _obj.length == 0) {
+            return;
+        }
+        this._obj = _obj;
+        if (that.cache("ad_close") == 1) {
+            $(_obj).remove();
+            return
+        }
+        that.setElementSize(_obj, this._width, this._height);
+
+        tpcode = this._ztCode;
+        //测试
+        //tpcode = "E055";
+        var that = this;
+
+        $.ajax({
+            url: this.apiUrl + "app/get/ads",
+            type: "GET",
+            // dataType: "jsonp",
+            crossDomain: true,
+            xhrFields: {
+                widthCreate: true,
+            },
+            data: {
+                kw: this._kw,
+                name: this._name,
+                maga: this._maga,
+                size: this.adpotSize,
+                spotcode: this.adpotCode,
+                subject: tpcode
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                $(that._obj).remove()
+            },
+            success: function (data) {
+                //that.consoleLog(data);
+                try {
+                    $(_obj).html("");
+                    if (data.code == undefined || data.code != 1 || data.data == undefined || data.data == null) {
+                        $(that._obj).remove();
+                        return false;
+                    }
+                    var data2 = "";
+                    data2 = that.createAdTotalContent(data.data);
+                    if (!!$.trim(data2)) {
+                        $(_obj).html(data2);
+                        $(_obj).find(".but-ad-item-click").click(function () {
+                            that.WirteClickLog(this);
+                        });
+                        that.resetSizeUseData(_obj, data);
+                        that.init(_obj);
+                        // window.adsContainer.WirteShowLog()
+                    } else {
+                        $(_obj).remove();
+                        //$(_obj).parent().removeClass("hasad");
+                        //$(_obj).empty().hide()
+                    }
+                } catch (e) {
+                    $(_obj).remove();
+                }
+            }
+        })
+    },
+    removeAd: function () {
+        $(this._obj).remove();
+    },
+    close: function (obj) {
+        $(obj).remove();
+        this.cache("ad_close", 1, {
+            domain: "cnki.net",
+            expires: 1,
+            session: 1
+        })
+    },
+    cache: function (name, value, options) {
+        options = options || {};
+        if (value === null) {
+            value = "";
+            options.expires = -1
+        }
+        var expires = "";
+        var date;
+        if (options.expires && (typeof options.expires == "number" || options.expires.toUTCString)) {
+            if (typeof options.expires == "number") {
+                date = new Date();
+                date.setTime(date.getTime() + (options.expires * 60 * 60 * 1000))
+            } else {
+                date = options.expires
+            }
+            expires = "; expires=" + date.toUTCString()
+        }
+        if (window.localStorage || window.sessionStorage) {
+            if (typeof value != "undefined") {
+                if (options.session) {
+                    sessionStorage.setItem(name, value)
+                } else {
+                    if (date) {
+                        var data = {
+                            value: value,
+                            expirse: date
+                        };
+                        localStorage.setItem(name, JSON.stringify(data))
+                    } else {
+                        sessionStorage.setItem(name, value)
+                    }
+                }
+            } else {
+                if (!sessionStorage.getItem(name)) {
+                    var data = JSON.parse(localStorage.getItem(name));
+                    if (data !== null) {
+                        if (data.expirse != null && data.expirse < new Date().getTime()) {
+                            localStorage.removeItem(name)
+                        } else {
+                            return data.value
+                        }
+                    }
+                    return null
+                } else {
+                    return sessionStorage.getItem(name)
+                }
+            }
+        } else {
+            if (typeof value != "undefined") {
+                var path = options.path ? "; path=" + (options.path) : "";
+                var domain = options.domain ? "; domain=" + (options.domain) : "";
+                var secure = options.secure ? "; secure" : "";
+                document.cookie = [name, "=", encodeURIComponent(value), expires, path, domain, secure].join("")
+            } else {
+                var cookieValue = null;
+                if (document.cookie && document.cookie != "") {
+                    var cookies = document.cookie.split(";");
+                    for (var i = 0; i < cookies.length; i++) {
+                        var cookie = jQuery.trim(cookies[i]);
+                        if (cookie.substring(0, name.length + 1) == (name + "=")) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break
+                        }
+                    }
+                }
+                return cookieValue
+            }
+        }
+    },
+    WirteShowLog: function () {
+        if (this.currentExposure > this.maxExposure) {
+            return false;
+        }
+        this.currentExposure++;
+        var ID = "";
+        var childList = $(this._obj).find(".carousel-dots");
+        if (childList.length == 0) {
+            return;
+        }
+        var childListdot = childList.find(".carousel-dot")
+        if (childListdot.length > 0) {
+            if ($(this._obj).find(".carousel-dots span.active").length > 0) {
+                var liID = $(this._obj).find(".carousel-dots span.active").attr("id").replace("dot", "");
+                ID = $(this._obj).find(".carousel-inner .carousel-item:eq(" + (parseInt(liID) - 1) + ") a").attr("dataid")
+            } else {
+                ID = $(this._obj).find(".carousel-inner .carousel-item a").attr("dataid")
+            }
+        }
+        else {
+            ID = $(this._obj).find(".carousel-inner .carousel-item a").attr("dataid")
+        }
+
+        if (!ID) {
+            return
+        }
+        var that = this;
+        var param = JSON.stringify({ "adWorkerId": ID, "fromUrl": window.location.href });
+        //this.consoleLog("WirteShowLog", param);
+        $.ajax({
+            type: "POST",
+            url: this.apiUrl + "app/add/show",
+            // dataType: "JSON",
+            contentType: 'application/json;charset=UTF-8',
+            crossDomain: true,
+            xhrFields: {
+                widthCreate: true,
+            },
+            data: param,
+            success: function (data) {
+                //that.consoleLog(data);
+            }
+        })
+    },
+    WirteClickLog: function (obj) {
+        var ID = $(obj).attr("dataid");
+        if (!ID) {
+            return
+        }
+        var workerId = parseInt(ID);
+        if (isNaN(workerId)) {
+            return
+        }
+        var param = JSON.stringify({ adWorkerId: ID, fromUrl: window.location.href });
+        //this.consoleLog("WirteClickLog", param);
+        var that = this;
+        $.ajax({
+            type: "POST",
+            url: this.apiUrl + "app/add/click",
+            // dataType: "JSON",
+            contentType: 'application/json;charset=UTF-8',
+            crossDomain: true,
+            xhrFields: {
+                widthCreate: true,
+            },
+            data: param,
+            success: function (data) {
+                //that.consoleLog(data);
+            }
+        })
+    },
+    parsetIEBrowser: function () {
+        var browser = { msie: false, version: 11 };
+        var userAgent = navigator.userAgent;
+        var rMsie = /(msie\s|trident.*rv:)([\w.]+)/;
+        var ua = userAgent.toLowerCase();
+        var version = "0";
+        var match = rMsie.exec(ua);
+        if (match != null) {
+            browser.msie = true;
+            version = match[2] || "0";
+            var num = parseInt(version);
+            if (!isNaN(num)) {
+                browser.version = num;
+            }
+        }
+        this._browser = browser;
+    },
+    addcss: function () {
+        try {
+            var newcsstxt = '.recommenda .carousel{position:relative;overflow:hidden;margin:0 auto;height:100%;font-family:Microsoft YaHei;border: 1px solid #F0F0F0;border-radius: 8px;}.recommenda .carousel-inner{display:flex;flex-wrap:nowrap;transition:transform .5s ease-in-out;min-width:0;height:100%;}.recommenda .carousel-item{flex:0 0 100%;overflow:hidden;position:relative;height:100%;max-height:100%;min-width:0;}.recommenda .carousel-item img,.carousel-item video{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;display:inline-block;vertical-align:middle;min-width:0;}.recommenda .adbutprev-btn,.adbutnext-btn{display:none;position:absolute;top:50%;transform:translateY(-50%);border:none;outline:none;width:20px;height:20px;overflow:hidden;cursor:pointer;background-repeat:no-repeat;}.recommenda .adbutprev-btn{left:0;background-position:left top;background-size: 100% 100%;background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAP1BMVEUAAAAAAAAAAAAAAAAAAAD7+/sAAAB2dnYAAAB1dXUAAADd3d3b29sAAAAAAAAAAAC+vr6NjY1YWFgyMjL////JNTcVAAAAFHRSTlNFADQRCPQXaB5pIrm5PCsNl3RdUWPU5GwAAADoSURBVDjLndTbssMgCAXQfYAaj22S3v7/W9s6GakBNdP9vEYSRPB3MBYKx8DrAEoibKEoTcibKpZdKASTRSxkeJnDHkY0kmqY0Ez8hgGdsEKZ0YsUuKAbytD/4f9rVXyDZN3peauOzFA8d66/MsM4dEgZ0tCBMmw7zQeuBxzkDbnntEGor+/uO4Q9fJyeFxea0lORprTggFy1PX2pDbfSNjxhKKMORV+KjpmREzTUHtzJHVw90s+ij6vrZilQi/vXp1Cn3FsVCnurIu6XVJhdx87aWywj+W2RaiRSUUkGy37lEFiRgaO8AA8QBymoZp5bAAAAAElFTkSuQmCC)}.recommenda .adbutnext-btn{right:0;background-position:right top;background-size: 100% 100%;background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAOVBMVEUAAAAAAAAAAAAAAAAAAAB2dnb7+/vc3NwAAAAAAAAAAAAAAAAAAAAAAAC+vr6NjY1ZWVkyMjL///9ubDfCAAAAEnRSTlNFADQRCGjzuRceIjwrDZd0XFH63vgMAAAA1ElEQVQ4y53UWQ6DMAxF0YfttnaATvtfbClFJGSm9/tIiCh5GDpLobApzw0ojrBFJkXIhEPEWSiEpElSyMg1agwNhdwROhSzECoqsYcyopbscEI1WmH8w/dLKnmDBN/lfU0l/aAg7JaTskJDU7oVEpqSVgi05RfO6JCyQEaH5AUq8vKFIK3AZwT7Py0dDnPv8Zw7cNd0sFOX4vjtR87R2Ys7EKpN/nFV3Sj+uXINajgAVnZu8LA2FRaPlI5Zx5nZm1JG8t+Q+sRoV04aYz+zKnvkYWcfQ4MGpY+ppD4AAAAASUVORK5CYII=)}.recommenda .carousel-dots{margin-top:-18px;text-align:center;position:absolute;width:100%;}.recommenda .carousel-dot{display:inline-block;width:7px;height:7px;background-color:#FFFFFF;filter:alpha(opacity=30);-moz-opacity:0.3;-khtml-opacity:0.3;opacity:0.3;border-radius:50%;margin:0 2px;cursor:pointer;}.recommenda .carousel-dot.active{filter:alpha(opacity=100);-moz-opacity:1;-khtml-opacity:1;opacity:1;}.recommenda .carousel .adbutclose{position:absolute;right:0;z-index:50;}.recommenda .carousel .adbutclose a{padding:3px 7px;float:right;color:white;font-size:12px;text-decoration:none;background-color:rgba(0,0,0,.2);cursor:pointer;border-radius:3px;}';
+            if (this._browser.msie && this._browser.version < 11) {
+                newcsstxt = '.recommenda .carousel{position:relative;overflow:hidden;margin:0 auto;height:100%;font-family:Microsoft YaHei;width:100%;border: 1px solid #F0F0F0;border-radius: 8px;}.recommenda .carousel-inner{position:relative;display:flex;flex-wrap:nowrap;transition:left .5s ease-in-out;height:100%;}.recommenda .carousel-item{display:inline-block;overflow:hidden;position:relative;height:100%;}.recommenda .carousel-item img,.carousel-item video{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;display:inline-block;vertical-align:middle;min-width:0;}.recommenda .adbutprev-btn,.adbutnext-btn{display:none;position:absolute;top:50%;transform:translateY(-50%);border:none;outline:none;width:20px;height:20px;overflow:hidden;cursor:pointer;background-repeat:no-repeat;}.recommenda .adbutprev-btn{left:0;background-position:left top;background-size: 100% 100%;background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAP1BMVEUAAAAAAAAAAAAAAAAAAAD7+/sAAAB2dnYAAAB1dXUAAADd3d3b29sAAAAAAAAAAAC+vr6NjY1YWFgyMjL////JNTcVAAAAFHRSTlNFADQRCPQXaB5pIrm5PCsNl3RdUWPU5GwAAADoSURBVDjLndTbssMgCAXQfYAaj22S3v7/W9s6GakBNdP9vEYSRPB3MBYKx8DrAEoibKEoTcibKpZdKASTRSxkeJnDHkY0kmqY0Ez8hgGdsEKZ0YsUuKAbytD/4f9rVXyDZN3peauOzFA8d66/MsM4dEgZ0tCBMmw7zQeuBxzkDbnntEGor+/uO4Q9fJyeFxea0lORprTggFy1PX2pDbfSNjxhKKMORV+KjpmREzTUHtzJHVw90s+ij6vrZilQi/vXp1Cn3FsVCnurIu6XVJhdx87aWywj+W2RaiRSUUkGy37lEFiRgaO8AA8QBymoZp5bAAAAAElFTkSuQmCC)}.recommenda .adbutnext-btn{right:0;background-position:right top;background-size: 100% 100%;background-image:url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAAOVBMVEUAAAAAAAAAAAAAAAAAAAB2dnb7+/vc3NwAAAAAAAAAAAAAAAAAAAAAAAC+vr6NjY1ZWVkyMjL///9ubDfCAAAAEnRSTlNFADQRCGjzuRceIjwrDZd0XFH63vgMAAAA1ElEQVQ4y53UWQ6DMAxF0YfttnaATvtfbClFJGSm9/tIiCh5GDpLobApzw0ojrBFJkXIhEPEWSiEpElSyMg1agwNhdwROhSzECoqsYcyopbscEI1WmH8w/dLKnmDBN/lfU0l/aAg7JaTskJDU7oVEpqSVgi05RfO6JCyQEaH5AUq8vKFIK3AZwT7Py0dDnPv8Zw7cNd0sFOX4vjtR87R2Ys7EKpN/nFV3Sj+uXINajgAVnZu8LA2FRaPlI5Zx5nZm1JG8t+Q+sRoV04aYz+zKnvkYWcfQ4MGpY+ppD4AAAAASUVORK5CYII=)}.recommenda .carousel-dots{margin-top:-18px;text-align:center;position:absolute;width:100%;}.recommenda .carousel-dot{display:inline-block;width:7px;height:7px;background-color:#FFFFFF;filter:alpha(opacity=30);-moz-opacity:0.3;-khtml-opacity:0.3;opacity:0.3;border-radius:50%;margin:0 2px;cursor:pointer;}.recommenda .carousel-dot.active{filter:alpha(opacity=100);-moz-opacity:1;-khtml-opacity:1;opacity:1;}.recommenda .carousel .adbutclose{position:absolute;right:0;z-index:50;}.recommenda .carousel .adbutclose a{padding:3px 7px;float:right;color:white;font-size:12px;text-decoration:none;background-color:rgba(0,0,0,.2);cursor:pointer;border-radius:3px;}';
+            }
+            var reg1 = new RegExp('.recommenda', "g")
+            newcsstxt = newcsstxt.replace(reg1, '#' + this._recommendId);
+            this._writeCssType = "1";
+            if (this._writeCssType == "1") {
+                //创建 style
+                var hm = document.createElement("style");
+                hm.innerHTML = newcsstxt;
+                if (document.getElementsByTagName("style").length > 0) {
+                    var s = document.getElementsByTagName("style")[0];
+                    s.parentNode.insertBefore(hm, s);
+                } else {
+                    document.head.appendChild(hm);
+                }
+            } else {
+                //write css
+                var newcss = '<style type="text/css">' + newcsstxt + '</style>';
+                document.writeln(newcss);
+            }
+        } catch (e) { }
+    }
+};
+!(function WriteADs() {
+    try {
+        var options = { adpot: '0302003', w: '100%', h: '157', zt: 'F097;I141;', s: '10', wcss: '', pe: 'recommend', kw: '视听', maga: 'SHIT', name: '', apiurl: '', debuggerflag: '', intertime:'' };
+        if (options.debuggerflag && options.debuggerflag == 'true') {
+            debugger
+        }
+        jQuery.support.cors = true;
+        __adContainer__1773351924364.config(options);
+    } catch (e) {
+        __adContainer__1773351924364.consoleLog(e);
+    }
+})();

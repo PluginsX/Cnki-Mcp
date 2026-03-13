@@ -1,0 +1,551 @@
+// top.js  toplogin2
+var showFlag = false;
+var showPersonalLoginFlag = false;
+var isAutoLogin = false;
+var p = 0;
+
+var username, pwd, ecpPhone, ecpCode;
+$(".ecp_personalLoginBox").hide();
+$(".ecp_unit_LoginBox").hide();
+// $(".ecp_unit_autoLogin ").prop("checked",true);
+// $(".ecp_checkedutoLogin").prop("checked",true);
+// 登录状态 0 未登录,1 机构已登录, 2 个人已登录,3 个人机构登录,
+
+function Ecp_LoginHeard_state(Ecp_LoginUsers, bkUserName) {
+  if (Ecp_LoginUsers == 0) {
+    $("#Ecp_top_logout_layer").hide();
+    $(".ecp_personalLoginBox").hide();
+    $(".ecp_unit_LoginoutBox").hide();
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $(".ecp_unit_LoginBox").hide();
+    $(".ecp_header_personalName_loginbg").hide();
+    $(".ecp_header_personal_loginbg").css("display", "inline-block");
+    $(".ecp_header_personal_loginbg").show();
+    $(".ecp_header_unit_loginbg").css("display", "inline-block");
+    $(".ecp_header_unit_loginbg").show();
+    $(".ecp_header_unit_loginIcon").hide();
+    $(".ecp_header_unitName").hide();
+  } else if (Ecp_LoginUsers == 1) {
+    ecp_unitLoginSuccess(bkUserName);
+  } else if (Ecp_LoginUsers == 2) {
+    ecp_personalLoginSuccess();
+  } else if (Ecp_LoginUsers == 3) {
+    ecp_unitLoginSuccess(bkUserName);
+    ecp_personalLoginSuccess();
+  }
+}
+
+function showPersonalLogin(e) {
+  getUserLoginStatus();
+  if (p != 0) {
+    var tempShowFlag = showPersonalLoginFlag;
+    FlushLogin();
+    showPersonalLoginFlag = tempShowFlag;
+  }
+  if (
+    [1, 3].indexOf(p) == -1 &&
+    $(".ecp_header_personalName_loginbg").is(":visible")
+  ) {
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $("#Ecp_top_logout_layer").hide();
+    $(".ecp_header_personalName_loginbg").hide();
+    $(".ecp_header_personal_loginbg").css("display", "inline-block");
+    $(".ecp_header_personal_loginbg").show();
+  }
+  if (p == 0) {
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $("#Ecp_top_logout_layer").hide();
+    $(".ecp_header_personalName_loginbg").hide();
+    $(".ecp_header_personal_loginbg").css("display", "inline-block");
+    $(".ecp_header_personal_loginbg").show();
+    $(".ecp_unit_LoginoutBox").hide();
+    $(".ecp_header_unit_loginbg").css("display", "inline-block");
+    $(".ecp_header_unit_loginbg").show();
+    $(".ecp_header_unit_loginIcon").hide();
+    $(".ecp_header_unit_loginbg").show();
+    $(".ecp_header_unitName").hide();
+  }
+  // if($(".ecp_personalLoginBox").is(":visible") || $("#Ecp_top_logout_layer").is(":visible") || $(".ecp_mycnki_LoginoutBox").is(":visible")) {
+  //   showPersonalLoginFlag = true
+  // }
+  isPersonalOrUnitSlide = 0;
+  $(".ecp_loginErrMsg").text("");
+  //   $(".ecp_passWord").val("");
+  //e.stopPropagation();
+  if (!showPersonalLoginFlag) {
+    if (
+      (Ecp_LoginUsers == 2 || Ecp_LoginUsers == 3) &&
+      cookie("Ecp_LoginStuts")
+    ) {
+      // 会员弹窗,需配置
+      if (ecp_showmember == 1) {
+        // 获取会员信息
+        getMemberInfo(cookie("LID"));
+        // $("#Ecp_top_logout_layer").show();
+        // $(".ecp_mycnki_LoginoutBox").hide();
+      } else {
+        $(".ecp_mycnki_LoginoutBox").show();
+        $("#Ecp_top_logout_layer").hide();
+      }
+    } else {
+      $(".ecp_personalLoginBox").show();
+      $(".ecp_userName").focus();
+    }
+    $(".ecp_unit_LoginBox").hide();
+    $(".ecp_unit_LoginoutBox").hide();
+    showPersonalLoginFlag = true;
+    showFlag = false;
+  } else {
+    $(".ecp_personalLoginBox").hide();
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $("#Ecp_top_logout_layer").hide();
+    showPersonalLoginFlag = false;
+    showFlag = false;
+  }
+}
+
+function showUnitLogin(e) {
+  getUserLoginStatus();
+  // 只有点击的情况下才同步状态  刘雨露有个页面直接调用了showUnitLogin方法  导致出现了死循环
+  if (e) {
+    if (p != 0) {
+      var tempShowFlag = showFlag;
+      FlushLogin();
+      showFlag = tempShowFlag;
+    }
+  }
+  if (
+    [2, 3].indexOf(p) == -1 &&
+    $(".ecp_header_unit_loginIcon ").hasClass("ecp_unit_loginCss")
+  ) {
+    $(".ecp_unit_LoginoutBox").hide();
+    $(".ecp_header_unit_loginIcon").removeClass("ecp_unit_loginCss");
+    $(".ecp_header_unit_loginIcon").hide();
+    $(".ecp_header_unitName").hide();
+    $(".ecp_header_unit_loginbg").show();
+    // $(".ecp_header_unit_loginIcon").attr("title",'')
+  }
+  if (p == 0) {
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $("#Ecp_top_logout_layer").hide();
+    $(".ecp_header_personalName_loginbg").hide();
+    $(".ecp_header_personal_loginbg").css("display", "inline-block");
+    $(".ecp_header_personal_loginbg").show();
+    $(".ecp_unit_LoginoutBox").hide();
+    $(".ecp_header_unit_loginbg").css("display", "inline-block");
+    $(".ecp_header_unit_loginbg").show();
+    $(".ecp_header_unit_loginIcon").hide();
+    $(".ecp_header_unitName").hide();
+  }
+  isPersonalOrUnitSlide = 1;
+  $(".ecp_loginErrMsg").text("");
+  //   $(".ecp_unitPassWord").val("");
+  //e.stopPropagation();
+  if (!showFlag) {
+    if (
+      (Ecp_LoginUsers == 1 || Ecp_LoginUsers == 3) &&
+      cookie("Ecp_LoginStuts")
+    ) {
+      // 如果个人也登录的情况下  机构下拉名称变成不可点击状态
+      var loginStatus = JSON.parse(cookie("Ecp_LoginStuts"));
+      if (loginStatus.UserType === "jf") {
+        $(".ecp_unitAccountName").css("cursor", "default");
+      } else {
+        $(".ecp_unitAccountName").css("cursor", "pointer");
+      }
+      $(".ecp_unit_LoginoutBox").show();
+    } else {
+      $(".ecp_unit_LoginBox").show();
+      $(".ecp_unitName").focus();
+    }
+    $(".ecp_personalLoginBox").hide();
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $("#Ecp_top_logout_layer").hide();
+    showFlag = true;
+    showPersonalLoginFlag = false;
+  } else {
+    $(".ecp_unit_LoginBox").hide();
+    $(".ecp_unit_LoginoutBox").hide();
+    $(".ecp_personalLoginBox").hide();
+    showFlag = false;
+    showPersonalLoginFlag = false;
+  }
+}
+
+clicktoclose();
+function clicktoclose() {
+  var ename = ".ecp_unit_LoginBox";
+  // start
+  var ename2 = ".ecp_personalLoginBox";
+  // end
+  $(document).on("click", function (e) {
+    var conss;
+    var cc;
+    var isin = false;
+    for (var i = 0; i < clickUnCloseLoginNames.length; i++) {
+      conss = $(clickUnCloseLoginNames[i]);
+      if (conss.length > 0) {
+        cc = !conss.is(e.target) && conss.has(e.target).length === 0;
+        if (!cc) {
+          isin = true;
+          break;
+        }
+      }
+    }
+    if (!isin) {
+      $(ename).hide();
+      $(ename2).hide();
+      $(".ecp_unit_LoginoutBox").hide();
+      $(".ecp_mycnki_LoginoutBox").hide();
+      $("#Ecp_top_logout_layer").hide();
+      showFlag = false;
+      showPersonalLoginFlag = false;
+    }
+  });
+}
+function Ecp_eventStop(event) {
+  event.stopPropagation();
+}
+
+function Ecp_Mycnki_Link() {
+  window.open(Ecp_MycnkiUrl + "/index.html#/", "_blank");
+}
+function Ecp_Equity_Link() {
+  window.open("https://au.cnki.net/author/workbench/homePage", "_blank");
+}
+function linkToGetResults() {
+  window.open(
+    "https://au.cnki.net/author/workbench/myAchievement?platform=cnkicard",
+    "_blank"
+  );
+}
+function linkToCnkiNumber() {
+  window.open("https://wenku.cnki.net/reader/guide/introduce", "_blank");
+}
+
+function linkToAiHome(params) {
+  if (aiNotOpenPosition == 1 && params == 1) {
+    window.open("https://aiplus.cnki.net/", "_blank");
+  } else if (aiNotOpenPosition == 2 && params == 2) {
+    window.open("https://aiplus.cnki.net/", "_blank");
+  } else {
+    return false;
+  }
+}
+
+// 个人登录成功
+function ecp_personalLoginSuccess() {
+  $("#agreement").prop("checked", false);
+  // $(".ecp_checkedutoLogin").prop("checked", false);
+  // $(".ecp_userName").val("");
+  // $(".ecp_passWord").val("");
+  $(".ecp_header_personal_loginbg").hide();
+  $(".ecp_personalLoginBox").hide();
+  $(".ecp_unit_LoginBox").hide();
+  $("#Ecp_top_logout_layer").hide();
+  $(".ecp_header_personalName_loginbg").show();
+  showPersonalLoginFlag = false;
+  showFlag = false;
+}
+// 机构登录成功
+function ecp_unitLoginSuccess(bkUserName) {
+  $("#agreementUnit").prop("checked", false);
+  // $(".ecp_unit_autoLogin").prop("checked", false);
+  // $(".ecp_unitName").val("");
+  // $(".ecp_unitPassWord").val("");
+  $(".ecp_header_unit_loginIcon").show();
+  $(".ecp_header_unit_loginbg").hide();
+  $(".ecp_header_unit_loginIcon").addClass("ecp_unit_loginCss");
+  $(".ecp_header_unitName").css("display", "inline-block");
+  $(".ecp_header_unitName").show();
+  // $(".ecp_header_unit_loginIcon").attr("title",bkUserName)
+  $(".ecp_unit_LoginBox").hide();
+  $(".ecp_personalLoginBox").hide();
+  showFlag = false;
+  showPersonalLoginFlag = false;
+}
+// 个人登录
+function ECP_PersonalLogin() {
+  $(".ecp_loginErrMsg").hide();
+  // $(".ecp-phone-tip").hdie();
+  $(".ecp_userNameBox").removeClass("ecp-input-error-tip")
+  $(".ecp_passwordBox").removeClass("ecp-input-error-tip")
+  ecpLoginType = 2;
+  $(".ecp-error-text").hide();
+  username = $.trim($(".ecp_userName").val());
+  pwd = aes256Encrypt($.trim($(".ecp_passWord").val()));
+  isAutoLogin = $(".ecp_checkedutoLogin").is(":checked");
+  if (!username) {
+    $(".ecp_userNameBox").addClass("ecp-input-error-tip");
+    $(".ecp-account-error").show();
+    $(".account-error-text").text("请输入用户名");
+  } else if (!$.trim($(".ecp_passWord").val())) {
+    $(".ecp-password-error").show();
+    $(".ecp_passwordBox").addClass("ecp-input-error-tip");
+    $(".password-error-text").text("请输入密码");
+  } else if (!$("#agreement").is(":checked")) {
+    $("#ecp-agreement-wrap").show();
+    window.parentLoginHandle = ECP_PersonalLogin;
+    return;
+  } else {
+    getUserLoginStatus();
+    Ecp_UserLogin(username, pwd, isAutoLogin, p, 1);
+  }
+}
+
+function ECP_PhoneLogin() {
+  $(".ecp_phoneBox").removeClass("ecp-input-error-tip")
+  $(".ecp_codeBox").removeClass("ecp-input-error-tip")
+  $(".ecp_loginErrMsg").hide();
+  // $(".ecp-phone-tip").show();
+  var regx = /^[1][3-9][0-9]{9}$/;
+  $(".ecp-error-text").hide();
+  ecpPhone = $.trim($(".ecp_phone").val());
+  ecpCode = $.trim($(".ecp_code").val());
+  isAutoLogin = $(".ecp_checkedutoLogin").is(":checked");
+  if (!ecpPhone) {
+    $(".ecp_phoneBox").addClass("ecp-input-error-tip");
+    $(".ecp-phone-error").show();
+    $(".phone-error-text").text("请输入手机号码");
+  } else if (!regx.test(ecpPhone)) {
+    $(".ecp_phoneBox").addClass("ecp-input-error-tip");
+    $(".ecp-phone-error").show();
+    $(".phone-error-text").text("请填写正确的手机号码");
+  } else if (!ecpCode) {
+    $(".ecp_codeBox").addClass("ecp-input-error-tip");
+    $(".ecp-code-error").show();
+    $(".code-error-text").text("请输入验证码");
+  } else if (!$("#agreementSms").is(":checked")) {
+    $("#ecp-agreement-wrap").show();
+    window.parentLoginHandle = ECP_PhoneLogin;
+    return;
+  } else {
+    // if(!window.nc_requestId) {
+    //   $(".ecp_codeBox").addClass("ecp-input-error-tip");
+    //   $(".ecp-code-error").show();
+    //   $(".code-error-text").text("请发送验证码");
+    //   captcha.show();
+    //   return
+    // }
+    getUserLoginStatus();
+    var signUrl =
+      Ecp_topLoginUrl1 +
+      "api/Register/CreateOrLogin?mobile=" +
+      ecpPhone +
+      "&phoneCode=" +
+      ecpCode +
+      "&requestID=" + "" + 
+      "&loginType=" +
+      p;
+    var param = {
+      mobile: ecpPhone,
+      phoneCode: ecpCode,
+      requestID: "",
+      loginType: p,
+    };
+    if (typeof Ecp_platform !== "undefined" && !isNull2(Ecp_platform)) {
+      param.platform = Ecp_platform;
+      signUrl += "&platform=" + Ecp_platform;
+    }
+    createSign(signUrl);
+    $.ajax({
+      url: Ecp_topLoginUrl1 + "api/Register/CreateOrLogin",
+      data: JSON.stringify(param),
+      type: "POST",
+      cache: false,
+      xhrFields: {
+        withCredentials: true,
+      },
+      contentType: "application/json",
+      success: function (result) {
+          Ecp_LoginSuccessOne(p, result, 3, true,true);
+      },
+      error: function (XMLHttpRequest, textStatus, errorThrown) {},
+      complete: function (XMLHttpRequest, textStatus) {
+        $("#Ecp_TextBoxPwd").val("");
+      },
+    });
+    // Ecp_UserLogin(ecpPhone, ecpCode, isAutoLogin, p, 1);
+  }
+}
+// 机构登录
+function ECP_UnitLOgin() {
+  $(".ecp_unit_userNameBox").removeClass("ecp-input-error-tip")
+  $(".ecp_unit_passwordBox").removeClass("ecp-input-error-tip")
+  ecpLoginType = 1;
+  $(".ecp-error-text").hide();
+  username = $.trim($(".ecp_unitName").val());
+  pwd = aes256Encrypt($.trim($(".ecp_unitPassWord").val()));
+  isAutoLogin = $(".ecp_checkedutoLogin1").is(":checked");
+  if (!username) {
+    $(".ecp_unit_userNameBox").addClass("ecp-input-error-tip");
+    $(".ecp-unit-account-error").show();
+    $(".unit-account-error-text").text("请输入机构名");
+  } else if (!$.trim($(".ecp_unitPassWord").val())) {
+    $(".ecp_unit_passwordBox").addClass("ecp-input-error-tip");
+    $(".ecp-unit-pwd-error").show();
+    $(".unit-pwd-error-text").text("请输入密码");
+  } else if (!$("#agreementUnit").is(":checked")) {
+    $("#ecp-agreement-wrap").show();
+    window.parentLoginHandle = ECP_UnitLOgin;
+    return;
+  } else {
+    getUserLoginStatus();
+    Ecp_UserLogin(username, pwd, isAutoLogin, p, 2);
+  }
+}
+
+// ip登录
+function Ecp_AutoIPLogin() {
+  ecpLoginType = 4;
+  isAutoLogin = $(".ecp_checkedutoLogin1").is(":checked");
+  forceLogin = true;
+  Ecp_IpLogin(forceLogin, isAutoLogin);
+}
+function Ecp_loginOut_showState(p) {
+  showFlag = false;
+  showPersonalLoginFlag = false;
+  getUserLoginStatus();
+  Ecp_LogoutOptr_my(p);
+}
+
+function Ecp_loginFalse(msg) {
+  $(".ecp_loginErrMsg").show();
+  $(".ecp_loginErrMsg").text(msg);
+  $("#Ecp_top_login_oversea").hide();
+}
+function Ecp_loginSuccess(jfUserName, bkUserName, isMember, memberinfo) {
+  // if (jfUserName) {
+  //   $("#vipUserName").text(jfUserName);
+  //   $(".tn-topmenulist").css("background", "none");
+  //   // 1是会员
+  //   if (isMember == 1) {
+  //     if (memberinfo[0] == "已过期") {
+  //       // 已过期
+  //       $(".vip-expired").css("display", "inline-block");
+  //     } else {
+  //       // 未过期
+  //       $(".vip-types").children().remove();
+  //       $(".vip-noOverdue").css("display", "inline-block");
+  //       for (var i = 0; i < memberinfo.length; i++) {
+  //         var txt =
+  //           "<div class='vip-type clearfix'><div class='vip-name'>" +
+  //           memberinfo[i].Le +
+  //           "</div><div class='vip-deadline'>有效期至<span>" +
+  //           memberinfo[i].ET +
+  //           "</span></div>";
+  //         $(".vip-types").append(txt);
+  //       }
+  //     }
+  //   } else {
+  //     // 未开通
+  //     $(".vip-notOpen").css("display", "inline-block");
+  //   }
+  // }
+  if (jfUserName && bkUserName) {
+    $(".ecp_header_personalName").text(jfUserName);
+    $(".ecp_header_personalName").attr("title", jfUserName);
+    $(".ecp_header_unitName").text(bkUserName);
+    $(".ecp_header_unitName").attr("title", bkUserName);
+    $(".ecp_unitAccountName").text(bkUserName);
+    $(".ecp_unitAccountName").attr("title", bkUserName);
+    Ecp_LoginHeard_state(3, bkUserName);
+    return;
+  }
+  if (jfUserName) {
+    $(".ecp_header_personalName").text(jfUserName);
+    $(".ecp_header_personalName").attr("title", jfUserName);
+    Ecp_LoginHeard_state(2);
+  }
+  if (bkUserName) {
+    $(".ecp_unitAccountName").text(bkUserName);
+    $(".ecp_unitAccountName").attr("title", bkUserName);
+    $(".ecp_header_unitName").text(bkUserName);
+    $(".ecp_header_unitName").attr("title", bkUserName);
+    Ecp_LoginHeard_state(1, bkUserName);
+  }
+}
+
+function getUserLoginStatus() {
+  if (cookie("Ecp_LoginStuts")) {
+    var loginStatus = JSON.parse(cookie("Ecp_LoginStuts"));
+    if (loginStatus.UserType === "jf") {
+      p = 1;
+      if (loginStatus.BUserType === "bk") {
+        p = 3;
+      }
+    } else {
+      p = 2;
+    }
+  } else {
+    p = 0;
+  }
+}
+
+$(".ecp_passWord").bind("keydown", function (e) {
+  //兼容浏览器的事件
+  var theEvent = e || window.event;
+  //兼容各浏览器的键盘事件
+  var keyCode = theEvent.keyCode || theEvent.which || theEvent.charCode;
+  if (keyCode == 13) {
+    ECP_PersonalLogin();
+  }
+});
+
+$(".ecp_unitPassWord").bind("keydown", function (e) {
+  //兼容浏览器的事件
+  var theEvent = e || window.event;
+  //兼容各浏览器的键盘事件
+  var keyCode = theEvent.keyCode || theEvent.which || theEvent.charCode;
+  if (keyCode == 13) {
+    ECP_UnitLOgin();
+  }
+});
+
+function linkToUseAgreement() {
+  window.open(
+    "https://my.cnki.net/cnkiAgreement/cnkiUseAgreement.html",
+    "_blank"
+  );
+}
+function linkToPrivacyAgreement() {
+  window.open(
+    "https://my.cnki.net/cnkiAgreement/cnkiPrivacyAgreement.html",
+    "_blank"
+  );
+}
+function showUnitTip() {
+  getUserLoginStatus();
+  if (p == 2 || p == 3) {
+    // $(".ecp_unit_LoginoutBox").show();
+    // showFlag = true;
+  } else {
+    $(".ecp_header_unit_loginIcon").addClass("ecp_unit_mouseover");
+    $(".ecp_unit_loginIcon_tip").css("visibility", "unset");
+  }
+}
+function removeUnitTip() {
+  getUserLoginStatus();
+  if (p == 2 || p == 3) {
+    // $(".ecp_unit_LoginoutBox").hide();
+    // showFlag = false;
+  } else {
+    $(".ecp_header_unit_loginIcon").removeClass("ecp_unit_mouseover");
+    $(".ecp_unit_loginIcon_tip").css("visibility", "hidden");
+  }
+}
+
+function showPersonalTip() {
+  $(".ecp_header_personal_loginbg").addClass("ecp_personal_mouseover");
+}
+
+function removePersonalTip() {
+  $(".ecp_header_personal_loginbg").removeClass("ecp_personal_mouseover");
+}
+function showUnitTip() {
+  $(".ecp_header_unit_loginbg").addClass("ecp_personal_mouseover");
+}
+
+function removeUnitTip() {
+  $(".ecp_header_unit_loginbg").removeClass("ecp_personal_mouseover");
+}

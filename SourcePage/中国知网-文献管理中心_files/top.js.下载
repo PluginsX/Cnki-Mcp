@@ -1,0 +1,609 @@
+//#中心网站发布#
+var Ecp_CookieSecure = true;
+var Ecp_realNameUrl = "//my.cnki.net/Certification/RealNameCertificationPopup.aspx";
+var Ecp_accountMoveCent = "https://my.cnki.net/accountMove/notice.html";
+var Ecp_accountMoveCento = "https://o.oversea.cnki.net/accountMove/notice.html";
+var Ecp_topLoginUrl = "https://login.cnki.net/TopLoginCore/";
+var Ecp_topLoginUrl1 = "https://login.cnki.net/TopLoginCore/";
+var Ecp_staticSource = "//login.cnki.net/tlogin/";
+// var Ecp_topLoginUrl = "https://ecpbeta.cnki.net/TopLoginCore/";
+// var Ecp_topLoginUrl1 = "https://ecpbeta.cnki.net/TopLoginCore/";
+// var Ecp_staticSource = "//ecpbeta.cnki.net/tlogin/";
+var Ecp_agreementUrl = "https://login.cnki.net/toploginnew"
+var Ecp_MycnkiUrl = "https://my.cnki.net/mycnki"
+
+// local e.dev
+// var Ecp_CookieSecure = false;
+// var Ecp_realNameUrl =
+//   "//e.dev.cnki.net/Certification/RealNameCertificationPopup.aspx";
+// var Ecp_accountMoveCent = "//e.dev.cnki.net/accountMove/notice.html";
+// var Ecp_accountMoveCento = "//e.dev.cnki.net/accountMove/notice.html";
+// var Ecp_topLoginUrl = "http://ec.dev.cnki.net/TopLogin/";
+// var Ecp_topLoginUrl1 = "http://ec.dev.cnki.net/TopLoginCore/";
+// var Ecp_staticSource = "//e.dev.cnki.net/tlogin/";
+// // var Ecp_staticSource = "/";
+// var Ecp_agreementUrl = "http://e.dev.cnki.net/toplogin";
+// var Ecp_MycnkiUrl = "http://e.dev.cnki.net/mycnki";
+
+// 记录Ip的请求地址
+var recodeIpUrl = "";
+var Ecp_PageStyle = "header";
+var Ecp_Style = "1";
+var Ecp_CookieDomain = "cnki.net";
+var Ecp_isAuotIpLogin;
+var Ecp_ArgueDic = new Object();
+var Ecp_platform;
+var AppendUID;
+var lang = "zh-CN";
+var Ecp_IsLoginRegist = false;
+var Ecp_Lay_Locate = "left";
+var isWithIpLogin = "0";
+var ecp_showmember = 0;
+var ecpFingerprint = "";
+var ecpCountdown;
+var ecpMemberType;
+var memberType; // 1AI  2文献
+// 机构还是个人的滑块  个人0  机构1
+var isPersonalOrUnitSlide = 0;
+var AliyunCaptchaConfig;
+var ecpLoginType = 0; // 手机验证码3  个人2  机构1  ip4
+var clickUnCloseLoginNames = [
+  "#Ecp_top_login_layer",
+  "#Ecp_top_login",
+  "#Ecp_top_logout_layer",
+  "#testunclose",
+  "#ecp-agreement-wrap",
+  ".ecp_header_personal_loginbg",
+  ".ecp_header_unit_loginIcon",
+  ".ecp_header_unit_loginbg",
+  ".ecp_header_personalName_loginbg",
+  ".ecp_header_unitName",
+  "#aliyunCaptcha-mask",
+  "#aliyunCaptcha-window-popup",
+  "#tcaptcha_transform_dy",
+];
+
+Ecp_windowonlad(ecpHeaderInit);
+function ecpHeaderInit() {
+  CreateArgDic();
+  var nojquery = GetParams("nojquery");
+  if (isNull(nojquery)) {
+    nojquery = "0";
+  }
+  if (nojquery !== "1") {
+    AppendJs(Ecp_staticSource + "scripts/jquery.js", InitPage);
+  } else {
+    InitPage();
+  }
+}
+
+function InitPage() {
+  AppendCss(Ecp_staticSource + "css/style.css?v=20251216");
+  lang = GetParams("lang");
+  if (isNull(lang)) {
+    lang = "zh-CN";
+  }
+  AppendJs(Ecp_staticSource + "scripts/mergeScripts.js?v=20251216", InitPage2);
+}
+// function InitPage1() {
+//   InitPage2();a
+// }
+
+// function InitPage2(){
+//   AliyunCaptchaConfig = {
+//     // 必填，验证码示例所属地区，支持中国内地（cn）、新加坡（sgp）
+//     region: "cn",
+//     // 必填，身份标。开通阿里云验证码2.0后，您可以在控制台概览页面的实例基本信息卡片区域，获取身份标
+//     prefix: "1p3paw",
+//   };
+//   // AppendJs(Ecp_staticSource + "scripts/newSlideTop.js?v=20251216", InitPage21);
+// }
+
+function InitPage2() {
+  AppendJs(Ecp_staticSource + "scripts/loginState.js?v=20251216");
+  AppendJs(Ecp_staticSource + "scripts/etlogin.js?v=20251216", InitPage3);
+}
+
+function InitPage3() {
+  var style = GetParams("style");
+  if (isNull(style)) {
+    style = "1";
+  }
+  Ecp_Style = style;
+
+  var laylocate = GetParams("laylocate");
+  if (isNull(laylocate)) {
+    Ecp_Lay_Locate = "left";
+  } else {
+    Ecp_Lay_Locate = laylocate;
+  }
+
+  if (Ecp_Style === "1" || Ecp_Style === "3") {
+    Ecp_IsLoginRegist = true;
+  }
+  isWithIpLogin = GetParams("isWithIpLogin");
+  if (isNull(isWithIpLogin)) isWithIpLogin = "0";
+  var returnUrl = GetParams("returnUrl");
+  var isAutoIpLogin = GetParams("isAutoIpLogin") || "1";
+  Ecp_platform = GetParams("platform");
+  AppendUID = GetParams("AppendUID");
+
+  var showmember = GetParams("showmember") || 1;
+  ecp_showmember = isNull(showmember) ? 0 : 1;
+  if (isNull(showmember)) {
+    ecp_showmember = 0;
+  } else {
+    var tshowm = parseInt(showmember);
+    ecp_showmember = isNull(tshowm) ? 0 : tshowm;
+  }
+
+  if (isNull(returnUrl)) {
+    returnUrl = "https://www.cnki.net";
+  }
+
+  if (!isNull(Ecp_platform)) {
+    returnUrl = decodeURIComponent(returnUrl);
+    returnUrl = changeUrlArg(returnUrl, "platform", Ecp_platform);
+    returnUrl = encodeURIComponent(returnUrl);
+  }
+
+  if (!isNull(isAutoIpLogin) && isAutoIpLogin === "1") {
+    Ecp_isAuotIpLogin = "1";
+  } else {
+    Ecp_isAuotIpLogin = "0";
+  }
+
+  var modalname = "model1.html";
+  if (Ecp_Style === "1") {
+    modalname = "model1.html";
+  } else if (Ecp_Style === "3") {
+    modalname = "model3.html?v=20251216";
+  } else {
+    modalname = "model2.html";
+  }
+
+  var placeid = GetParams("placeid");
+  var placesucc = false;
+  if (!isNull(placeid)) {
+    var placeho = $("#" + placeid + ":first");
+    if (placeho) {
+      placeho.load(
+        Ecp_staticSource + modalname,
+        function (responseTxt, statusTxt, xhr) {
+          if (statusTxt == "success") {
+            AppendJs(
+              Ecp_agreementUrl + "/scripts/ecpAgreementAlertLink.js?v=20251216",
+              InitPage4
+            );
+          }
+        }
+      );
+      placesucc = true;
+    }
+  }
+  if (!placesucc) {
+    //$("body:first").prepend(result);
+    $("body:first").load(
+      Ecp_staticSource + modalname,
+      function (responseTxt, statusTxt, xhr) {
+        if (statusTxt == "success") {
+          AppendJs(
+            Ecp_agreementUrl + "/scripts/ecpAgreementAlertLink.js?v=20251216",
+            InitPage4
+          );
+        }
+      }
+    );
+  }
+}
+
+function InitPage4() {
+  //加载广告系统广告
+  addTopAdSysAd();
+  // AppendJs(
+  //   "https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js",
+  //   InitPage5
+  // );
+  AppendJs("https://turing.captcha.qcloud.com/TJCaptcha.js", InitPage5);
+  // AppendJs(Ecp_staticSource + "scripts/slideTop.js?v=20251216", InitPage5);
+  // AppendJs("https://o.alicdn.com/captcha-frontend/aliyunCaptcha/AliyunCaptcha.js", InitPage5);
+}
+
+function InitPage5() {
+  // AliyunCaptchaConfig = {
+  //   // 必填，验证码示例所属地区，支持中国内地（cn）、新加坡（sgp）
+  //   region: "cn",
+  //   // 必填，身份标。开通阿里云验证码2.0后，您可以在控制台概览页面的实例基本信息卡片区域，获取身份标
+  //   prefix: "1p3paw",
+  // };
+  AppendJs(Ecp_staticSource + "scripts/tencentSlide.js?v=20251216", InitPage6);
+}
+function InitPage6() {
+  getFingerprint();
+  async function getFingerprint() {
+    // 等待 FingerprintJS 初始化  指纹1
+    var dynamicPath = "https://login.cnki.net/tlogin/scripts/pf.js";
+    var fpPromise = import(dynamicPath).then((FingerprintJS) =>
+      FingerprintJS.load()
+    );
+    // 获取指纹1
+    var fp = await fpPromise;
+    var result = await fp.get();
+    // 输出指纹1详情
+    ecpFingerprint = result.visitorId;
+    InitPage7();
+  }
+  // }-----------------------------------------------------------------------------------------指纹优化---------------------------------------------------------------------------------------
+  // var STORAGE_KEY = "ecp_fingerprint";
+  // var SAMPLE_COUNT = 5; // 增加采样次数，提高稳定性
+
+  // getFingerprint();
+
+  // async function getFingerprint() {
+  //   try {
+  //     // 优先读取 localStorage
+  //     let stored = localStorage.getItem(STORAGE_KEY);
+  //     if (stored) {
+  //       ecpFingerprint = stored;
+  //       InitPage7();
+  //       return;
+  //     }
+
+  //     // 动态加载 FingerprintJS 脚本
+  //     const dynamicPath = "https://login.cnki.net/tlogin/scripts/pf.js";
+  //     const fp = await import(dynamicPath).then((FingerprintJS) =>
+  //       FingerprintJS.load()
+  //     );
+
+  //     // 多次采样 visitorId 去噪
+  //     const samples = [];
+  //     for (let i = 0; i < SAMPLE_COUNT; i++) {
+  //       const result = await fp.get();
+  //       samples.push(result.visitorId);
+  //     }
+  //     const stableVisitorId = getStableVisitorId(samples);
+
+  //     // 构建稳定的额外特征（优化为同步获取）
+  //     const extraInfo = getCombinedExtraInfo();
+
+  //     // 将 FingerprintJS 的结果进行二次哈希（SHA-256）
+  //     ecpFingerprint = sha256Hash(stableVisitorId + "_" + extraInfo);
+
+  //     // 存储到 localStorage
+  //     try {
+  //       localStorage.setItem(STORAGE_KEY, ecpFingerprint);
+  //     } catch (e) {
+  //       console.error("存储 fingerprint 到 localStorage 失败:", e);
+  //     }
+
+  //     console.log("初始化 visitorId:", stableVisitorId);
+  //     console.log("最终 fingerprint (32字符):", ecpFingerprint);
+  //     InitPage7();
+  //   } catch (e) {
+  //     console.error("获取浏览器指纹时发生错误:", e);
+  //     // 如果发生错误，可以考虑使用备用方案生成指纹
+  //     ecpFingerprint = "error_fingerprint";
+  //     InitPage7();
+  //   }
+  // }
+  // // ================= SHA-256 哈希 =================
+  // function sha256Hash(str) {
+  //   const hash = CryptoJS.SHA256(str).toString(CryptoJS.enc.Hex);
+  //   return hash.slice(0, 32); // 截取前 32 个字符
+  // }
+
+  // // ================= 多次采样去噪 =================
+  // function getStableVisitorId(samples) {
+  //   const countMap = {};
+  //   for (const id of samples) countMap[id] = (countMap[id] || 0) + 1;
+  //   let stable = samples[0],
+  //     max = 0;
+  //   for (const id in countMap)
+  //     if (countMap[id] > max) {
+  //       max = countMap[id];
+  //       stable = id;
+  //     }
+  //   return stable;
+  // }
+
+  // // ================= 稳定的额外特征 =================
+  // function getCombinedExtraInfo() {
+  //   const uuid = getOrCreateUUID(); // 稳定的设备唯一标识
+  //   const cores = navigator.hardwareConcurrency || 0; // CPU 核心数
+  //   const memory = navigator.deviceMemory || 0; // 内存大小
+  //   const networkType = navigator.connection?.effectiveType || "UnknownNetwork"; // 网络类型
+  //   const browserVersion = getBrowserVersion(); // 获取浏览器大版本号
+
+  //   // 返回仅包含不重合的独特特征
+  //   return [uuid, cores, memory, networkType, browserVersion].join("_");
+  // }
+
+  // // ================= 获取浏览器大版本号 =================
+  // function getBrowserVersion() {
+  //   const userAgent = navigator.userAgent;
+
+  //   // Chrome/Edge 浏览器
+  //   const chromeMatch = userAgent.match(/(Chrome|Edg)\/(\d+)\./);
+  //   if (chromeMatch) {
+  //     return chromeMatch[2]; // 返回大版本号
+  //   }
+
+  //   // Firefox 浏览器
+  //   const firefoxMatch = userAgent.match(/Firefox\/(\d+)\./);
+  //   if (firefoxMatch) {
+  //     return firefoxMatch[1]; // 返回大版本号
+  //   }
+
+  //   // Safari 浏览器
+  //   const safariMatch = userAgent.match(/Version\/(\d+)\./);
+  //   if (safariMatch && userAgent.match(/Safari/)) {
+  //     return safariMatch[1]; // 返回大版本号
+  //   }
+
+  //   // Edge 旧版本
+  //   const oldEdgeMatch = userAgent.match(/Edge\/(\d+)\./);
+  //   if (oldEdgeMatch) {
+  //     return oldEdgeMatch[1]; // 返回大版本号
+  //   }
+
+  //   // 如果无法识别浏览器，返回 "Unknown"
+  //   return "Unknown";
+  // }
+
+  // // ================= UUID =================
+  // function getOrCreateUUID() {
+  //   const key = "ecp_uuid";
+  //   let uuid = localStorage.getItem(key);
+  //   if (!uuid) {
+  //     uuid = crypto.randomUUID
+  //       ? crypto.randomUUID()
+  //       : Math.random().toString(36).substring(2) + Date.now().toString(36);
+  //     try {
+  //       localStorage.setItem(key, uuid);
+  //     } catch {}
+  //   }
+  //   return uuid;
+  // }
+  // }-----------------------------------------------------------------------------------------指纹优化---------------------------------------------------------------------------------------
+}
+function InitPage7() {
+  $(".member_icon").hide();
+  $(".ecp_unit_autoLogin ").prop("checked", true);
+  $(".ecp_checkedutoLogin").prop("checked", true);
+  // 回车登录  个人
+  $(".ecp_passWord").bind("keydown", function (e) {
+    //兼容浏览器的事件
+    var theEvent = e || window.event;
+    //兼容各浏览器的键盘事件
+    var keyCode = theEvent.keyCode || theEvent.which || theEvent.charCode;
+    if (keyCode == 13) {
+      ECP_PersonalLogin();
+    }
+  });
+  $(".ecp_code").bind("keydown", function (e) {
+    //兼容浏览器的事件
+    var theEvent = e || window.event;
+    //兼容各浏览器的键盘事件
+    var keyCode = theEvent.keyCode || theEvent.which || theEvent.charCode;
+    if (keyCode == 13) {
+      ECP_PhoneLogin();
+    }
+  });
+  // 回车登录  机构
+  $(".ecp_unitPassWord").bind("keydown", function (e) {
+    //兼容浏览器的事件
+    var theEvent = e || window.event;
+    //兼容各浏览器的键盘事件
+    var keyCode = theEvent.keyCode || theEvent.which || theEvent.charCode;
+    if (keyCode == 13) {
+      ECP_UnitLOgin();
+    }
+  });
+  FlushLogin();
+
+  if (typeof LayInitComplete === "function") {
+    LayInitComplete();
+  }
+}
+//--------
+
+function linkToBuy() {
+  if (ecpMemberType == 1) {
+    window.open(
+      "https://member.cnki.net/kcenter/aipluscard/mbuy?tt=2",
+      "_blank"
+    );
+  } else {
+    window.open("https://member.cnki.net/kcenter/memcard/buy?ct=zpn", "_blank");
+  }
+}
+function linkToUse() {
+  window.open("https://member.cnki.net/kcenter/memcard/buy?ct=zpn", "_blank");
+}
+function GetParams(name) {
+  return Ecp_ArgueDic[name.toLowerCase()];
+}
+
+function CreateArgDic() {
+  var data = document
+    .getElementById("toploginstruct")
+    .getAttribute("data")
+    .split("&");
+  for (var vi = 0; vi < data.length; vi++) {
+    var v = data[vi];
+    var d = v.indexOf("=");
+    var key = v.substring(0, d).toLowerCase();
+    var val = v.substring(d + 1, v.length);
+    Ecp_ArgueDic[key] = val;
+  }
+
+  var unclose = Ecp_ArgueDic["unclose"];
+  if (unclose) {
+    var uns = unclose.split("|");
+    for (var i = 0; i < uns.length; i++) {
+      clickUnCloseLoginNames.push("#" + uns[i]);
+    }
+  }
+}
+
+function addTopAdSysAd() {
+  var orgHtml = "";
+  try {
+    orgHtml = $("#Ecp_members_operate").html();
+    $("#Ecp_members_operate").html("");
+    var timestamp = Date.parse(new Date());
+    var t = timestamp + Math.round(Math.random() * 100000);
+    var adurl =
+      "https://ad.cnki.net/gadssource/js/ecpucard.js?adpot=0602003" +
+      "&t=" +
+      t +
+      "&w=384&h=66&pe=Ecp_members_operate&s=1&wcss=1";
+    var adScript = document.createElement("script");
+    adScript.type = "text/javascript";
+    adScript.src = adurl;
+    document.head.appendChild(adScript);
+  } catch (e) {
+    $("#Ecp_members_operate").html(orgHtml);
+  }
+}
+
+function baseUrl(url1) {
+  var url = document.getElementById("toploginstruct").src;
+  var host = url.substring(0, url.toLowerCase().indexOf(url1.toLowerCase()));
+  return host;
+}
+
+function Ecp_windowonlad(FuncName) {
+  // if (document.all) {
+  // 	window.attachEvent('onload', FuncName)
+  // }
+  // else {
+  // 	window.addEventListener('DOMContentLoaded', FuncName, false);
+  // }
+  if (document.all) {
+    window.attachEvent("onload", FuncName);
+  } else {
+    // 兼容火狐
+    if (document.readyState === "complete") {
+      ecpHeaderInit();
+    } else {
+      window.addEventListener("load", FuncName, false);
+    }
+  }
+}
+function AppendJs(jsurl, callback) {
+  var oHead = document.getElementsByTagName("HEAD").item(0);
+  var oScript = document.createElement("script");
+  oScript.src = jsurl;
+  if (callback) {
+    oScript.onload = callback;
+  }
+  oHead.appendChild(oScript);
+}
+
+function getMemberInfo(uid) {
+  var signUrl = Ecp_topLoginUrl1 + "api/loginapi/get_user_member_info?IdenId=" + uid + "&SourceType=login"
+  createSign(signUrl);
+  var params = {
+    IdenId: uid,
+    SourceType: "login"
+  }
+  $.ajax({
+    url: Ecp_topLoginUrl1 + "api/loginapi/get_user_member_info",
+    data: JSON.stringify(params),
+    type: "POST",
+    cache: false,
+    headers: {
+      authorization: "Bearer" + " " +  + uid
+    },
+    xhrFields: {
+      withCredentials: true,
+    },
+    contentType: "application/json",
+    dataType: "json",
+    success: function (result) {
+      $(".Ecp_members_operate").hide(); // 广告
+      $(".ecp-member-newuser").hide();
+      $(".ecp-member-expired").hide();
+      $(".ecp-member-valid").hide();
+      var data = result.Data;
+      switch(data.IsMember) {
+        case -1 : 
+          $(".Ecp_members_operate").show();
+          break;
+          // 新用户
+        case 0 : 
+          $(".ecp-member-newuser").show();
+          if(data.CouponEndTime) {
+            $(".ecp-member-text").text("立即使用>>");
+          } else {
+            $(".ecp-member-text").text("立即领取>>");
+          }
+          $(".member-text-tip").text(data.NoticeMsg)
+          break;
+        case 1 : 
+        // 已过期
+        // IsMember等于-2说明超过60天 显示广告
+          if(data.IsMember == -2) {
+            $(".Ecp_members_operate").show();
+          } else {
+            $(".ecp-member-expired").show();
+            $(".member-text-tip").text(data.NoticeMsg)
+          }
+          break;
+          // 有效期内
+        case 3 : 
+          $(".ecp-member-valid").show();
+          $(".member-text-tip").text(data.NoticeMsg);
+          // $(".ecp-member-name").text(data.MemberName)
+          // $(".ecp-member-day").text(data.MemberValidityDay + '天')
+          // $(".ecp-member-discount").text(data.MemberDiscount + '折')
+          break;
+        default:
+          $(".Ecp_members_operate").show();
+      }
+        ecpMemberType = data.Member;
+        $("#Ecp_top_logout_layer").show();
+        $(".ecp_mycnki_LoginoutBox").hide();
+    },
+  });
+}
+
+function AppendCss(path) {
+  var a = document.createElement("link");
+  a.href = path;
+  a.rel = "stylesheet";
+  var head = document.getElementsByTagName("head")[0];
+  head.appendChild(a);
+}
+
+// s参数只有10.30.20.185传
+function recodeIpLog(bkName, d, ci, ci2) {
+  var param = {
+    u: window.location.href,
+    b: bkName,
+    r: document.referrer,
+    c: document.cookie,
+    d: d,
+    ci: ci,
+    // s: 30185,
+    // ci2: ci2
+  };
+  $.ajax({
+    url: recodeIpUrl,
+    data: JSON.stringify(param),
+    type: "POST",
+    cache: false,
+    contentType: "application/json",
+    dataType: "text",
+    success: function (result) {},
+    error: function (error) {
+      console.error("recodeIpLog");
+    },
+  });
+}
+
+function isNull(str) {
+  if (typeof str === "undefined" || str === null || str === "") return true;
+  else return false;
+}

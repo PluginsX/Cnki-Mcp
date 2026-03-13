@@ -1,0 +1,1546 @@
+﻿/*
+ * 范围：高级检索、一框式检索
+ * 功能：检索词引导
+*/
+
+var wordsGuid = (function () {
+    function wordsGuid(recommendDiv, inputText) {
+        this.recommendDiv = recommendDiv;
+        this.inputText = inputText
+    }
+
+    var callback = '';//高级检索还原函数
+    var mysearch;
+    var inBrowser = typeof window !== 'undefined';
+    var UA = inBrowser && window.navigator.userAgent.toLowerCase();
+    var isIE = UA && /msie|trident/.test(UA);
+    var isIE9 = UA && UA.indexOf('msie 9.0') > 0;
+    var recommendApi = $("#hidRecommendApi").val();
+    wordsGuid.prototype = {
+        //初始化
+        init: function () {
+            var that = this;
+            if (typeof (window.mysearch) !== "undefined") {
+                mysearch = window.mysearch;
+            }
+            that.inputFunc();
+            that.recommendCheckbox();
+        },
+
+        //清空提供引导的输入框的隐藏属性（代码，机构等）
+        //obj：需清空的输入框对象
+        clearInputAttr: function (obj) {
+            obj.removeAttr('data-checkedcode');
+            obj.removeAttr("data-field");
+            obj.removeAttr('searchWord');
+            obj.removeAttr('data-authorcode');
+            obj.removeAttr('data-authorunit');
+            obj.removeClass('disable-editor');
+            obj.removeClass('is-input-error');
+        },
+
+        //清空提供引导的输入框对应的引导
+        //obj：需清空的输入框对象
+        clearRecommendBox: function (obj) {
+            //清除对应推荐框
+            var id = obj.attr("data-tipid");
+            if (!!id) {
+                $("#" + id).hide().siblings(".default-info").show();
+                $("#" + id).remove();
+            }
+
+            if ($(".search-sidebar-b .recommend-info").length == 0) {
+                $(".search-sidebar-b .prototype").addClass("recommend-info")
+            }
+        },
+
+        //输入框事件
+        inputFunc: function () {
+            var that = this;
+            var inputText = that.inputText;
+            var recommendDiv = that.recommendDiv;
+            var isCNInput = false;//中文输入标识
+
+            //修改检索项 输入框清空 推荐模块隐藏
+            $(".search-box").on("click", ".input-box .reopt li", function (e) {
+                e.preventDefault();
+
+                if ($(this).hasClass("prevCur")) {
+                    $(this).removeClass("prevCur");
+                    return;
+                }
+                else {
+                    if (!$(this).hasClass("tit")) {
+                        $(this).closest(".sort-list").find("li.prevCur").removeAttr("class");
+                    }
+                }
+
+                var inputObj = $(this).closest(".input-box").find(":text");
+
+                var _reoptText = $(this).text();
+
+                //由检索项判断输入框默认值
+                //if (_reoptText == message.CJFQLYFiled) {
+                //    inputObj.attr("placeholder", message.CJFQLYFiled + "/ISSN/CN");
+                //} else if (_reoptText == message.CCNDLYFiled) {
+                //    inputObj.attr("placeholder", message.CCNDLYFiled + "/" + message.CN);
+                //} else {
+                //    inputObj.attr("placeholder", "");
+                //}
+
+
+                //inputObj.val("");
+                that.clearInputAttr(inputObj);
+                that.clearRecommendBox(inputObj);
+
+                if (inputObj.siblings("a.btn-cleartext").length > 0) {
+                    inputObj.siblings("a.btn-cleartext").hide();
+                }
+            })
+
+            //input获取焦点
+            $("body").on("focus", that.inputText, function (event) {
+                event.preventDefault();
+
+                // 不需要提示词的输入框
+                var noneedtip = $(this).attr("noneedtip");
+                if (noneedtip == "1") {
+                    return;
+                }
+
+                var inputId = $(this).attr("data-tipid");
+                var divId = $("div.recommend-info").attr('id');
+                var text = $(this).val();
+                var searchText = $(this).hasClass("disable-editor") ? $(this).attr("searchword") : $(this).val();
+                var oneBoxRecom = $(this).siblings("div.droplist").find("li");
+
+                if (!!text && text != $(this).attr("placeholder")) {
+                    if ($(this).siblings("a.btn-cleartext").length > 0) {
+                        $(this).siblings("a.btn-cleartext").show();
+                    }
+                }
+                else {
+                    oneBoxRecom.parent().empty();
+                }
+
+                var divObj = $(".recommend-info");
+                if ((!!searchText === false) && (!!text === false)) {
+                    //检索词不存在，不显示推荐
+                    divObj.hide().siblings(".default-info").show();
+                    return;
+                }
+
+                var hideDiv = $("#" + inputId);
+                if (!!hideDiv && (hideDiv.attr("searchtext") === $.trim(searchText) || hideDiv.attr("searchtext") === $.trim(text))) {
+                    //推荐已存在,且被引藏，不重新刷新，直接显示
+                    if (!hideDiv.hasClass("noContent")) {
+                        hideDiv.addClass("recommend-info").show().siblings().removeClass("recommend-info").hide();
+                    }
+                    else {
+                        hideDiv.hide().siblings().hide().siblings(".default-info").show();
+                    }
+                    if (!!mysearch) {//仅高级检索mysearch才会初始化
+                        mysearch._rightRecommendH();//计算右侧推荐列表高度;
+                    }
+                    return;
+                }
+
+                if (oneBoxRecom.length > 0) {
+                    searchText = $(this).attr("searchword");
+                    if (!!searchText) {
+                        oneBoxRecom.closest("div.droplist").show();
+                        return;
+                    }
+                }
+
+                that._judgeRecommend(this);//根据检索词及input值是否存在，判断右侧推荐内容显示/隐藏
+            });
+
+            ////input移出焦点
+            //$("body").on("blur", that.inputText, function (event) {
+            //    event.preventDefault();
+            //    var recommendDiv = that.recommendDiv;
+            //    var inputText = that.inputText;
+            //    $(document).click(function (event) {//鼠标未移到右侧推荐模块或左侧输入框中，右侧就恢复默认状态
+            //        if ($(event.target).closest(inputText).length == 0 && $(event.target).closest(recommendDiv).length == 0 && $(event.target).closest(".popup-prompt").length == 0) {
+            //            if ($(that.recommendDiv).find(".default-info").length > 0) {
+            //                $(that.recommendDiv).find(".default-info").show().siblings().hide();
+            //            }
+            //            else {
+            //                $(that.recommendDiv).hide();
+            //            }
+            //        }
+            //    });
+            //});
+
+            //鼠标未移到右侧推荐模块或左侧输入框中，右侧就恢复默认状态
+            $("body").on("mouseup", function (event) {
+                var recommendDiv = that.recommendDiv;
+                var inputText = that.inputText;
+                if ($(event.target).closest(inputText).length == 0 && $(event.target).closest(recommendDiv).length == 0 && $(event.target).closest(".popup-prompt").length == 0) {
+                    if ($(that.recommendDiv).find(".default-info").length > 0) {
+                        $(that.recommendDiv).find(".default-info").show().siblings().hide();
+                    }
+                    else {
+                        $(that.recommendDiv).hide();
+                    }
+                }
+            })
+
+            //推荐请求后台数据消抖
+            //连续多次请求，只发送最后一次请求
+            var debounce = function (fn, delay) {
+                // 定时器，用来 setTimeout
+                var timer;
+
+                // 返回一个函数，这个函数会在一个时间区间结束后的 delay 毫秒时执行 fn 函数
+                return function () {
+                    // 保存函数调用时的上下文和参数，传递给 fn
+                    var context = this
+                    var args = arguments
+
+                    clearTimeout(timer);
+
+                    timer = setTimeout(function () {
+                        fn.apply(context, args)
+                    }, delay);
+                }
+            }
+
+            //开始进行中文输入，设定中文输入标识
+            $("body").on("compositionstart", that.inputText, function (event) {
+                isCNInput = true;
+            })
+
+            //IE9下回退键（BackSpace），Delect键不触发input事件
+            if (isIE9) {
+                $("body").on("keyup", that.inputText, function (event) {
+                    if (event.keyCode == 8 || event.keyCode == 46) {
+                        $(this).trigger("input");
+                    }
+                })
+            }
+
+            $("body").on("input", that.inputText, debounce(function (event) {
+                if (isCNInput) {
+                    //中文输入不截断
+                    return;
+                }
+
+
+                // 不需要提示词的输入框
+                var noneedtip = $(this).attr("noneedtip");
+                if (noneedtip == "1") {
+                    return;
+                }
+
+                var obj = this;
+                var $obj = $(obj);
+
+                //选中后编辑或输入非空格时，清空已选项
+                var text = $.trim($obj.val());
+                var recommendText = $.trim($("#" + $obj.attr("data-tipid")).attr("searchtext"));
+                if (text !== recommendText || $obj.hasClass("disable-editor")) {
+                    that.clearInputAttr($obj);
+                    that.clearRecommendBox($obj);
+                }
+
+
+                if ($obj.siblings("a.btn-cleartext").length > 0) {
+                    if (!!$obj.val() && $obj.val() != $obj.attr("placeholder")) {
+                        $obj.siblings("a.btn-cleartext").show();
+                    }
+                    else {
+                        $obj.siblings("a.btn-cleartext").hide();
+                        $(that.recommendDiv).hide();
+                        return;
+                    }
+                }
+
+                if ($obj.val().indexOf("+") == -1 && $obj.val().indexOf("（") == -1 && $obj.val().indexOf("(") == -1) {
+                    $obj.removeClass("disable-editor");//若输入框内无+（(号，则恢复输入框的正常状态
+                }
+
+                if (!!$obj.attr("data-tipid")) {
+                    var _id = $obj.attr("data-tipid");
+                    $("#" + _id).hide();
+                    if ($obj.hasClass("disable-editor")) {//含有这个class，说明不能编辑，若用户仍编辑，则对应的右侧边栏不再推荐内容,同时删除之前对应的右侧推荐列表
+
+                        $("#" + _id).siblings(".default-info").show();
+                        //$("#" + _id).remove();
+
+                    } else {
+                        that._judgeRecommend(obj);//根据检索词和input值，判断右侧推荐内容显示/隐藏、创建/移除
+                    }
+                }
+                else {
+                    if ($obj.hasClass("disable-editor")) {//含有这个class，说明不能编辑，若用户仍编辑，则对应的右侧边栏不再推荐内容,同时删除之前对应的右侧推荐列表
+                        $(that.recommendDiv).hide();
+                        $(that.recommendDiv).find("ul").empty();
+                        return false;
+                    } else {
+                        that._judgeRecommend(obj);//根据检索词和input值，判断下拉框推荐内容显示/隐藏、创建/移除
+                    }
+                }
+            }, 300));
+
+            //中文输入结束 修改标识，提供推荐
+            $("body").on("compositionend", that.inputText, function () {
+                isCNInput = false;
+            })
+
+        },
+
+        //推荐引导栏相关事件
+        recommendCheckbox: function () {
+            var that = this;
+            var maxCheckCount = 5;//最大选中数量
+            var checkedCount;
+
+            //当此标识为true表示选中作者一级机构，取消选中作者二级机构或选中作者二级机构，取消选中作者一级机构，此时已选数量不改变
+            var isChecedCountFlag = false;
+
+            //返回检索词为“主题”、“作者”、“期刊名称”、“基金”···的列表或列表父级
+            function _recommendParent(obj) {
+                var recommendBox1 = $(obj).closest(".recommend-info-list");//检索词为“主题”、“作者”、“期刊名称”的列表对象
+                var recommendBox2 = $(obj).closest(".recommend-fund-list");//检索词为“基金”的列表对象
+                if (recommendBox1.length > 0)
+                    return $(obj).closest(".recommend-info-list");
+                else if (recommendBox2.length > 0)
+                    return $(obj).closest(".recommend-fund-list");
+                else
+                    return $(obj).closest(".recommend-info");
+            }
+
+            //恢复input输入框初始状态
+            function _recoverInput(btnObj) {
+                var tipId = $(btnObj).closest(".recommend-info").attr("id");
+                if (!!tipId) {
+                    var textInput = $(btnObj).closest(".grade-search-content,.author-search-content").find("input[data-tipid='" + tipId + "']");
+                    var initVal = $.trim(textInput.attr("searchWord"));
+                    textInput.val(initVal);
+                    textInput.removeClass("disable-editor");
+                    that.clearInputAttr(textInput);
+                }
+            }
+
+            //右侧“同名作者/所在机构”导航层级的折叠/展开事件
+            $(that.recommendDiv).unbind("click").on("click", ".icon", function () {
+                var itemNode = $(this).parent();      //".item-nav"
+                itemNode.toggleClass("is-down");
+
+                if (itemNode.hasClass("is-down")) {
+                    itemNode.next("ul").slideDown();
+                } else {
+                    itemNode.next("ul").slideUp();
+                }
+            });
+
+            //清除所有input[type=checkbox]选中状态
+            $(that.recommendDiv).on("click", ".btn-clear-selected", function () {
+                recommendBox = _recommendParent(this); //检索词为“主题”、“作者”、“期刊名称”、“基金”的列表对象
+                recommendBox.find("input[type=checkbox]:checked").each(function(){
+                    $(this).click();//点击才能彻底清除
+                })
+                var id = $(this).parents(".recommend-info").attr("id");
+                var inputBox = $("input[data-tipid='" + id + "']");
+                if (!!inputBox.hasClass("disable-editor")) {
+                    _recoverInput(this);//恢复input输入框初始状态
+                }
+                recommendBox.find("label").removeClass("selected");
+                $(".popup-prompt").remove();
+            });
+
+            //选中复选框，数量不超过maxCheckCount
+            $(that.recommendDiv).on("click", "ul.recommendList input[type=checkbox]", function () {
+                var authorRemove = function (obj, removeCode) {
+
+                    isChecedCountFlag = true;
+
+                    obj.find(":checked").prop("checked", false);
+                    obj.find("label").removeClass("selected");
+
+                    //移除父级机构保存的值
+                    var spanObj = obj.find("span.organ");
+                    var temp = '';
+                    //修改隐藏代码值
+                    var objVal = textInput.attr(removeCode);
+                    $.each(spanObj, function () {
+                        objVal = objVal.replace($.trim($(this).attr("value")), "");
+                    })
+                    var objValArr = objVal.split("+");
+                    for (var i = 0, len = objValArr.length; i < len; i++) {
+                        if (!!objValArr[i]) {
+                            temp += objValArr[i] + "+";
+                        }
+                    }
+                    textInput.attr(removeCode, temp.substring(0, temp.length - 1));
+                    //修改输入框值
+                    var inputText = textInput.val();
+                    $.each(spanObj, function () {
+                        inputText = inputText.replace($.trim($(this).text()), "");
+                    })
+                    var inputValArr = inputText.split("+");
+                    temp = '';
+                    for (var i = 0, len = inputValArr.length; i < len; i++) {
+                        if (!!inputValArr[i]) {
+                            if (i == len - 1 || $.trim(objValArr[i]) == "）")
+                                temp += inputValArr[i];
+                            else
+                                temp += inputValArr[i] + "+";
+                        }
+                    }
+                    textInput.val(temp);
+                }
+
+                var _getAuthorInputVal = function () {//将右侧选中的推荐作者机构添加到左侧对应的输入框内,返回输入框值
+                    if (oldVal.indexOf("（") == -1 && oldVal.indexOf("(") == -1)
+                        return oldVal + "（" + organText + "）";
+                    else {
+                        return _analyAuthorArr(valArr);
+                    }
+                }
+
+                var _analyAuthorArr = function (arr) {//解析数组，返回对应输入框的值
+                    text = "";
+                    if (arr.length == 1)
+                        return arr[0];
+                    else {
+                        for (var j = 0, len = arr.length; j < len; j++) {
+                            if (j != 0) //排除数组第一个值
+                                text += j == 1 ? arr[j] : (" + " + arr[j]);
+                        }
+                        return arr[0] + "（" + text + "）";
+                    }
+                }
+
+                var _clearArrBlank = function (val, isAuthor) {//将val通过+()（）号分隔，除去空格和空值，获得新数组
+                    var arr = new Array();
+                    if (isAuthor) {
+                        //只有作者才按括号拆分
+                        var defaultValArr = [];
+                        if (val.indexOf("（") == 3) {//机构中含有括号
+                            defaultValArr.push(val.substring(0, 3));
+                            defaultValArr = defaultValArr.concat(val.substring(4, val.length - 1).split(/[+]/));
+                        } else {
+                            defaultValArr = val.split(/[+()（）]/);
+                        }
+
+                    }
+                    else {
+                        var defaultValArr = val.split(/[+]/);
+                    }
+
+                    for (var i = 0; i < defaultValArr.length; i++) {
+                        if (!$.trim(defaultValArr[i]) == "")
+                            arr.push($.trim(defaultValArr[i]));
+                    }
+                    return arr;
+                }
+
+                var _indexArr = function (array, val) {//获取数组array中val的索引值
+                    for (var i = 0; i < array.length; i++) {
+                        if ($.trim(array[i]) == val) return i;
+                    }
+                    return -1;
+                }
+
+                var _removeArr = function (array, val) {//移除数组array中的val
+                    var index = _indexArr(array, val);
+                    if (index > -1) {
+                        array.splice(index, 1);
+                    }
+                }
+
+
+                var recommendBox = _recommendParent(this); //检索词为“主题”、“作者”、“期刊名称”、“基金”的列表对象
+
+                //判断是否为“同名作者 / 所在机构”列表
+                //注：选中作者推荐列表项，左侧对应输入框的展示格式与其它几个不同
+                var isAuthorList = recommendBox.attr("class").indexOf("authorlist") > -1;
+                var isThemeList = recommendBox.hasClass("js-recommend-themelist");
+
+                var tipId = $(this).closest(".recommend-info").attr("id");
+                var datafield = $(this).parents("ul.recommendList").attr("data-field");
+                var textInput = $(this).closest(".grade-search-content,.author-search-content").find("input[data-tipid='" + tipId + "']");
+                if (textInput.length == 0) {
+                    //一框式检索
+                    textInput = $(that.inputText);
+                }
+
+                checkedCount = !!textInput.val() ? textInput.val().split("+").length : 0;
+                if (isThemeList) {
+                    checkedCount--;
+                }
+
+                if (isAuthorList) {//作者
+                    var authorAttribut;
+                    if (!textInput.attr("data-authorcode") && !textInput.attr("data-authorunit")) {
+                        textInput.attr("searchWord", $.trim(textInput.val()));
+                    }
+                    if ($(this).parents("ul").siblings("div.item").length == 0) {
+                        //选择一级代码
+                        var childObj = $(this).parents("div.item").siblings("ul");
+                        if (!!childObj.find(":checked").length > 0) {
+                            //取消子级机构选中
+                            authorRemove(childObj, "data-authorunit");
+                        }
+                        authorAttribut = "data-authorcode";
+                    }
+                    else {
+                        //选择二级代码
+                        var parentObj = $(this).parents("ul").siblings("div.item");//父级机构
+                        if (!!parentObj.find(":checked").length > 0) {
+                            authorRemove(parentObj, "data-authorcode");
+                        }
+                        authorAttribut = "data-authorunit";
+                    }
+                    var oldCodeVal = textInput.attr(authorAttribut);//隐藏的代码值
+                    var codeValArr = !!oldCodeVal ? _clearArrBlank(oldCodeVal, isAuthorList) : [];
+                    var thisCode = $.trim($(this).siblings("span.organ").attr("value"));
+                    var oldVal = textInput.val();
+                }
+                else {//非作者
+                    var oldCodeVal = textInput.attr("data-checkedcode");//隐藏的代码值
+                    var codeValArr = !!oldCodeVal ? _clearArrBlank(oldCodeVal, isAuthorList) : [];
+                    var thisCode = $.trim($(this).attr("value"));
+                    var oldVal;
+                    if (!!oldCodeVal) {
+                        oldVal = textInput.val();
+                    }
+                    else {
+                        oldVal = "";
+                        textInput.attr("searchWord", $.trim(textInput.val()));//勾选后储存用户检索词
+                    }
+                }
+
+                var parentLabel = $(this).closest("label");
+                var authorName = textInput.attr("searchWord");
+                var re = new RegExp(authorName, "g");
+                if (isAuthorList) {
+                    oldVal = $.trim(oldVal).replace(re, "<$>")//如果是作者，将作者名用特殊符号代替（部分作者名字中含有括号）
+                    var organ = oldVal.substring(3).replace(/\<\$\>/g, authorName);//防止机构名中含有作者名 如 张（张掖大学）
+                    oldVal = "<$>" + organ
+                }
+
+                var valArr = _clearArrBlank(oldVal, isAuthorList);//将当前值转换成数组，并清除前后空格和空值
+                var thisText = $.trim(parentLabel.text());
+
+
+                var newVal;
+                if (parentLabel.hasClass("selected")) {//取消选中
+                    parentLabel.removeClass("selected"); //移除selected
+                    checkedCount--;
+
+                    if (isAuthorList) {//作者
+                        organText = $.trim(parentLabel.find(".organ").text());//机构名称
+                        _removeArr(valArr, organText); //数组中移除与点击的字符串匹配的值
+                        newVal = _analyAuthorArr(valArr).replace("<$>", authorName);
+                        textInput.val(newVal);
+
+                        //移除隐藏域中保存的code值
+                        _removeArr(codeValArr, thisCode); //数组中移除与该字符串匹配的值
+                        newVal = "";
+                        for (var j = 0, len = codeValArr.length; j < len; j++) {
+                            newVal += j == 0 ? codeValArr[j] : ("+" + codeValArr[j]);
+                        }
+                        textInput.attr(authorAttribut, newVal)
+
+                    } else { //非作者
+                        _removeArr(valArr, thisText); //数组中移除与该字符串匹配的值
+                        newVal = "";
+                        for (var j = 0; j < valArr.length; j++) {
+                            newVal += j == 0 ? valArr[j] : (" + " + valArr[j]);
+                        }
+                        textInput.val(newVal);
+
+                        //移除隐藏域中保存的code值
+                        _removeArr(codeValArr, thisCode); //数组中移除与该字符串匹配的值
+                        newVal = "";
+                        for (var j = 0, len = codeValArr.length; j < len; j++) {
+                            newVal += j == 0 ? codeValArr[j] : ("+" + codeValArr[j]);
+                        }
+                        textInput.attr("data-checkedcode", newVal)
+                    }
+                    if (valArr.length <= 1) textInput.removeClass("disable-editor");//对应的input值恢复黑色，表示可编辑
+
+                }
+                else if (checkedCount < maxCheckCount || isChecedCountFlag) {
+                    parentLabel.addClass("selected");//添加selected
+                    if (isAuthorList) {//作者
+                        organText = $.trim(parentLabel.find(".organ").text());//机构名称
+                        valArr.push(organText);
+                        newVal = _getAuthorInputVal().replace("<$>", authorName);//解析数组，计算对应输入框的值
+                        textInput.val(newVal);
+
+                        //储存选中项代码
+                        codeValArr.push(thisCode);
+                        newVal = !!oldCodeVal ? oldCodeVal + "+" + thisCode : thisCode;
+                        textInput.attr(authorAttribut, newVal);
+                    } else { //非作者
+                        valArr.push(thisText);
+                        newVal = !!oldCodeVal ? oldVal + " + " + thisText : thisText;
+                        if (isThemeList && !oldCodeVal) {//主题引导，勾选后不移除输入词
+                            textInput.val(textInput.attr("searchWord") + " + " + newVal);
+                        } else {
+                            textInput.val(newVal);
+                        }
+
+                        //储存选中项代码
+                        codeValArr.push(thisCode);
+                        newVal = !!oldCodeVal ? oldCodeVal + "+" + thisCode : thisCode;
+                        textInput.attr("data-checkedcode", newVal);
+                    }
+                    if (!textInput.attr("data-field")) {
+                        textInput.attr("data-field", datafield)
+                    }
+                    textInput.addClass("disable-editor");//对应的input值变为灰色，表示不可编辑
+                }
+            });
+
+            //选中数量大于maxCheckCount，弹出提示框
+            $(that.recommendDiv).on("click", "ul.recommendList input[type=checkbox]", function () {
+                if (isChecedCountFlag) {
+                    isChecedCountFlag = false;
+                    return;
+                }
+
+                var recommendBox = $(this).parents("ul.recommendList").parent();
+                if (checkedCount >= maxCheckCount) {
+
+                    if ($(".popup-prompt").length > 0) {
+                        clearTimeout(autoDelPop);//清除上次的延迟自动消失
+                        $(".popup-prompt").remove();
+                    }
+                    popupPrompt = $('<div class="popup-prompt">\n' +
+                        '   <a class="btn-close" href="javascript:void(0)"></a>\n' +
+                        '   <p>最多只能选择' + maxCheckCount + '项</p>\n' +
+                        '   <a class="btn-confirm" href="javascript:void(0)">确定</a>\n' +
+                        '</div>')
+                        .on("click", ".btn-close,.btn-confirm", function () {
+                            $(this).parent().remove();
+                        });
+                    recommendBox.append(popupPrompt);//弹出提示框
+                    autoDelPop = setTimeout(function () {
+                        popupPrompt.remove();//2s后自动消失
+                    }, 2000);
+                    return false;
+                }
+            });
+
+            //一框主体引导直接检索
+            $(".droplist").on("click", "li.theme", function () {
+                $("input.search-input").val($(this).find("span").text());
+                $(".search-btn").click();
+            })
+        },
+
+        //恢复引导页面中的已选中项
+        //inputObj 与引导界面对应的输入框的js对象
+        //Obj 待选项的父级容器对象 如高级检索$("ul.recommendList")
+        //isAuthor 是否是作者引导(作者引导特殊处理)
+        setCheckedItems: function (inputObj, obj, isAuthor) {
+            if (isAuthor) {
+                //作者引导
+                var authorCode = inputObj.attr("data-authorcode");//一级机构
+                if (!!authorCode) {
+                    var arr = authorCode.split("+");
+                    for (var i = 0, len = arr.length; i < len; i++) {
+                        var code = $.trim(arr[i]);
+                        var checkbox = obj.find("span[value='" + code + "']").siblings(":checkbox");
+                        if (!!checkbox) {
+                            checkbox.prop("checked", true);
+                            checkbox.parent().addClass("selected");
+                        }
+                    }
+                }
+                var authorUnit = inputObj.attr("data-authorunit");
+                if (!!authorUnit) {
+                    var arr = authorUnit.split("+");
+                    for (var i = 0, len = arr.length; i < len; i++) {
+                        var code = $.trim(arr[i]);
+                        var checkbox = obj.find("span[value='" + code + "']").siblings(":checkbox");
+                        if (!!checkbox) {
+                            checkbox.prop("checked", true);
+                            checkbox.parent().addClass("selected");
+                            checkbox.parents("ul").show().siblings("div.item").addClass("is-down");
+                        }
+                    }
+                }
+            }
+            else {
+                //非作者引导
+                var checkedcode = inputObj.attr("data-checkedcode");
+                if (!!checkedcode) {
+                    var arr = checkedcode.split("+");
+                    for (var i = 0, len = arr.length; i < len; i++) {
+                        var code = $.trim(arr[i]);
+                        var checkbox = obj.find("input[value='" + code + "']");
+                        if (!!checkbox) {
+                            checkbox.prop("checked", true);
+                            checkbox.parent().addClass("selected");
+                        }
+                    }
+                }
+            }
+        },
+
+        //从后台获取数据 非作者引导
+        //pageIndex:页码数
+        //xmltype:配置文件Recommend.xml的Item节点type属性
+        //inputText:用户输入的检索关键词
+        //isFund:是否是基金
+        //htmlFun 动态拼接html代码的方法
+        getData: function (pageIndex, xmltype, inputText, htmlFun, isFund) {
+            var async = typeof callback == "function" ? false : true;
+            var url = '', param = {};
+            switch (xmltype) {
+                case "literaturerecommend": //文献来源推荐
+                    url = recommendApi + "/api/recommend/source";
+                    param = {pageIndex: pageIndex, sourceName: inputText};
+                    break;
+                case "journalrecommend":    //期刊来源推荐
+                    url = recommendApi + "/api/recommend/journal";
+                    param = {pageIndex: pageIndex, journalName: inputText};
+                    break;
+                case "fundrecommend":       //基金推荐
+                    url = recommendApi + "/api/recommend/fund";
+                    param = {pageIndex: pageIndex, fundName: inputText};
+                    break;
+                case "dormrecommend":       //博硕学位授予单位来源推荐
+                    url = recommendApi + "/api/recommend/ppaper";
+                    param = {pageIndex: pageIndex, ppaperName: inputText};
+                    break;
+                case "newsrecommend":       //报纸来源推荐
+                    url = recommendApi + "/api/recommend/npaper";
+                    param = {pageIndex: pageIndex, npaperName: inputText};
+                    break;
+                case "compilationrecommend":    //辑刊来源推荐
+                    url = recommendApi + "/api/recommend/jiKan";
+                    param = {pageIndex: pageIndex, jiKanName: inputText};
+                    break;
+                case "yearbookrecommend":    //年鉴来源推荐
+                    url = recommendApi + "/api/recommend/yearbook";
+                    param = {pageIndex: pageIndex, yearbookName: inputText};
+                    break;
+            }
+            ajaxSubmit.Submit(url, param, function (data) {
+                htmlFun(pageIndex, data, isFund);
+            }, '', 'jsonp', 'get', async);
+        },
+
+        //从后台获取数据 作者引导
+        //pageIndex 页码
+        //htmlFun 动态拼接html代码的方法
+        getAuthorData: function (pageIndex, inputText, htmlFun) {
+            if (!!pageIndex == false) {
+                pageIndex = "1";
+            }
+            var async = typeof callback == "function" ? false : true;
+            var param = {pageIndex: pageIndex, authorName: inputText}
+            ajaxSubmit.Submit(recommendApi + "/api/recommend/author", param, function (data) {
+                htmlFun(pageIndex, data);
+            }, '', 'jsonp', 'get', async);
+        },
+
+        //拼接非作者引导html字符串
+        creatHtml: function (data) {
+            var json = {
+                "CCJD": "CJFD_",
+                "CJFQ": "CJFD_",
+                "CCND": "CCND_"
+            }
+            var recommendDetailList = '';
+            var dbcode = $("#dbcode").val();
+            for (var i = 0; i < data.list.length; i++) {
+                var code;
+                if (!!data.list[i].viewCode && dbcode.toUpperCase() === "SCDB") {
+                    //文献
+                    code = json[data.list[i].viewCode];
+                }
+                code = !!code ? code : "";
+                var item = '<li><label><input value="' + code + data.list[i].code + '" type="checkbox"><span title="' + data.list[i].name + '">' + data.list[i].name + '</span></label></li>\n';
+                recommendDetailList = recommendDetailList + item;
+            }
+            return recommendDetailList;
+        },
+
+        //拼接作者引导html字符串
+        creatAuthorHtml: function (data) {
+            var recommendDetailList = '';
+            for (var i = 0; i < data.list.length; i++) {
+                var item;
+                SecondInstitution = data.list[i].secondInstitution ? data.list[i].secondInstitution.split(';') : [];
+                var itemhead =
+                    '             <li>\n' +
+                    '                <div class="item"><i class="icon"></i><label href="javascript:void(0);"><input type="checkbox"><span title="' + data.list[i].authorName + '">' + data.list[i].authorName + '</span><span class="organ" value="' + data.list[i].authorCode + '" title="' + data.list[i].firstInstitution + '">' + data.list[i].firstInstitution + '</span></label></div>\n' +
+                    '                <ul>\n';
+                var itembody = '';
+                for (var k = 0; k < SecondInstitution.length; k++) {
+                    if (!SecondInstitution[k]) {
+                        continue;
+                    }
+                    itembody = itembody + '<li><div><label href="javascript:void(0);"><input type="checkbox"><span title="' + data.list[i].authorName + '">' + data.list[i].authorName + '</span><span class="organ" value="' + SecondInstitution[k] + '" title="' + SecondInstitution[k] + '">' + SecondInstitution[k] + '</span></label></div></li>\n';
+                }
+
+                var itemfoot =
+                    '                 </ul>\n' +
+                    '             </li>\n';
+                item = itemhead + itembody + itemfoot;
+
+
+                recommendDetailList = recommendDetailList + item;
+            }
+            return recommendDetailList;
+        },
+
+        //从sug获取主题词推荐
+        getThemeDataBySug: function (inputText, creatThemeHtml, ulObj, inputObj, obj) {
+            var dbcode = $("div.data-selected>span").attr("value");
+            var url = recommendApi + "/su?action=getsmarttips&kw=" + encodeURIComponent(inputText) + "&attr=1&isex=1"
+            $.ajax({
+                url: url,
+                timeout: 1000,
+                type: "GET",
+                dataType: "jsonp",
+                jsonp: "jsonvar",        //若不指定则默认为callback
+                jsonpCallback: "eJson",//若不指定则Jquery自己生成随机的名称
+                success: function (eJson) {
+                    if (!eJson || !eJson.sug) {
+                        return;
+                    }
+                    var data = eJson.sug.replace(/[|*@]/g, "")
+                    var recommendDetailList = creatThemeHtml(data);
+                    ulObj.empty();
+                    ulObj.append(recommendDetailList);
+                    ulObj.siblings(".search-page").hide();
+                    ulObj.siblings(".btn-morefund").hide();
+                    wordsGuid.prototype.setCheckedItems(inputObj, obj)
+                    //ulObj.parent().show();
+                    if (typeof callback == "function")
+                        callback(data);
+                    if (!!mysearch) {//仅高级检索mysearch才会初始化
+                        mysearch._rightRecommendH();//计算右侧推荐列表高度;
+                    }
+                }
+            });
+        },
+
+        //通过推荐栏是否存在数据判断推荐栏展示或隐藏
+        //isshow：是否展示
+        showOrhide: function (isShow) {
+            var divObj = $(".recommend-info");
+            if (isShow) {
+                divObj.removeClass("noContent");
+                divObj.hasClass("droplist") ? divObj.show() : divObj.show().siblings().hide();
+            }
+            else {
+                divObj.addClass("noContent");
+                divObj.hasClass("droplist") ? divObj.hide() : divObj.siblings(".default-info").show().siblings().hide();
+            }
+        }
+    }
+
+    //高级检索引导 继承公共的检索引导
+    function advWordsGuid(recommendDiv, inputText) {
+        //wordsGuid.call(this);
+        this.recommendDiv = recommendDiv;
+        this.inputText = inputText
+        wordsGuid.prototype.init.call(this);//执行父级的初始化方法
+    }
+
+    advWordsGuid.prototype = new wordsGuid();
+    advWordsGuid.prototype.constructor = advWordsGuid;
+
+    advWordsGuid.prototype._judgeRecommend = function (textInput, func) {
+        var that = this;
+        var j = 0;
+        inputObj = $(textInput);
+        callback = func;//把回调函数复制给公共变量
+        mainSearch = inputObj.closest(".search-mainbox");
+        rightSearch = mainSearch.siblings(".search-sidebar-b");
+        reoptText = $.trim(inputObj.siblings(".reopt").find(".sort-default>span").text());
+
+        reoptArr = Object.keys(message.RecommendIndex);//这些检索项有引导功能
+        if (reoptArr.indexOf(reoptText) == -1) {
+            rightSearch.find("dl.default-info").show().siblings().hide();//非引导项显示提示并隐藏引导框
+            return false;
+        }
+
+
+        inputVal = !!inputObj.attr("searchWord") ? inputObj.attr("searchWord") : $.trim(inputObj.val());//input当前值
+        tipID = inputObj.attr("data-tipID");//输入框标记的data-tipID，对应右侧推荐框的id
+        //recommendInfoBox = rightSearch.find("#" + tipID);//与输入框对应右侧推荐框的id
+
+        recommendInfoBox = rightSearch.find(".recommend-info");
+
+        /* 1、输入框值为空，
+        ** 2、存在不可编辑标志(class="disable-editor")，且右侧推荐列表已经不存在时，说明该输入框的值被编辑修改过，此时右侧不进行推荐，
+        ** 3、直到不可编辑标志消失，继续进行推荐
+        * */
+        if (inputVal == "" || (inputObj.hasClass("disable-editor") && recommendInfoBox.length == 0)) {
+            rightSearch.find(".default-info").show().siblings().hide();
+        }
+        else {
+            var hideRecommendBox = $("#" + tipID);
+            if (hideRecommendBox.length > 0 && (hideRecommendBox.attr("searchText") === $.trim(inputObj.val()) || inputObj.hasClass("disable-editor"))) {
+                if (!hideRecommendBox.hasClass("noContent")) {//无内容不显示
+                    recommendInfoBox.removeClass("recommend-info").hide();
+                    hideRecommendBox.show().addClass("recommend-info").siblings().hide();
+                }
+                return;
+            }
+
+            var preTipID = recommendInfoBox.attr("id");
+            if (preTipID !== tipID && hideRecommendBox.length == 0) {//保留上一次推荐结果
+                var preInputObj = $("input[data-tipid='" + preTipID + "']");
+                var preInputText = preInputObj.hasClass("disable-editor") ? preInputObj.attr("searchword") : preInputObj.val();
+                recommendInfoBox.parent().append(recommendInfoBox.clone().removeClass("recommend-info").attr("searchText", preInputText))
+                recommendInfoBox.removeClass("prototype");
+            }
+            else if (hideRecommendBox.length == 1) {
+                hideRecommendBox.addClass("recommend-info").siblings().removeClass("recommend-info");
+                recommendInfoBox = hideRecommendBox;
+            }
+
+            iconTop = inputObj.offset().top - inputObj.parents(".search-middle").offset().top + (inputObj.height() - 16) / 2; //.icon高16px
+            recommendInfoBox.find(".icon-triangle").css("top", iconTop + "px");
+            recommendInfoBox.attr("id", tipID);
+            recommendInfoBox.find(".reopt-tit").text(reoptText);
+            recommendInfoBox.find("ul.recommendList").empty();
+            recommendInfoBox.find("ul.recommendList~div").hide();
+            recommendInfoBox.attr("searchText", $.trim(inputObj.val()))
+            that._matchListFormat(recommendInfoBox, reoptText, inputVal);
+            //recommendInfoBox.show().siblings().hide();
+        }
+
+    }
+    advWordsGuid.prototype._matchListFormat = function (obj, curReopt, inputText) {
+        var that = this;
+
+        if (!inputText) {
+            return;
+        }
+        var parentDivId = obj.attr("id");
+        var inputObj = $("input[data-tipid=" + parentDivId + "]");
+        var ulObj = obj.find(".recommendList");
+
+        //生成高级检索出版物、基金引导html字符串
+        //data 异步请求的数据
+        var htmlFun = function (pageIndex, data, isFund) {
+            ulObj.siblings(".search-page").hide();
+            ulObj.siblings(".btn-morefund").hide();
+            if (data.total == 0) {
+                ulObj.empty();
+                that.showOrhide(false);
+            } else {
+                var recommendDetailList = that.creatHtml(data);
+                if (isFund) {
+                    if (pageIndex == '1') {
+                        //加载第一页
+                        ulObj.empty()
+                    }
+                    ulObj.siblings(".search-page").hide();
+                    if (data.maxPageIndex <= 1 || pageIndex == data.maxPageIndex) {
+                        $(".btn-morefund").hide();
+                    }
+                    else {
+                        $(".btn-morefund").show();
+                    }
+                }
+                else {
+                    ulObj.empty()
+                    if (data.maxPageIndex > 1) {
+                        ulObj.siblings(".search-page").show();
+                    }
+                    else {
+                        ulObj.siblings(".search-page").hide();
+                    }
+                }
+
+                ulObj.append(recommendDetailList);
+                ulObj.siblings(".search-page").find("b").text(pageIndex);
+                ulObj.siblings(".search-page").find("em").text(data.maxPageIndex);
+                ulObj.closest("div.recommend-info").show().siblings().hide();
+                that.setCheckedItems(inputObj, ulObj);
+                that.showOrhide(true);
+
+                mysearch._rightRecommendH(); //计算右侧推荐列表高度;
+
+            }
+            if (typeof callback == "function")
+                callback(data);
+        }
+
+        //生成作者引导html字符串
+        //data:异步请求的数据
+        var athourHtmlFun = function (pageIndex, data) {
+            ulObj.siblings(".search-page").hide();
+            ulObj.siblings(".btn-morefund").hide();
+            if (data.total == 0) {
+                ulObj.empty()
+                that.showOrhide(false);
+            } else {
+                var recommendDetailList = that.creatAuthorHtml(data);
+                ulObj.empty();
+                ulObj.append(recommendDetailList);
+                ulObj.siblings(".search-page").find("b").text(pageIndex);
+                ulObj.siblings(".search-page").find("em").text(data.maxPageIndex);
+                if (data.maxPageIndex > 1) {
+                    ulObj.siblings(".search-page").show();
+                }
+                else {
+                    ulObj.siblings(".search-page").hide();
+                }
+                //ulObj.closest("div.recommend-info").show().siblings().hide();
+                that.setCheckedItems(inputObj, obj, true);
+
+                if (!!mysearch) {//仅高级检索mysearch才会初始化
+                    mysearch._rightRecommendH();//计算右侧推荐列表高度;
+                }
+
+                that.showOrhide(true);
+            }
+            if (typeof callback == "function")
+                callback(data);
+        }
+
+        //翻页事件
+        //obj:绑定翻页事件的对象
+        //xmltype:配置文件Recommend.xml的Item节点type属性
+        var bindPageTurning = function (xmltype, isAuthor, isFund) {
+            //绑定翻页事件 点击翻页按钮请求下一页数据
+            $(".search-page a.but-l").attr('disable', 'true');
+            $(".search-page a").unbind("click").on("click", function () {
+                var pageIndex = $(this).parents(".search-page").find("b").text();
+                parentDivId = $(this).parents(".recommend-info").attr("id");
+                inputObj = $("input[data-tipid=" + parentDivId + "]");
+                ulObj = $("div.recommend-info>ul.recommendList");
+                var searchText = !!inputObj.attr("searchWord") ? inputObj.attr("searchWord") : inputObj.val();
+                var maxPageIndex = $(this).parents(".search-page").find("em").text();
+
+                if ($(this).hasClass('but-l')) {
+                    if (pageIndex == '1') return;
+                    else pageIndex--;
+                }
+                else if ($(this).hasClass('but-r')) {
+                    if (pageIndex == maxPageIndex) return;
+                    else pageIndex++;
+                }
+                else {
+                    return;
+                }
+
+                if (isAuthor) {
+                    that.getAuthorData(pageIndex, searchText, athourHtmlFun);
+                }
+                else if (isFund) {
+                    that.getData(pageIndex, xmltype, searchText, htmlFun, true);
+                }
+                else {
+                    that.getData(pageIndex, xmltype, searchText, htmlFun);
+                }
+
+                if (pageIndex == maxPageIndex) {
+                    $(this).parents(".search-page").find("a.but-r").attr('disable', 'true');
+                    $(this).parents(".search-page").find("a.but-l").attr('disable', 'false');
+                    $(this).parent().siblings("div.btn-morefund").hide()//基金加载更多隐藏
+                }
+                else if (pageIndex == '1') {
+                    $(this).parents(".search-page").find("a.but-r").attr('disable', 'false');
+                    $(this).parents(".search-page").find("a.but-l").attr('disable', 'true');
+                }
+                else {
+                    $(this).parents(".search-page").find("a.but-r").attr('disable', 'false');
+                    $(this).parents(".search-page").find("a.but-l").attr('disable', 'false');
+                }
+                $(this).parents(".search-page").find("b").text(pageIndex);
+            });
+            $(".search-page").find("a[disable='true']").css('cursor', 'default');
+            $(".search-page").find("a[disable='false']").css('cursor', 'pointer');
+            $("div.btn-morefund a").unbind("click").on("click", function () {
+                $(this).parent().siblings(".search-page").find("a.but-r").click();
+            })
+        }
+
+        //主题引导
+        var getThemeDataByApi = function () {
+            // var apipath = recommendApi;
+            // if (!apipath) {
+            //     return;
+            // }
+            // var getByApi = $.ajax({
+            //     url: apipath + "/api/Recommend/GetTheme",
+            //     async: true,
+            //     data: {themeText: inputText, language: LanguageEncode.toUpperCase()},
+            //     type: "GET",
+            //     dataType: "json",
+            //     success: function (data) {
+            //         if (data.isSuccess) {
+            //             var recommendDetailList = creatThemeHtml(data.data);
+            //             ulObj.empty();
+            //             ulObj.append(recommendDetailList);
+            //             mysearch._rightRecommendH();// 计算右侧推荐列表的高度
+            //             ulObj.siblings(".search-page").hide();
+            //             ulObj.siblings(".btn-morefund").hide();
+            //             that.setCheckedItems(inputObj, obj)
+            //         }
+            //         else {
+            that.getThemeDataBySug(inputText, creatThemeHtml, ulObj, inputObj, obj);
+            //         }
+            //         if (typeof callback == "function")
+            //             callback(data);
+            //     }
+            // });
+        }
+
+        //生成主题html字符串
+        // var creatThemeHtml = function (data) {
+        //     that.showOrhide(data.length > 0);
+        //     var recommendDetailList = '';
+        //     for (var i = 0; i < data.length; i++) {
+        //         var item = '<li class="theme-item"><label><input value="' + data[i].name + '"type="checkbox"><span title="' + data[i].name + '" >' + data[i].name + '</span></label></li>\n';
+        //         recommendDetailList = recommendDetailList + item;
+        //     }
+        //     return recommendDetailList;
+        // }
+        //生成主题html字符串
+        var creatThemeHtml = function (data) {
+            if (!!data) {
+                data = data.split(";");
+            }
+            else data = [];
+            that.showOrhide(data.length > 0);
+            var recommendDetailList = '';
+            for (var i = 0; i < data.length; i++) {
+                if (!data[i]) {
+                    continue;
+                }
+                var item = '<li class="theme-item"><label><input value="' + data[i].replace(/#.*#/i, "") + '"type="checkbox"><span title="' + data[i].replace(/#.*#/i, "") + '" >' + data[i].replace(/#.*#/i, "") + '</span></label></li>\n';
+                recommendDetailList = recommendDetailList + item;
+            }
+            return recommendDetailList;
+        }
+        //主题
+        var theme = function () {
+            obj.find("h6>span").text(message.RecommendWords);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-themelist recommendList");
+            ulObj.attr("data-field", "");
+            getThemeDataByApi();
+        }
+
+        //作者
+        var author = function () {
+            obj.find("h6>span").text(message.RecommendAuthor);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-authorlist recommendList");
+            ulObj.attr("data-field", "AUC|AF");
+            that.getAuthorData("1", inputText, athourHtmlFun);
+            bindPageTurning(null, true);
+        }
+
+        //第一作者
+        var firstAuthor = function () {
+            obj.find("h6>span").text(message.RecommendAuthor);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-authorlist recommendList");
+            ulObj.attr("data-field", "AUC|AF");
+            that.getAuthorData("1", inputText, athourHtmlFun);
+            bindPageTurning(null, true);
+        }
+
+        //通讯作者
+        var comAuthor = function () {
+            obj.find("h6>span").text(message.RecommendAuthor);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-authorlist recommendList");
+            ulObj.attr("data-field", "IAUC|IAF");
+            that.getAuthorData("1", inputText, athourHtmlFun);
+            bindPageTurning(null, true);
+        }
+
+        //文献
+        var paper = function () {
+            obj.find("h6>span").text(message.RecommendLiterature);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-journallist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "literaturerecommend", inputText, htmlFun);
+            bindPageTurning("literaturerecommend");
+        }
+
+        //期刊
+        var journal = function () {
+            obj.find("h6>span").text(message.RecommendJournal);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-journallist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "journalrecommend", inputText, htmlFun);
+            bindPageTurning("journalrecommend");
+        }
+
+        //报纸
+        var newspaper = function () {
+            obj.find("h6>span").text(message.RecommendNewspaper);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-journallist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "newsrecommend", inputText, htmlFun);
+            bindPageTurning("newsrecommend");
+        }
+
+        //年鉴
+        var yearbook = function () {
+            obj.find("h6>span").text(message.RecommendYearbook);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-journallist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "yearbookrecommend", inputText, htmlFun);
+            bindPageTurning("yearbookrecommend");
+        }
+
+        //辑刊
+        var compilation = function () {
+            obj.find("h6>span").text(message.RecommendMagzine);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-journallist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "compilationrecommend", inputText, htmlFun);
+            bindPageTurning("compilationrecommend");
+        }
+
+        //基金
+        var fund = function () {
+            obj.find("h6>span").text(message.RecommendFund);
+            ulObj.removeClass().addClass("recommend-fund-list js-recommend-fundlist recommendList");
+            ulObj.attr("data-field", "FUC");
+            $(".search-page").hide();
+            that.getData("1", "fundrecommend", inputText, htmlFun, true);
+            bindPageTurning("fundrecommend", false, true);
+        }
+        //博硕士
+        var ppaper = function () {
+            obj.find("h6>span").text(message.RecommendLiterature);
+            ulObj.removeClass().addClass("recommend-info-list js-recommend-journallist recommendList");
+            ulObj.attr("data-field", "LY");
+            that.getData("1", "dormrecommend", inputText, htmlFun);
+            bindPageTurning("dormrecommend");
+        }
+        var recommendObj = {
+            "主题": theme,
+            "篇名": theme,
+            "题名": theme,
+            "正文": theme,
+            "专利名称": theme,
+            "标准名称": theme,
+            "成果名称": theme,
+            "关键词": theme,
+            "摘要": theme,
+            "全文": theme,
+            "报告标题": theme,
+            "标题": theme,
+            "职业标准名称": theme,
+            "成果简介": theme,
+            "作者": author,
+            "第一作者": firstAuthor,
+            "通讯作者": comAuthor,
+            "文献来源": paper,
+            "期刊名称": journal,
+            "基金": fund,
+            "报纸名称": newspaper,
+            "年鉴名称": yearbook,
+            "辑刊名称": compilation,
+            "学位授予单位": ppaper,
+        }
+
+        var key = message.RecommendIndex[curReopt]//通过多语言索引找到对应的方法
+
+        if (key in recommendObj) {
+            recommendObj[key]();
+        }
+
+    };
+
+    //一框式检索引导 继承公共的检索引导
+    function oneBoxWordsGuid(recommendDiv, inputText) {
+        //wordsGuid.call(this);
+        this.recommendDiv = recommendDiv;
+        this.inputText = inputText
+        wordsGuid.prototype.init.call(this);//执行父级的初始化方法
+    }
+
+    oneBoxWordsGuid.prototype = new wordsGuid();
+    oneBoxWordsGuid.prototype.constructor = oneBoxWordsGuid;
+
+    oneBoxWordsGuid.prototype.privateEvent = function () {
+        //一框式检索引导独有的事件
+        var that = this;
+        $(that.recommendDiv).on("mouseenter", ".item", function () {
+            recommendList = $(this).closest(".recommend-info-list");
+            if ($(this).hasClass("hover")) return;
+            recommendList.find(".item").removeClass("hover");
+            $(this).addClass("hover");
+        });
+
+        //一框式检索框清空按钮
+        $("body").on("click", "a.btn-cleartext", function () {
+            $(this).siblings(":text").val("");
+            that.clearInputAttr($(this).siblings(":text"));
+            $(this).hide();
+        })
+    }
+    oneBoxWordsGuid.prototype._judgeRecommend = function (textInput) {
+        var that = this;
+        var reoptText = $(textInput).siblings("div.sort.reopt").find(".sort-default span").text();//检索关键词 作者、基金等
+        var inputVal = !!$(textInput).attr("searchWord") ? $(textInput).attr("searchWord") : $.trim($(textInput).val());
+        ;//input当前值
+
+
+        if (inputVal == "" || inputVal == $(textInput).attr("placeholder")) {
+            $(that.recommendDiv).hide()
+            return;
+        } else {
+            that._matchListFormat($(that.recommendDiv).find("ul"), reoptText, inputVal);
+            //$(that.recommendDiv).show()
+        }
+
+    }
+    oneBoxWordsGuid.prototype._matchListFormat = function (obj, curReopt, inputText) {
+        var that = this;
+        if (!inputText) {
+            return;
+        }
+
+        var ulObj = obj;
+        var inputObj = $(that.inputText);
+
+        //生成高级检索出版物、基金引导html字符串
+        //data 异步请求的数据
+        var htmlFun = function (pageIndex, data, isFund) {
+            if (data.total == 0) {
+                //ulObj.parent().hide();
+                that.showOrhide(false);
+            } else {
+                var recommendDetailList = that.creatHtml(data);
+                ulObj.empty()
+                if (data.maxPageIndex > 1) {
+                    ulObj.siblings(".search-page").show();
+                }
+                else {
+                    ulObj.siblings(".search-page").hide();
+                }
+                ulObj.append(recommendDetailList);
+                ulObj.siblings(".search-page").find("b").text(pageIndex);
+                ulObj.siblings(".search-page").find("em").text(data.maxPageIndex);
+
+                that.setCheckedItems(inputObj, ulObj);
+                //ulObj.parent().show();
+                that.showOrhide(true);
+            }
+        }
+
+        //生成作者引导html字符串
+        //data 异步请求的数据
+        var athourHtmlFun = function (pageIndex, data) {
+            if (data.total == 0) {
+                //ulObj.parent().hide();
+                that.showOrhide(false);
+            } else {
+                var recommendDetailList = that.creatAuthorHtml(data);
+                ulObj.empty();
+                ulObj.append(recommendDetailList);
+                ulObj.siblings(".search-page").find("b").text(pageIndex);
+                ulObj.siblings(".search-page").find("em").text(data.maxPageIndex);
+                if (data.maxPageIndex > 1) {
+                    ulObj.siblings(".search-page").show();
+                }
+                else {
+                    ulObj.siblings(".search-page").hide();
+                }
+                that.setCheckedItems(inputObj, obj, true);
+                ulObj.find("li>div").removeClass("item").addClass("item")
+                //ulObj.parent().show();
+                that.showOrhide(true);
+            }
+        }
+
+        //翻页事件
+        //obj 绑定翻页事件的对象
+        //xmltype:配置文件Recommend.xml的Item节点type属性
+        var bindPageTurning = function (xmltype, isAuthor) {
+            //绑定翻页事件 点击翻页按钮请求下一页数据
+            $(".search-page a.but-l").attr('disable', 'true');
+            $(".search-page a").unbind("click").on("click", function () {
+                var pageIndex = $(".search-page b").text();
+                var inputObj = $(that.inputText);
+                var searchText = !!inputObj.attr("searchWord") ? inputObj.attr("searchWord") : inputObj.val();
+                var maxPageIndex = $(".search-page em").text();
+
+                if ($(this).hasClass('but-l')) {
+                    if (pageIndex == '1') return;
+                    else pageIndex--;
+                }
+                else if ($(this).hasClass('but-r')) {
+                    if (pageIndex == maxPageIndex) return;
+                    else pageIndex++;
+                }
+                else {
+                    return;
+                }
+
+                if (isAuthor) {
+                    that.getAuthorData(pageIndex, inputText, athourHtmlFun);
+                }
+                else {
+                    that.getData(pageIndex, xmltype, inputText, htmlFun);
+                }
+
+                if (pageIndex == maxPageIndex) {
+                    $(".search-page a.but-r").attr('disable', 'true');
+                    $(".search-page a.but-l").attr('disable', 'false');
+                    $("div.btn-morefund").hide()//基金加载更多隐藏
+                }
+                else if (pageIndex == '1') {
+                    $(".search-page a.but-r").attr('disable', 'false');
+                    $(".search-page a.but-l").attr('disable', 'true');
+                }
+                else {
+                    $(".search-page a.but-r").attr('disable', 'false');
+                    $(".search-page a.but-l").attr('disable', 'false');
+                }
+                $(".search-page b").text(pageIndex);
+                $(".search-page").find("a[disable='true']").css('cursor', 'default');
+                $(".search-page").find("a[disable='false']").css('cursor', 'pointer');
+            });
+            $(".search-page").find("a[disable='true']").css('cursor', 'default');
+            $(".search-page").find("a[disable='false']").css('cursor', 'pointer');
+        }
+
+        //作者
+        var author = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-authorlist recommendList");
+            ulObj.attr("data-field", "AUC|AF");
+            that.getAuthorData("1", inputText, athourHtmlFun);
+            bindPageTurning(null, true);
+        }
+
+        //第一作者
+        var firstAuthor = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-authorlist recommendList");
+            ulObj.attr("data-field", "FIC|FAF");
+            that.getAuthorData("1", inputText, athourHtmlFun);
+            bindPageTurning(null, true);
+        }
+
+        //通讯作者
+        var comAuthor = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-authorlist recommendList");
+            ulObj.attr("data-field", "IAUC|IAF");
+            that.getAuthorData("1", inputText, athourHtmlFun);
+            bindPageTurning(null, true);
+        }
+
+        //文献
+        var paper = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "literaturerecommend", inputText, htmlFun);
+            bindPageTurning("literaturerecommend");
+        }
+
+        //主题
+        var theme = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "");
+            that.getThemeDataBySug(inputText, creatThemeHtml, ulObj, inputObj, obj);
+        }
+        //博硕士
+        var ppaper = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "LY");
+            that.getData("1", "dormrecommend", inputText, htmlFun);
+            bindPageTurning("dormrecommend");
+        }
+        //生成主题html字符串
+        var creatThemeHtml = function (data) {
+            if (!!data) {
+                data = data.split(";");
+            }
+            else data = [];
+            that.showOrhide(data.length > 0);
+            var recommendDetailList = '';
+            for (var i = 0; i < data.length; i++) {
+                if (!data[i]) {
+                    continue;
+                }
+                var item = '<li class="theme"><span>' + data[i].replace(/#.*#/i, "") + '</span></label></li>\n';
+                recommendDetailList = recommendDetailList + item;
+            }
+            return recommendDetailList;
+        }
+
+        //期刊
+        var journal = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "journalrecommend", inputText, htmlFun);
+            bindPageTurning("journalrecommend");
+        }
+
+        //报纸
+        var newspaper = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "newsrecommend", inputText, htmlFun);
+            bindPageTurning("newsrecommend");
+        }
+
+        //年鉴
+        var yearbook = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "yearbookrecommend", inputText, htmlFun);
+            bindPageTurning("yearbookrecommend");
+        }
+
+        //辑刊
+        var compilation = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "LYC");
+            that.getData("1", "compilationrecommend", inputText, htmlFun);
+            bindPageTurning("compilationrecommend");
+        }
+
+        //基金
+        var fund = function () {
+            ulObj.removeClass().addClass("recommend-info-list recommend-fundlist recommendList");
+            ulObj.attr("data-field", "FUC");
+            that.getData("1", "fundrecommend", inputText, htmlFun);
+            bindPageTurning("fundrecommend");
+        }
+
+        var recommendObj = {
+            // "主题": theme,
+            "文献来源": paper,
+            "作者": author,
+            "第一作者": firstAuthor,
+            "通讯作者": comAuthor,
+            "期刊名称": journal,
+            "基金": fund,
+            "报纸名称": newspaper,
+            "年鉴名称": yearbook,
+            "辑刊名称": compilation,
+            "学位授予单位": ppaper
+        }
+
+        var key = message.RecommendIndex[curReopt]//通过多语言索引找到对应的方法
+
+        if (key in recommendObj) {
+            recommendObj[key]();
+        }
+    };
+
+    return {
+        getAdvWordsGuid: function (recommendDiv, inputText) {
+            return new advWordsGuid(recommendDiv, inputText);
+        },
+
+        getOneBoxWordsGuid: function (recommendDiv, inputText) {
+            return new oneBoxWordsGuid(recommendDiv, inputText);
+        }
+    }
+}())
+window.wordsGuid = wordsGuid;
+

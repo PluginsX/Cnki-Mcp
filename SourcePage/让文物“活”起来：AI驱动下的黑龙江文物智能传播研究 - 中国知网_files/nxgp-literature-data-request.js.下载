@@ -1,0 +1,1563 @@
+var literaturesApiHost = "https://kns.cnki.net/restapi";
+var similarArticle = "/v1/articles/relations/similar";
+var readerRecommend = "/v1/articles/relations/recommends";
+var relatedVideos = "/v1/articles/relations/videos";                    //相关视频
+var relatedFundLiteratureURL = "/v1/articles/relations/fund-articles";  //相关基金文献
+var associatedAuthorURL = "/v1/articles/relations/authors";               //关联作者
+var yearbookSameColumnLiteratureYearsURL = "/v1/articles/year/{id}";         //年鉴相同栏目年分组
+var yearbookSameColumnLiteratures = "/v1/articles/relations/co-column";   //年鉴相同栏目某年文献
+var fourKeyElementURL = "/v1/articles/summary"; //文摘4要素接口
+var publishingURL ="/v1/articles/publishing";
+var attachmentsURL ="/v1/articles/attachments";
+
+var publicationApiHost = "https://kns.cnki.net/restapi/knavi-api";
+var PUBLICATION_INFO_URL = "/v1/criteria/query"
+var ATTACHMENT_VIEDEO_PATH = "/v1/video/sign"
+var RecommendedBYreaders = "/usercenter-api/v1/recommend/scenario/articles";
+
+var similarArticleNew = "/usercenter-api/v1/recommend/similar/articles";
+
+function getSimilarDataFromApiOld(div, filename, resource) {
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if (!div || !filename || !resource || !v) {
+        return;
+    }
+    //已经有数据不再发送请求
+    if ($("#" + div).length > 1) {
+        return;
+    }
+    var wgpart = getVV();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    /*var kurl = apiHost + similarArticle + wgpart;*/
+    var kurl = apiHost + similarArticle + "?" + v +"&start=1&size=10";
+    /*kurl = "http://jlb.cnki.net:8084/v1/articles/relations/similar?dbcode=CJFQ&filename=JSYX201703008&resource=JOURNAL&size=10&start=1"*/
+    var dataset = "";
+    if(resource.toUpperCase() == "CYFD" || resource.toUpperCase() == "BSFD"){
+        dataset = resource.toUpperCase() + "LM_TOTAL";
+    }
+    var kdata = {
+        id: filename,
+        resource: resource,
+        dataset: dataset,
+        size: 10,
+        start: 1
+    };
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        /*data: JSON.stringify(kdata),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data) {
+                if (data.data && data.data.data && data.data.data.length > 0) {
+                    var ulhtml = nxgpdata_stucture_analysis_urpart(data);
+                    $("#" + div).html(ulhtml);
+                    $("#" + div).attr("isRequest", 1);
+                    if($("#paramresource").length >0
+                        && $("#paramresource").val().toUpperCase() === "JOURNAL"){
+                        var array = [];
+                        $("#kcms-data-similar").find("li .search-id").each(function(){
+                            array.push($(this).val());
+                        });
+                        var kdata = {
+                            ids: array,
+                            position: "SIMILAR"
+                        };
+                        addZbtjSignList("kcms-data-similar",kdata);
+                    }
+                } else {
+                    $(".bulkdown").hide();
+                    noData(div);
+                }
+            } else {
+                $(".bulkdown").hide();
+                noData(div);
+            }
+        }
+    });
+}
+function getSimilarDataFromApi(div, filename, resource) {
+    var productId = resource;
+    if (resource.toUpperCase() == "CJFQ"
+        || resource.toUpperCase() == "CJFD"
+        || resource.toUpperCase() == "CAPJ"
+        || resource.toUpperCase() == "CJFN"
+        || resource.toUpperCase() == "CCJD"
+        || resource.toUpperCase() == "ZHYX"){
+        productId = "CJFD";
+    }
+    var wgpart = getVV();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val()  : literaturesApiHost;
+    apiHost = handleUserApiUrl(apiHost);
+    var id = $("#export-id").val();
+    var kurl = apiHost + similarArticleNew  +"?productid="+productId+"&trace=JZTJ_KCMSSIMILAR&articleid="+id+"&size=10";
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        dataType: "json",
+        contentType: "application/json",
+        headers: getHearder(),
+        xhrFields: {//设置withCredentials 允许带Cookie
+            withCredentials: true
+        },
+        success: function (data) {
+            if (data && data.data && data.data.length > 0) {
+                var ulhtml = nxgpdata_stucture_analysis_urpart(data);
+                $("#" + div).html(ulhtml);
+                $("#" + div).attr("isRequest", 1);
+                if($("#paramresource").length >0) {
+
+                    handlZbtjSignSort();
+                }
+
+            } else {
+                $(".bulkdown").hide();
+                noData(div);
+            }
+        }
+    });
+}
+
+
+function getSimilarEbookFromApi(){
+    var v = $("#paramkcmslink").val();
+    if(!v){
+        return;
+    }
+    var url = "../book/recommend?{0}";
+    url = url.format(v);
+    $.get(url, function (data) {
+        let html = '';
+        if (data &&  data.length > 0) {
+            /*var ulhtml = urpart_content(data,"EBOOK",1,"");*/
+            var $lists = $('#relBooks .lists')
+            var $existingItems = $lists.find('.list_item');
+            // 如果已经处理过，不再重复处理
+            if ($lists.data('merged')) {
+                return;
+            }
+            // 1. 先移除他们的后5条数据
+            var $theirLast5 = $existingItems.slice(5);// 获取他们的后5条
+            $theirLast5.detach();// 先移除但保留引用
+            // 2. 清空现有内容
+            $lists.empty();
+            // 3. 插入我的5条数据
+            for (var i = 0; i < data.length; i++) {
+                var dataarrdata = data[i];
+                var newIndex = i + 1;
+                const $newItem = createBookItem(dataarrdata, newIndex);
+                $lists.append($newItem);
+
+            }
+            // 4. 插入他们的前5条数据（重新编号）
+            $existingItems.slice(0, 5).each(function(index) {
+                const $item = $(this);
+                const newIndex = index + 6; // 6-10
+                updateBookItemNumber($item, newIndex);
+                $lists.append($item);
+            });
+
+            // 标记已处理
+            $lists.data('merged', true);
+
+            console.log('数据合并完成');
+
+            // 触发自定义事件
+            $(document).trigger('books:merged');
+
+        }
+    });
+}
+
+function createBookItem(dataarrdata, index) {
+
+    var ti = _findmetadatavalue(dataarrdata, "TI");
+    var link = _findrelationsvalue(dataarrdata, "ABSTRACT");
+    var author = _findmetadatavalue(dataarrdata, "AU");
+    var ptitle = dataarrdata.source.title? dataarrdata.source.title : "";
+
+    return $(`
+            <div class="list_item">
+                [${index}] <a target="_blank" title="${ti}" href="${link}">${ti}</a>. ${author}. ${ptitle}
+            </div>
+        `);
+}
+// 更新现有图书条目的序号
+function updateBookItemNumber($item, newIndex) {
+    // 获取原始的HTML内容
+    let html = $item.html();
+
+    // 替换序号部分
+    // 匹配 [数字] 开头的部分
+    html = html.replace(/\[\s*(\d+)\s*\]/i,  `[${newIndex}]`);
+
+    // 更新HTML
+    $item.html(html);
+
+    return $item;
+}
+function handlZbtjSignSort(){
+
+    $("#kcms-data-reader-recommend li").each(function (index) {
+        if($(this).find(".editor-span").length > 0){
+            var index = $(this).index();
+            if(index != 0){
+                $(this).prependTo("#kcms-data-reader-recommend .ebBd");
+                resetItemNumbers("kcms-data-reader-recommend");
+            }
+        }
+    })
+
+    $("#kcms-data-similar li").each(function (index) {
+        if($(this).find(".editor-span").length > 0){
+            var index = $(this).index();
+            if(index != 0){
+                $(this).prependTo("#kcms-data-similar .ebBd");
+                resetItemNumbers("kcms-data-similar");
+            }
+        }
+    })
+}
+function addZbtjSignList(div,kdata,positionDiv){
+
+    var apiHost =  $("#apiHost").val()
+    if(apiHost.indexOf("/restapi")>0){
+        apiHost = apiHost.replace("/restapi","/uniapps");
+    }
+    var url = apiHost + "/journalmarket/v2/push/list";
+    if(kdata.ids && kdata.ids.length > 0){
+        $.ajax({
+            url: url,
+            type: "POST",
+            contentType: 'application/json',
+            data: JSON.stringify(kdata),
+            headers: getHearder("JZTJ"),
+            timeout: 8000,
+            success: function (data) {
+                if(data.code === 0 && data.data && data.data.length > 0){
+                    var result = data.data;
+                    for (var i = 0; i < result.length; i++) {
+                        if(result[i].pushState === 1){
+                            var tjId = result[i].fileId;
+                            $("#"+div+" li #"+tjId).after("<span class=\"editor-span\" >主编推荐</span>")
+                            var index = $("#"+div+" #"+tjId).parent("li").index()
+                            if(index === 0){
+                                continue;
+                            }
+                            if(positionDiv){
+                                var $fifthItem = $("#"+div+" ."+positionDiv+" li").eq(i);
+                                $fifthItem.prependTo("#"+div+" ."+positionDiv);
+                                $("#"+div+" ."+positionDiv+" li").each(function(index) {
+                                    // 序号从1开始
+                                    $(this).find('.number').text("["+(index + 1)+"]");
+                                });
+                            }else{
+                                var $fifthItem = $("#"+div+" li").eq(i);
+                                $fifthItem.prependTo("#"+div+" .ebBd");
+                                resetItemNumbers(div);
+                            }
+
+                        }
+                    }
+
+                }
+            },
+            error: function(xhr, status, error) {
+                if (status === 'timeout') {}
+            }
+        });
+    }
+}
+
+// 重置所有文献条目的序号
+function resetItemNumbers(div) {
+    $("#"+div+" li").each(function(index) {
+        // 序号从1开始
+        $(this).find('.number').text("["+(index + 1)+"]");
+    });
+}
+
+function getSimilarDataFromApi2(div) {
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if(!v){
+        return;
+    }
+    //已经有数据不再发送请求
+    if ($("#" + div).length > 1) {
+        return;
+    }
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    var kurl = apiHost + similarArticle + "?v=" + v;
+
+
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data) {
+                if (data.data.data && data.data.data.length > 0) {
+                    var ulhtml = nxgpdata_stucture_analysis_urpart(data);
+                    $("#" + div).html(ulhtml);
+                    $("#" + div).attr("isRequest", 1);
+                } else {
+                    noData(div);
+                }
+            } else {
+                noData(div);
+            }
+        }
+    });
+}
+//读者推荐部分  同相似文献
+function getAraDownloadDataFromApi(div, filename, resource){
+
+    var productId = resource;
+    if (resource.toUpperCase() == "CJFQ"
+        || resource.toUpperCase() == "CJFD"
+        || resource.toUpperCase() == "CAPJ"
+        || resource.toUpperCase() == "CJFN"
+        || resource.toUpperCase() == "CCJD"
+        || resource.toUpperCase() == "ZHYX"){
+        productId = "CJFD";
+    }
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val()  : literaturesApiHost;
+    apiHost = handleUserApiUrl(apiHost);
+    var id = $("#export-id").val();
+    var kurl = apiHost + RecommendedBYreaders  +"?productid="+productId+"&trace=JZTJ_KCMSSCENARIO&resourcetype=paper&articleid="+id+"&start=1&size=10";
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        dataType: "json",
+        contentType: "application/json",
+        headers: getHearder(),
+        xhrFields: {//设置withCredentials 允许带Cookie
+            withCredentials: true
+        },
+        success: function (data) {
+            if (data && data.data && data.data.length > 0) {
+                var ulhtml = nxgpdata_stucture_analysis_urpart(data);
+                $("#" + div).html(ulhtml);
+                $("#" + div).attr("isRequest", 1);
+                if($("#paramresource").length >0) {
+                    /* var array = [];
+                     $("#kcms-data-reader-recommend").find("li .search-id").each(function () {
+                         array.push($(this).val());
+                     });
+                     var kdata = {
+                         ids: array,
+                         position: "SCENARIO"
+                     };*/
+                    handlZbtjSignSort();
+                }
+            } else {
+                $(".bulkdown").hide();
+                noData(div);
+            }
+        }
+    });
+
+}
+
+function userHitLog(obj,position){
+    var param = $(obj).attr("id");
+    var strs = param.split("|");
+    var recId = strs[0] ? strs[0]:"";
+    var filename = strs[1]? strs[1]:"";
+    var title =$(obj).text();
+    var userip = getClientIP();
+    if(userip && userip.indexOf("%7C") > -1){
+        userip = userip.split("%7C")[0];
+    }
+    var clientid = getClientID();
+    if(clientid && clientid.indexOf("%7C") > -1){
+        clientid = clientid.split("%7C")[0];
+    }
+    var c_m_LinID = newgetCookie("c_m_LinID");
+    if(c_m_LinID){
+        var e = c_m_LinID.indexOf("="),
+            i = c_m_LinID.lastIndexOf("&");
+        var indenId = c_m_LinID.substring(e + 1, i);
+    }
+
+    if(!indenId){indenId = -1;}
+    var params = 'idenID='+ indenId + '&clientID=' + clientid + '&userIP=' + userip + '&platformURL='+position+'&recID='+recId+'&resourceType=paper&resourceID='+filename+'&resourceName='+ title;
+    $.ajax({
+        url: 'https://recsys.cnki.net/RCDService/api/Log/UserHitLog?' + params,
+        type: "POST",
+        /* data: JSON.stringify(kdata),*/
+        /*  headers: getHearder(),*/
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (!data || !data.Success) {
+                console.log("日志记录失败！")
+            }
+        }
+    });
+
+}
+
+function noData(div){
+    if($("#kcms-data-reader-recommend-parent").length>0){
+        $("#" + div + "-parent").hide();
+    }else{
+        $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">"+NULL_DATA+"</b></h3>");
+    }
+}
+
+//相关视频
+function getRelatedVideos(div, filename, resource) {
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if (!div || !filename || !resource || !v) {
+        return;
+    }
+    //已经有数据不再发送请求
+    if ($("#" + div).length > 1) {
+        return;
+    }
+    /*var wgpart = getVV();*/
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost + "/literature-api";
+    var kurl = apiHost + relatedVideos + "?" + v;
+    /*var kdata = {
+        id: filename,
+        resource: resource,
+        size: 10,
+        start: 1
+    };*/
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        /*  data: JSON.stringify(kdata),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data) {
+                if (data.data && data.data.data && data.data.data.length > 0) {
+                    var ulhtml = relatedVideosDataConversion(data.data);
+                    $("#" + div).html(ulhtml);
+                    $("#" + div).attr("isRequest", 1);
+                } else {
+                    noData(div);
+                }
+            } else {
+                noData(div);
+            }
+        }
+    });
+}
+
+//相关基金文献
+function relatedFundLiterature(div, filename) {
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if (!div || !filename) {
+        return;
+    }
+    //已经有数据不再发送请求
+    if ($("#" + div).length > 1) {
+        return;
+    }
+    var v = $("#paramkcmslink").val();
+    var wgpart = getVV();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    /*var kurl = apiHost + relatedFundLiteratureURL + wgpart;*/
+    var referencesParamUrl = apiHost + relatedFundLiteratureURL + "?" + v +"&type=references&start=1&size=10";
+    var citationsParamurl = apiHost + relatedFundLiteratureURL + "?" + v +"&type=citations&start=1&size=10";
+    var referencesParam = {
+        id: filename,
+        type: "references",
+        size: 10,
+        start: 1
+    };
+    var citationsParam = {
+        id: filename,
+        type: "citations",
+        size: 10,
+        start: 1
+    };
+    var references, citations;
+    $("#" + div).attr("isRequest", 1);
+    var index= 0;
+    $.ajax({
+        url: referencesParamUrl,
+        type: "GET",
+        /* data: JSON.stringify(referencesParam),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            index ++ ;
+            if (data) {
+                if (data.data && data.data.length > 0) {
+                    references = data.data;
+                    var ulhtml = relatedFundReferencesLiteratureDataConversion(references);
+                    $("#" + div).append(ulhtml);
+                    if($("#paramresource").length >0) {
+                        var array = [];
+                        $("#kcms-related-fund-literature .citations-literatures").find("li .search-id").each(function () {
+                            array.push($(this).val());
+                        });
+                        var kdata = {
+                            ids: array,
+                            position: "JZTJ_KCMSFUND"
+                        };
+                        addZbtjSignList("kcms-related-fund-literature", kdata, "citations-literatures");
+                    }
+                } else {
+                    if(index == 2){
+                        $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                    }
+                }
+            } else {
+                if(index == 2){
+                    $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                }
+            }
+        }
+    });
+    $.ajax({
+        url: citationsParamurl,
+        type: "GET",
+        /*data: JSON.stringify(citationsParam),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            index ++ ;
+            if (data) {
+                if (data.data && data.data.length > 0) {
+                    citations = data.data;
+                    var ulhtml = relatedFundCitationsLiteratureDataConversion(citations);
+                    $("#" + div).append(ulhtml);
+                    var array = [];
+                    $("#kcms-related-fund-literature .references-literatures").find("li .search-id").each(function(){
+                        array.push($(this).val());
+                    });
+                    var kdata = {
+                        ids: array,
+                        position: "JZTJ_KCMSFUND"
+                    };
+                    addZbtjSignList("kcms-related-fund-literature",kdata,"references-literatures");
+                } else {
+                    if(index == 2){
+                        $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                    }
+                }
+            } else {
+                if(index == 2){
+                    $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                }
+            }
+        }
+    });
+}
+
+//关联作者
+function associatedAuthor(div, filename) {
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if (!div || !filename || !v) {
+        return;
+    }
+    //已经有数据不再发送请求
+    if ($("#" + div).length > 1) {
+        return;
+    }
+    var wgpart = getVV();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    /*var kurl = apiHost + associatedAuthorURL + wgpart;*/
+    var referencesParamUrl = apiHost + associatedAuthorURL + "?" + v +"&type=references&start=1&size=10";
+    var citationsParamurl = apiHost + associatedAuthorURL + "?" + v +"&type=citations&start=1&size=10";
+    var referencesParam = {
+        id: filename,
+        type: "references",
+        size: 10,
+        start: 1
+    };
+    var citationsParam = {
+        id: filename,
+        type: "citations",
+        size: 10,
+        start: 1
+    };
+    var references, citations;
+    $("#" + div).attr("isRequest", 1);
+
+    var index= 0;
+    $.ajax({
+        url: referencesParamUrl,
+        type: "GET",
+        /*data: JSON.stringify(referencesParam),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            index ++ ;
+            if (data) {
+                if (data.data && data.data.length > 0) {
+                    references = data.data;
+                    var ulhtml = associatedReferencesAuthorDataConversion(references);
+                    $("#" + div).append(ulhtml);
+                } else {
+                    if(index == 2){
+                        $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                    }
+                }
+            } else {
+
+                if(index == 2){
+                    $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                }
+
+            }
+        }
+    });
+    $.ajax({
+        url: citationsParamurl,
+        type: "GET",
+        /*data: JSON.stringify(citationsParam),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            index ++ ;
+            if (data) {
+                if (data.data && data.data.length > 0) {
+                    citations = data.data;
+                    var ulhtml = associatedCitationsAuthorDataConversion(citations);
+                    $("#" + div).append(ulhtml);
+                } else {
+                    if(index == 2){
+                        $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                    }
+                }
+            } else {
+                if(index == 2){
+                    $("#" + div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                }
+            }
+        }
+    });
+
+}
+
+//同栏目文献年份
+function getYearbookSameColumnLiteratureYears(div, year) {
+    if (!div) {
+        return;
+    }
+    //已经有数据不再发送请求
+    if ($("#" + div).length > 1) {
+        return;
+    }
+    var chekcYear;
+    var wgpart = getVV();
+    var filename = $("#paramfilename").val();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    var url = apiHost + yearbookSameColumnLiteratureYearsURL.replace("{id}", filename) + wgpart;
+
+    $("#" + div).attr("isRequest", 1);
+    $.ajax({
+        url: url,
+        type: "POST",
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data.data && data.data.length > 0) {
+                years = data.data.sort(function(a,b){
+                    if(b.code){
+                        return b.code-a.code
+                    }else{
+                        return b.YEAR-a.YEAR
+                    }
+
+                });
+
+                if (!year) {
+                    chekcYear = years[0].code?years[0].code: years[0].YEAR;
+                }
+                var ulhtml = yearbookSameColumnLiteratureYearsDataConversion(years, chekcYear);
+                $("#" + div).html(ulhtml);
+                getYearbookSameColumnLiteratures(chekcYear, 1);
+                $("#" + div).show();
+            } else {
+                noData(div);
+            }
+        }
+    });
+
+
+}
+
+// 同栏目文献数据
+function getYearbookSameColumnLiteratures(chekcYear, pageno, _this) {
+    var wgpart = getVV();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    var literatureUrl = apiHost + yearbookSameColumnLiteratures + wgpart;
+    var start = (pageno-1)*10+1;
+    var filename = $("#paramfilename").val();
+    var param = {
+        id: filename,
+        year: chekcYear,
+        size: 10,
+        start: start
+    };
+    if(_this) {
+        $(_this).addClass('columnYear').siblings().removeClass('columnYear');
+    }else {
+        var first=$(".SplitDiv").find("a")[0];
+        $(first).addClass('columnYear');
+    }
+    $.ajax({
+        url: literatureUrl,
+        type: "POST",
+        data: JSON.stringify(param),
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data && data.code==0) {
+                if (data.data && data.data.data && data.data.data.length > 0) {
+                    citations = data.data;
+                    // var pageno=start/10;
+                    pageinitCallback(citations,chekcYear,filename,pageno);
+                } else {
+                    $("#same-column-literature").hide();
+                }
+            } else {
+                $("#same-column-literature").hide();
+            }
+        }
+    });
+}
+
+//大陆法规效力级别分组
+function getRelatedLawLevelLegal(div,filename,product){
+
+    if($(".keywords").length > 0 && $(".keywords").find("a").length>0){
+        var keyword =  $(".keywords").find("a").text();
+        var arrKeyword = keyword.split(";");
+        var filteredArr = arrKeyword.filter(function(value) {
+            return value !== null && value !== undefined && value !== "";
+        });
+        var data = {
+            filteredArr: filteredArr,  // 必须是数组，不能是对象
+            filename: filename,
+            product: product
+        };
+        $.ajax({
+            url: '../law/level-legal',
+            type: 'POST',
+            contentType: 'application/json; charset=UTF-8',
+            data: JSON.stringify(data),
+            success: function(data) {
+                if (data && data.length>0) {
+                    var referenceOrder = [
+                        '01', '0201', '0202', '0203', '0204',
+                        '03', '06', '08', '05', '07',
+                        '04', '09', '10', '14', '15',
+                        '17', '13010301', '13010302'
+                    ];
+                    // 创建参考顺序的映射对象（提高查找效率）
+                    var orderMap = {};
+                    referenceOrder.forEach(function(code, index) {
+                        orderMap[code] = index + 1; // 使用1-based索引
+                    });
+
+                    // 1. 首先过滤掉code不在参考顺序中的对象
+                    var filteredList   = data.filter(function(item) {
+                        return orderMap.hasOwnProperty(item.code);
+                    });
+
+                    // 2. 然后按照参考顺序排序
+                    var results = filteredList.sort(function(a, b) {
+                        return orderMap[a.code] - orderMap[b.code];
+                    });
+                    var chekcLevel = results[0].code ? results[0].code: results[0].name;
+                    var ulhtml = lawLevelHtml(results,filename,product);
+                    $("#" + div).html(ulhtml);
+                    geLawLiteraturesByLevel(chekcLevel,filename,product);
+                    $("#" + div).show();
+                } else {
+                    noData(div);
+                }
+            }
+        });
+    }else{
+        noData(div);
+    }
+
+}
+
+//根据效力级别 获取 相关法规文献
+function geLawLiteraturesByLevel(chekcLevel,filename,product,_this){
+    var keyword =  $(".keywords").find("a").text();
+    var arrKeyword = keyword.split(";");
+    var filteredArr = arrKeyword.filter(function(value) {
+        return value !== null && value !== undefined && value !== "";
+    });
+    if(_this) {
+        $(_this).addClass('columnYear').siblings().removeClass('columnYear');
+    }else {
+        var first=$(".SplitDiv").find("a")[0];
+        $(first).addClass('columnYear');
+    }
+    var data = {
+        filteredArr: filteredArr,  // 必须是数组，不能是对象
+        filename: filename,
+        product: product,
+        levelCode: chekcLevel,
+        start: 1,
+        size: 10
+    };
+    $.ajax({
+        url: '../law/literatures',
+        type: 'POST',
+        contentType: 'application/json; charset=UTF-8',
+        data: JSON.stringify(data),
+        success: function(data) {
+            if (data.data.data && data.data.data.length > 0) {
+                var ulhtml = handlerLawLiteraturesHtml(data.data.data);
+                $("#law-literature").html(ulhtml);
+            } else {
+                $("#law-literature").hide();
+            }
+        }
+    });
+
+}
+
+
+function handlerLawLiteraturesHtml(data){
+
+    var lihtml = "";
+    for (var i = 0; i < data.length; i++) {
+        lihtml += "<li>";
+        lihtml += "[" + (i + 1) + "] ";
+        var ti = data[i].TI;
+        var df =  data[i].DF;
+        var pt =  data[i].PT;
+        var sxx =  data[i].SXX;
+        var fn = data[i].FN;
+        var href = "https://lawpro.cnki.net/inds/dispage?mtype=5&sysid=7000&tablename=clkllast&filename="+fn;
+        if(df){
+            lihtml += df;
+        }
+        lihtml += ".<a target='_blank'  class='recommend-title' title='" + ti + "' href='" + href + "'>" + ti + "</a>";
+        lihtml += " [L]";
+
+        if(pt){
+            lihtml +=  "." + pt;
+        }
+        if(sxx){
+            lihtml += "." + sxx;
+        }
+        lihtml += "</li>";
+    }
+    if (lihtml.length > 0) {
+        return "<ul class='ebBd'>" + lihtml + "</ul>";
+    }
+    return "";
+}
+
+
+/**
+ * 渲染法律效力级别分组
+ * @returns {string}
+ * @param list
+ * @param filteredArr
+ * @param filename
+ * @param product
+ */
+function lawLevelHtml(list,filename,product) {
+    if (!list || list.length == 0) {
+        var nodate = " <h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">"+NULL_DATA+" </b></h3>"
+        return nodate;
+    }
+    var lihtml = "<div class=\"box boxex\">" +
+        "<div class=\"law-level-title\">     " +
+        "  <div class=\"SplitDiv\" style=\"line-height: 30px;margin-bottom: 10px;margin-top: 0;padding-top: 6px;border-bottom: 1px solid #e3e3e3;\">                                                ";
+    for (var i = 0; i < list.length; i++) {
+        var level = list[i];
+        lihtml += "<a class='levelGroup' style='margin-right: 10px;' onclick=\"geLawLiteraturesByLevel('" + level.code + "','" + filename + "','" + product + "',this);\">";
+        lihtml += level.xljb;
+        lihtml+="</a>";
+    }
+    if (lihtml.length > 0) {
+        return lihtml + "   </div>  " +
+            " </div>" +
+            " </div>  <div id='law-literature' class='essayBox'></div>  <div id='columnPage' class=\"page_journal pageBar\">    " +
+            "      </div>     ";
+    }
+    return lihtml;
+}
+
+
+function getVV() {
+    var kclientId = $("#literature-api-clientId").val();
+    var kvv = $("#literature-api-vv").val();
+    var wgpart = "?vv=" + kvv + "&clientId=" + kclientId;
+    return wgpart;
+}
+
+
+function getFourKeyElement(filename){
+    if($(".fourKeys").length>0){
+        return;
+    }
+    /*filename = "MSZX202107044";*/
+    var wgpart = getVV();
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    var literatureUrl = apiHost + fourKeyElementURL + wgpart;
+    var param = {
+        id: filename,
+    };
+    $.ajax({
+        url: literatureUrl,
+        /*url: "http://t.dev.cnki.net/literature-api/v1/articles/summary",*/
+        type: "POST",
+        data: JSON.stringify(param),
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data && data.code==0) {
+                if (data.data && data.data.metadata.length > 0) {
+                    var result = data.data.metadata;
+                    for (var i = 0; i < result.length; i++) {
+                        if(result[i].name == "objective"){
+                            var objective =result[i].value;
+                            var objectHtml =  "<li class=\"top-space\"><span class=\"rowtit\">目的：</span><p>"+objective+"</p></li>";
+                        }
+                        if(result[i].name == "methods"){
+                            var methods =result[i].value;
+                            var methodsHtml = "<li class=\"top-space\"><span class=\"rowtit\">方法：</span><p>"+methods+"</p></li>";
+                        }
+                        if(result[i].name == "results"){
+                            var results =result[i].value;
+                            var resultsHtml = "<li class=\"top-space\"><span class=\"rowtit\">方法：</span><p>"+results+"</p></li>";
+                        }
+                        if(result[i].name == "conclusion"){
+                            var conclusion =result[i].value;
+                            var conclusionHtml = "<li class=\"top-space\"><span class=\"rowtit\">方法：</span><p>"+conclusion+"</p></li>";
+                        }
+
+                    }
+                    if(objective || methods || results || conclusion){
+                        var html ="<div class=\"row fourKeys\"><ul>"+objectHtml+methodsHtml+resultsHtml+conclusionHtml+"</ul></div>";
+                        $(".abstract-content").after(html);
+                    }
+
+                }
+            }
+        }
+    });
+}
+
+
+
+//出版过程
+function getPublishProcess(pubtype) {
+
+    /*var v = $("#cpzxkcmslinkparam").val();*/
+    var v = $("#paramkcmslink").val() ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v") ;
+    if(!v){
+        return;
+    }
+
+    /*var wgpart = getVV();*/
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    var kurl = apiHost + publishingURL + "?" + v;
+
+
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data && data.data) {
+                if (data.data.processes && data.data.processes.length>0) {
+                    var name = getKcmsUrlParam("version");
+                    if(!name){
+                        name = "印刷版"
+                    }else{
+                        name = message[name.toUpperCase()];
+                    }
+                    var div = "<div class=\"sort  publishing-div\"><div class=\"sort-default\">\n" +
+                        "            <span id=\"curname\">"+name+"</span><i class=\"sort-icon\"></i>\n" +
+                        "        </div> </div>";
+                    $(".other-versions").html(div);
+                    var ulhtml = renderProcess(data,pubtype);
+                    $(".publishing-div").append(ulhtml);
+                    sort(".sort", "cur");
+                    $(".sort-list a").each(function(){
+                        if($(this).text() == $("#curname").text()){
+                            $(this).parent("li").addClass("cur");
+                        }
+                    })
+
+                }
+            }
+
+        }
+    });
+}
+
+function renderProcess(data,pubtype){
+    if (!nxgpdata_stucture_check_datalist(data)) {
+        return "";
+    }
+    var processType="";
+    switch (pubtype) {
+        case "2":
+            processType = "DPYX";
+            break;
+        case "3":
+            processType = "ZQYX";
+            break;
+        case "7":
+            processType = "LYDG";
+            break;
+        case "8":
+            processType = "PBDG";
+            break;
+        case "9":
+            processType = "ZQDG";
+            break;
+        default:
+            processType = "YSB";
+            break;
+    }
+    var process = data.data.processes;
+
+    var div = "<ul class=\"sort-list\">";
+    if(process.length>0){
+        for (var i = 0; i < process.length; i++) {
+            var relations = process[i].relations;
+            var name = process[i].process;
+            if(relations){
+                if(processType == name){
+                    $("#curname").html(message[name.toUpperCase()]);
+                }
+                var href = urlByScope(relations, "ABSTRACT");
+                div +="<li ><a target='_self' href='"+href+"'>"+message[name.toUpperCase()]+"</a></li>"
+            }
+        }
+    }
+    div += "</ul>";
+    return div;
+}
+
+
+function attachments(){
+    var v = getKcmsUrlParam("v") ? "v=" + getKcmsUrlParam("v") : $("#paramkcmslink").val();
+    if(!v){
+        return;
+    }
+    /*var wgpart = getVV();*/
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/literature-api" : literaturesApiHost;
+    var kurl = apiHost + attachmentsURL + "?" + v;
+    /*var kurl = "http://jlb.cnki.net:8084/v1/articles/attachments?filename=XDZK202402006";*/
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data && data.data && data.data.length>0) {
+                var ulhtml = renderAttachments(data);
+                if(ulhtml){
+                    $("#zqfilelist").html(ulhtml);
+                }
+            }
+        }
+    });
+}
+
+
+function renderAttachments(data){
+    if (!nxgpdata_stucture_check_datalist(data)) {
+        return "";
+    }
+    var html = "";
+    var attachments = data.data;
+    if(attachments.length>0){
+        html = "<div class=\"row\"> <span class=\"rowtit\">附加材料：</span><ul class=\"zq-inner\" style=\"margin-left: 2px;margin-top: -5px;\">";
+        for (var i = 0; i < attachments.length; i++) {
+            var name = "";
+            var href = "";
+            var fjmlx = "";
+            if(attachments[i].metadata != null){
+                name =findMetadataValue(attachments[i], "TI");
+                fjmlx = findMetadataValue(attachments[i], "FJLXM");
+            }
+            if(attachments[i].relations != null){
+                href =findRelationsValue(attachments[i],"ZQ");
+            }
+            if(fjmlx === "V1" && href){
+
+
+                html +="<li><a target=\"_blank\" href='"+href+"' >"+(i+1)+"、"+name+"</a></li>";
+                var unplatform = getKcmsUrlParam("uniplatform");
+                var  vfn = findMetadataValue(attachments[i], "VFN");
+                var  fn = findMetadataValue(attachments[i], "FN");
+                var  fbl = findMetadataValue(attachments[i], "FBL");
+                var  yltsl = findMetadataValue(attachments[i], "YLTSL");
+                var  date = findMetadataValue(attachments[i], "UT");
+                var  ID = attachments[i].ID;
+                var  type = findMetadataValue(attachments[i], "TYPE");
+                if(vfn && date){
+                    $(".video-abstract").show();
+                    //设置封面
+                    date = date.substring(0,date.length-2);
+                    var videoUrl = $("#video-url").val();
+                    var cover = videoUrl+"/cnkivideopic/covers/{0}/big/{1}.png"
+                    cover = cover.format(date,vfn);
+                    $("#video").html("<img style='width: 676px;height: 430px' src='"+cover+"'>");
+
+                    var basePath = $(".resource-url").val();
+                    var captchaUrl= basePath + "plugins/player/player.js";
+                    //因现在收藏、关注必须登录个人账号后才能操作，故页面初始化时只有登录后才能初始化 关注、收藏状态
+                    utype = getUInfoFromECP("utype");
+                    if(utype){
+                        loadScript(captchaUrl);
+                        $("#video-mask").hide();
+                        hanlderVideoFrame(ID,vfn,fn,date,fbl,yltsl,unplatform,type);
+                    }else{
+                        $("#video-mask").show();
+                    }
+                }
+
+            }else{
+                if(name && href){
+                    html +="<li><a target=\"_blank\" href='"+href+"' >"+(i+1)+"、"+name+"</a></li>";
+                }else if(name && !href){
+                    html +="<li>"+(i+1)+"、"+name+"</li>";
+                }else if(fjmlx === "V1" && attachments.length === 1){
+                    html +="<li><a class='row' target=\"_blank\" href='"+href+"' ><i class=\"icon-video\"></i>"+(i+1)+"、"+name+"</a></li>";
+                }else{
+                    html= "";
+                }
+            }
+
+        }
+    }
+    html += "</ul></div>";
+    return html;
+}
+
+function findMetadataValue(dataarrdata, mname) {
+    if (!dataarrdata.metadata || !dataarrdata.metadata.length > 0) {
+        return "";
+    }
+    for (i = 0; i < dataarrdata.metadata.length; i++) {
+        if (!dataarrdata.metadata[i].name) {
+            continue;
+        }
+        if (dataarrdata.metadata[i].name == mname) {
+            return dataarrdata.metadata[i].value;
+        }
+    }
+    return "";
+}
+
+function findRelationsValue (dataarrdata, mname) {
+    if (!dataarrdata.relations || !dataarrdata.relations.length > 0) {
+        return "";
+    }
+    for (i = 0; i < dataarrdata.relations.length; i++) {
+        if (!dataarrdata.relations[i].scope) {
+            continue;
+        }
+        if (dataarrdata.relations[i].scope == mname) {
+            return dataarrdata.relations[i].url;
+        }
+    }
+    return "";
+}
+
+
+//出版来源信息
+function sourceInfo(sourceHref,id,type,field) {
+    if(!id){
+        return "";
+    }
+    var apiHost = $("#apiHost").val() ? $("#apiHost").val() + "/knavi-api" : publicationApiHost;
+    var kurl = apiHost + PUBLICATION_INFO_URL;
+    var kclientId = $("#publication-api-clientId").val();
+    var kvv = $("#publication-api-vv").val();
+    var getUrl = kurl + "?vv=" + kvv + "&clientId=" + kclientId;
+    var json = {
+        Resource: "",
+        Classid: type,
+        Products: "",
+        QNode: {
+            QGroup: [
+                {
+                    Key: "subject",
+                    Title: "",
+                    Logic: 0,
+                    Items: [
+                        {
+                            Field: field,
+                            Value: id,
+                            Operator: "DEFAULT",
+                            Logic: 0
+                        }
+                    ],
+                    ChildItems: []
+                }
+            ]
+        },
+        ExScope: 1,
+        SearchType: 2,
+        Rlang: "Both",
+        sort: "",
+        sortType: "",
+        pageNum: 1,
+        pageSize: 5
+    }
+    $.ajax({
+        url: getUrl,
+        type: "POST",
+        data: JSON.stringify(json),
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (nxgpdata_stucture_check_datalist(data)) {
+                switch (type) {
+                    case "PVBT1ZGM":
+                        degreeunitsHtml(sourceHref,data);
+                        break;
+                    case "I2ISXPHY":
+                        newspaperHtml(sourceHref,data);
+                        break;
+                    case "M4YX7Q77":
+                        conferenceHtml(sourceHref,data);
+                        break;
+                }
+
+            } else {
+                var name = $("#au-name").val();
+                $("#kcms-author-info").html("<h1 id='showname'>" + name + "</h1>");
+            }
+        }
+    });
+
+}
+
+function degreeunitsHtml(sourceHref,data){
+    if (!nxgpdata_stucture_check_datalist(data)) {
+        return "";
+    }
+    var html = "";
+    var name =findMetadataValue(data.data.data[0], "TI");
+    if(name){
+        html += "<div class=\"top-tip\">";
+        if(sourceHref){
+            html +="<span title='"+name+"'><a target='_blank' href='"+sourceHref+"'>"+name+"</a></span>";
+        }else{
+            html +="<span title='"+name+"'>"+name+"</span>";
+        }
+
+
+        var szs =findMetadataValue(data.data.data[0], "SZS");
+        if(szs){
+            html +="<span>"+szs+"</span>";
+        }
+
+        var ota =findMetadataValue(data.data.data[0], "OTA");
+        if(ota && ota == "1"){
+            html +="<span>211工程院校</span>";
+        }
+        var otb =findMetadataValue(data.data.data[0], "OTB");
+        if(otb && otb == "1"){
+            html +="<span>985工程院校</span>";
+        }
+        var otc =findMetadataValue(data.data.data[0], "OTC");
+        if(otc && otc == "1"){
+            html +="<span>教育部直属院校</span>";
+        }
+
+        var e1 = findMetadataValue(data.data.data[0],"E1");
+        if(e1 && e1 =="E1"){
+            html +="<span style=\"color: orange;font-size: 12px;\">一流大学</span>";
+        }
+        html += "</div>";
+    }
+
+    $(".source-info").html(html);
+}
+
+function newspaperHtml(sourceHref,data){
+    if (!nxgpdata_stucture_check_datalist(data)) {
+        return "";
+    }
+    var html = "";
+    var lv =findMetadataValue(data.data.data[0], "LV");
+    var ti =findMetadataValue(data.data.data[0], "LY");
+    if(ti) {
+        html += "<div class=\"top-tip\">";
+        if (sourceHref) {
+            html += "<a target='_blank'  title='" + ti + "' href='" + sourceHref + "'>" + ti + "</a>";
+        } else {
+            html += "<span target='_blank'  title='" + ti + "'>" + ti + "</span>";
+        }
+        html += "<span title='" + lv + "'>" + lv + "</span>";
+        html += "</div>";
+    }
+    $(".source-info").html(html);
+}
+
+function conferenceHtml(sourceHref,data){
+    if (!data  || data.data.data === null) {
+        return "";
+    }
+    var html = "";
+    var title =findMetadataValue(data.data.data[0], "TI");
+    if(title){
+        html += "<div class=\"top-tip\">";
+        var af = findMetadataValue(data.data.data[0], "INSTITUTE");
+        var publicationUrl = findRelationsValue(data.data.data[0],"PUBLICATION");
+        if(sourceHref){
+            html +="<a target='_blank'  title='"+title+"' href='"+sourceHref+"'>"+title+"</a>";
+        }else if(publicationUrl){
+            html +="<a target='_blank'  title='"+title+"' href='"+publicationUrl+"'>"+title+"</a>";
+        }else{
+            html +="<span target='_blank'  title='"+title+"'>"+title+"</span>";
+        }
+        if(af){
+            html +="<span title='"+af+"'>"+af+"</span>";
+        }
+        var lwjtx = findMetadataValue(data.data.data[0], "LWJLX");
+        if(lwjtx){
+            html += "<span>"+lwjtx+"</span>";
+        }
+        html += "</div>";
+    }
+
+    $(".source-info").html(html);
+}
+
+
+/**
+ * 视频案例文献
+ */
+function caseArticles(rfn){
+    if(!rfn){
+        noData("kcms-recommend-case");
+        return;
+    }
+    var v = $("#paramkcmslink").val();
+    var url = "../document/quote?{0}&rfn={1}";
+    url = url.format(v,rfn);
+    $.get(url, function (data) {
+        if (data && data.data.length > 0) {
+            var ulhtml = nxgpdata_stucture_analysis_urpart(data);
+
+            $("#kcms-recommend-case").html(ulhtml);
+        } else {
+            $(".bulkdown").hide();
+            noData("kcms-recommend-case");
+        }
+    });
+
+}
+
+function  hanlderVideoFrame(ID,vfn,fn, date, fbl, prenum, platform,type) {
+    /*$("iframe").on("load", function() {*/
+    if(!platform){
+        platform = "NZKPT";
+    }
+    var wgpart = getVV();
+    var invoiceHost = $("#apiHost").val() ? $("#apiHost").val()  : literaturesApiHost ;
+    var invoicePath =  invoiceHost+"/userapi/v1/download/simply" + wgpart;
+    var parmas = {
+        id: ID,
+        downInfoParams: {
+            scope: "download",
+            dflag: type,
+            GetRight: 1,
+            RightUserName: "",
+            specialRight: {
+                IsEcspFA: 0,
+                SkipPacktactic: 0
+            }
+        }
+    }
+    $.ajax({
+        url: invoicePath,
+        type: "POST",
+        data: JSON.stringify(parmas),
+        dataType: "json",
+        contentType: "application/json",
+        headers: getHearder(),
+        xhrFields: {//设置withCredentials 允许带Cookie
+            withCredentials: true
+        },
+        success: function (data) {
+            var  invoice = data.data.Invoice ? data.data.Invoice : "";
+            var  nonce = data.data.Nonce ? data.data.Nonce : "";
+            if(!invoice || !nonce){
+                return;
+            }
+            var c_m_LinID = newgetCookie("c_m_LinID");
+            if(c_m_LinID){
+                var e = c_m_LinID.indexOf("="),
+                    i = c_m_LinID.lastIndexOf("&");
+                var pidenID = c_m_LinID.substring(e + 1, i);
+            }
+            var resnum = fbl.split(";").length;
+            var videoApiHost = $("#videoapi-url").val() ? $("#videoapi-url").val() + "/kreader-api" : literaturesApiHost + "/kreader-api";
+            var url = videoApiHost + ATTACHMENT_VIEDEO_PATH + "?platform={0}&idenid={1}&invoice={2}&nonce={3}&filename={4}&date={5}&resnum={6}&prenum={7}&videofilename={8}";
+            url = url.format(platform,pidenID,invoice,nonce,fn,date,resnum,prenum,vfn);
+            $.get(url,function(data){
+                var base64String = data.data ? data.data:"";
+                var video = new Array();
+                if(base64String && !base64String.msg){
+                    // 解码Base64并处理UTF-8
+                    var decodedString = decodeURIComponent(escape(atob(base64String)));
+                    decodedString = JSON.parse(decodedString);
+                    var playlist = decodedString.url;
+                    playlist  = JSON.parse(playlist);
+                    for (var k in playlist) {
+                        var item = new Array();
+                        item.push(playlist[k]);
+                        item.push('video/m3u8');
+                        item.push(k);
+                        item.push(0);
+                        video.push(item);
+                    }
+                    if (undefined == playlist || null == playlist || "null" == playlist || 0 == playlist.length) {
+                        document.getElementById("video").style.backgroundImage = "url('../images/basic/video-nopic.png')";
+                    } else if(playlist['NoPermission']){
+                        document.getElementById("video").style.backgroundImage = "url('../images/basic/video-noright.png')";
+                    } else {
+                        var videoObject = {
+                            playerID: 'nxgpVideo',//播放器ID，第一个字符不能是数字，用来在使用多个播放器时监听到的函数将在所有参数最后添加一个参数用来获取播放器的内容
+                            container: '#video', //容器的ID或className
+                            variable: 'player', //播放函数名称
+                            loaded: 'loadedHandler', //当播放器加载后执行的函数
+                            loop: false, //播放结束是否循环播放
+                            autoplay: false, //是否自动播放
+                            html5m3u8: true,//是否在pc端环境使用hls播放m3u8
+                            mobileCkControls: true,//移动端h5显示控制栏
+                            video: video
+                        };
+                        var player = new ckplayer(videoObject);
+                    }
+                }
+
+            });
+        }
+    })
+
+    /*});*/
+}
+
+function handleUserApiUrl(apiHost){
+    if(apiHost.indexOf("/restapi")>0){
+        apiHost = apiHost.replace("/restapi","/openapi");
+    }else{
+        apiHost = apiHost + "/openapi";
+    }
+    return apiHost;
+}
+//获取浏览器接口参数
+function getParamFromUrl (url,name) {
+    var reg = new RegExp('(?:(?:&|\\?)' + name + '=([^&]*))|(?:/' + name + '/([^/]*))', 'i');
+    var r = url.match(reg);
+    if (r != null)
+        return decodeURI(r[1] || r[2]);
+    return null;
+}
+$(function (){
+    $(".video-login").on("click",function(){
+        var param = window.location.href;
+        var _url = encodeURIComponent(param);
+        var loginUrl = $("#login-url").val();
+        window.open(loginUrl + "/?platform=nxgp&returnUrl="+_url+"&AppendUID=0&ForceReLogin=1&lang=zh-CN", "_self");
+    })
+})
+
+$(function(){
+
+    $(document).on("click", ".btn-dlcaj,.btn-dlpdf", function() {
+        if($(".editor-span").length >0){
+            var  searchId = $("#ID").val();
+            var tag = $("#traceability").length >0 ? $("#traceability").val() : "";
+            var downloadPosition;
+            if(searchId && tag){
+                if(tag.toUpperCase().indexOf("JZTJ") <0){
+                    tag = "JZTJ_KCMS";
+                }
+                var parmas = {
+                    fileId: searchId,
+                    downloadPosition: tag
+                }
+                recordBrowsingLogs(parmas,"DOWNLOAD")
+            }
+        }
+    })
+
+
+    $("#kcms-data-reader-recommend").on("click", "li .document-title", function() {
+        userHitLog($(this),"NZKPT_JZTJ_KCMSSIMILAR");
+    })
+
+    $("#kcms-data-similar").on("click", "li .document-title", function() {
+        userHitLog($(this),"NZKPT_JZTJ_KCMSSCENARIO");
+    })
+
+    $("#kcms-related-fund-literature").on("click", "li .document-title", function() {
+        if($(this).siblings(".editor-span").length > 0){
+            var searchId = $(this).siblings(".search-id").val();
+            if(searchId){
+                var parmas = {
+                    fileId: searchId,
+                    clickPosition: "JZTJ_KCMSFUND"
+                }
+                recordBrowsingLogs(parmas)
+            }
+        }
+    })
+
+    /**
+     * 记录浏览、下载日志
+     * @param parmas
+     */
+    function recordBrowsingLogs(parmas,type){
+        var apiHost =  $("#apiHost").val()
+        if(apiHost.indexOf("/restapi")>0){
+            apiHost = apiHost.replace("/restapi","/uniapps");
+        }
+        if(type && type === "DOWNLOAD"){
+            var url = apiHost + "/journalmarket/v2/downloadLog/single";
+        }else {
+            var url = apiHost + "/journalmarket/v2/clickLog/single";
+        }
+
+        $.ajax({
+            url: url,
+            type: "POST",
+            data: JSON.stringify(parmas),
+            headers: getHearder("JZTJ"),
+            dataType: "json",
+            contentType: "application/json",
+            success: function(data) {},
+            error: function(e) {
+                console.log(e)
+            }
+        })
+    }
+
+})

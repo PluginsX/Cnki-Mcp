@@ -1,0 +1,460 @@
+var bookStoreData = {
+  fileName:'recommendBooks.js',
+  baseUrl :'https://book.cnki.net',//接口地址
+  bookHref:'https://book.cnki.net/book?id=',//资源地址前缀
+  hotIdName:'#hotBooks',
+  relatedIdName:'#relBooks',
+  carouselIdName:'#booklist',
+  relatedCss:'<style type="text/css">#relBooks .book_title{height: 42px;margin-top: 30px;text-align: center;border-bottom: 1px dashed #a9a9a9;clear: both;font-size: 14px;line-height: 60px;color: #000;}#relBooks .book_title span{display: inline-block;line-height: 80px;height: 42px;margin: 0 auto;padding: 0 40px;font-size: 18px;font-weight: normal;color: #666;border-bottom: 1px solid #53a3e2;}#relBooks .book_title span b {font-family: "Microsoft Yahei";margin: 0 auto;padding: 0 40px;line-height: 80px;font-weight: normal;letter-spacing: 2px;background: #fff;}#relBooks .lists{padding:20px 0 20px;font-size: 14px;line-height: 2;}#relBooks .list_item{font-family: Arial, Helvetica, SimSun, "宋体", sans-serif;position: relative;z-index: 1;padding: 1px 26px 1px 5px;line-height: 2;zoom: 1;color: #666;word-wrap: break-word;word-break: break-all;}#relBooks .list_item  a{color: #506697;cursor: pointer;text-decoration: none;cursor: pointer;}#relBooks .list_item  a:hover{color: #ff7624 !important;}</style>',
+  hotCss:'<style type="text/css">#hotBooks .books{width:100%;padding:30px 0 10px;display:flex;gap:10px;justify-content:space-between;align-items:flex-start;box-sizing:border-box;margin:0;}#hotBooks .books .book{flex:1;box-sizing:border-box;padding:0;margin:0 0 10px 0;min-width:160px;max-width:290px;display:flex;flex-direction:row;justify-content:flex-start;text-decoration:none;outline:none;}#hotBooks .books .book .img_box{box-sizing:border-box;display:block;border:1px solid #F0F0F0;padding:4px;position:relative;flex:0 0 45%;max-width:45%;padding-top:56.25%;overflow:hidden;margin:0;}#hotBooks .books .book .img_box img{box-sizing:border-box;display:inline-block;vertical-align:top;position:absolute;top:0;left:0;right:0;bottom:0;padding:4px;width:100%;height:100%;object-fit:contain;}#hotBooks .books .book .text{box-sizing:border-box;display:inline-block;vertical-align:top;flex:1;height:100%;padding-left:10px;padding-top:10px;margin:0;min-width:100px;}#hotBooks .books .book .title{text-align:left;font-family:"Microsoft Yahei";font-weight:bold;font-size:13px;color:#333333;line-height:20px;min-height:40px;margin:0 !important;width:100%;word-break:normal;overflow-wrap:normal;text-align:left;}#hotBooks .books .book .subtitle{text-align:left;font-family:"Microsoft Yahei";font-weight:400;font-size:12px;color:#999999;line-height:20px;width:100%;word-break:break-all;margin-top:20px;}#hotBooks .books .book .title:hover{color:#ff7624;}.p-ellipsis-2{display:-webkit-box;overflow:hidden;text-overflow:ellipsis;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-all;}.p-ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;word-break:break-all;}</style>',
+  carouselCss:'<style type="text/css">#booklist{width:100%!important;box-sizing:border-box!important;position:relative;overflow:hidden!important;padding:0!important;margin:16px 0 0!important;max-width:100%!important;min-width:0!important;}.booklist-con{width:100%!important;box-sizing:border-box!important;position:relative;overflow:hidden!important;max-width:100%!important;min-width:0!important;}#booklist .carousel-track{display:flex;transition:transform 0.5s ease-in-out;width:100%!important;flex-wrap:nowrap!important;box-sizing:border-box!important;}#booklist .carousel-page{width:100%!important;flex-shrink:0!important;padding:0!important;box-sizing:border-box!important;max-width:100%!important;min-width:0!important;}#booklist .books{width:100%!important;display:flex;justify-content:space-between!important;margin:0!important;padding:0 0!important;box-sizing:border-box!important;gap:12px!important;flex-wrap:wrap!important;}#booklist .books .book{width:calc((100% - 12px)/2)!important;max-width:none!important;min-width:80px!important;margin-bottom:10px!important;display:flex!important;flex-direction:column!important;align-items:center!important;text-decoration:none!important;outline:none!important;box-sizing:border-box!important;padding:0!important;background-color:#fff;border-radius:8px;position:relative;}#booklist .books .book .img_box{box-sizing:border-box!important;display:block!important;width:100%!important;padding:4px!important;border-radius:4px!important;position:relative!important;padding-top:106%!important;overflow:hidden!important;margin:0!important;max-width:94px!important;}#booklist .books .book .img_box img{position:absolute!important;top:40% !important;left:0!important;transform: translateY(-50%);width:100%!important;height:calc(100% - 31px)!important; max-height: 106px;object-fit:contain!important;background-color:#fff!important;box-sizing:border-box!important;}#booklist .books .book .title{text-align:center!important;font-family:"Microsoft Yahei"!important;font-weight:400!important;font-size:14px!important;color:#54688D!important;line-height:30px!important;height:30px!important;margin:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;width:100%!important;margin-top:0!important;box-sizing:border-box!important;padding:0 12px!important;position:absolute;left:0;right:0;bottom:8px;}#booklist .books .book .title:hover{color:#ff7624!important;}#booklist .carousel-btn{position:absolute!important;top:45%!important;transform:translateY(-50%)!important;width:20px!important;height:20px!important;background:#CCCCCC!important;color:#fff!important;border:none!important;border-radius:50%!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;align-items:center!important;z-index:10!important;padding:0!important;margin:0!important;}#booklist .carousel-btn img{width:70%!important;height:80%!important;object-fit:contain!important;box-sizing:border-box!important;display:block!important;}#booklist .prev-btn{left:7px!important;}#booklist .next-btn{right:7px!important;}#booklist .carousel-btn:hover{background:rgba(0,0,0,0.27)!important;}</style>',
+};
+var bookStoreFuns = {
+  //解析出参数
+  GetScriptSrcQueryString: function(jsfilename, name) {
+      if (name == null || name == "")
+          return null;
+      var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)");
+      var dscriptSrc = bookStoreFuns.FindScriptSrc(jsfilename);
+      var scriptsrc = dscriptSrc.substr(dscriptSrc.indexOf("?") + 1);
+      var r = scriptsrc.match(reg);
+      if (r != null) return decodeURIComponent(r[2]); return null;
+  },
+  FindScriptSrc: function(jsfilename) {
+    var src = "";
+    var scriptArr = document.scripts;
+    for (var i = 0; i < scriptArr.length; i++) {
+        if (scriptArr[i].src.indexOf(jsfilename) > -1) {
+            src = scriptArr[i].src;
+            break;
+        }
+    }
+    return src;
+  },
+  //输出广告的样式表
+  addCss: function(value) {
+    try {
+      var newcss = '';
+      newcss = value
+      document.writeln(newcss);
+    } catch (e) { }
+  },
+  // 从隐藏input中读取fileId和productId参数
+  getHiddenInputParams: function(queryObj) {
+    var fileId = $('#param-filename').val();
+    var productId = $('#param-dbcode').val();
+    if(fileId) {
+      queryObj.fileId = fileId;
+    }
+    if(productId) {
+      queryObj.productId = productId;
+    }
+    return queryObj;
+  },
+  requestHotList: function(query) {
+    console.log('requestHotList---请求数据');
+    var adReqUrl = bookStoreData.baseUrl+'/bookstore-shop/zongku-recommend/hot-books';
+    let queryObj={};
+    if(query == null || query == ""){
+      queryObj={};
+    }else{
+      queryObj=query;
+    }
+    // 从隐藏input中读取fileId和productId参数
+    queryObj = bookStoreFuns.getHiddenInputParams(queryObj);
+    // 添加promotionPosition参数
+    queryObj.promotionPosition = 'kns-pic-bottom';
+    try {
+        $.ajax({
+            url: adReqUrl,
+            type: "GET",
+            dataType: "json",
+            data: queryObj,
+            success: function (resdata) {
+              console.log(resdata);
+              if(resdata && resdata.code && resdata.code != "200" && resdata.data && resdata.data.length == 0) {
+                  $(bookStoreData.hotIdName).hide();
+                  return false;
+              }
+              let list=resdata.data.length>5?resdata.data.slice(0,5):resdata.data;
+
+              let htmlStr = `<div class="books">`;
+              for(var i=0;i<list.length;i++){
+                // 使用接口返回的recommendFrom，如果不存在则使用默认值
+                const recommendFromValue = list[i].recommendFrom || 'hot-books';
+                htmlStr+=` <a href="${bookStoreData.bookHref+list[i].id}&recommendFrom=${recommendFromValue}&promotionPosition=kns-pic-bottom${list[i].recID ? '&recID='+list[i].recID : ''}" target="_blank" rel="noopener noreferrer" class="book">
+                        <div class="img_box">
+                          <img
+                            src="${list[i].coverImage}"
+                            alt="" srcset="">
+                        </div>
+                        <div class="text">
+                          <p class="title p-ellipsis-2" title="${list[i].title}">${list[i].title}</p>
+                          <p class="subtitle p-ellipsis" title="${list[i].publisher}">${list[i].publisher}</p>
+                        </div>
+                      </a>`;
+              }
+              htmlStr+=`</div>`;
+              //渲染
+              $(bookStoreData.hotIdName).append(htmlStr);
+
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                bookStoreFuns.consoleAd(XMLHttpRequest.status + XMLHttpRequest.statusText + " " + XMLHttpRequest.readyState + " " + textStatus);
+                $(bookStoreData.hotIdName).hide();
+            }
+        });
+    }
+    catch (e) {
+      console.log('catch',e);
+    }
+  },
+  requestRelatedList: function(query) {
+    console.log('requestRelatedList-请求数据');
+    var adReqUrl = bookStoreData.baseUrl+'/bookstore-shop/zongku-recommend/related-books';
+    let queryObj={};
+    if(query == null || query == ""){
+      queryObj={};
+    }else{
+      queryObj=query;
+    }
+    // 从隐藏input中读取fileId和productId参数
+    queryObj = bookStoreFuns.getHiddenInputParams(queryObj);
+    // 添加promotionPosition参数
+    queryObj.promotionPosition = 'kns-text-bottom';
+    try {
+        $.ajax({
+            url: adReqUrl,
+            type: "GET",
+            dataType: "json",
+            data: queryObj,
+            success: function (resdata) {
+                console.log(resdata);
+                if(resdata && resdata.code && resdata.code != "200" && resdata.data && resdata.data.length == 0) {
+                    $(bookStoreData.relatedIdName).hide();
+                    return false;
+                }
+                let list=resdata.data;
+
+                //渲染元素
+                if(list.length<=0||!list){
+                 return false;
+                }
+                 let contentHtml=``;
+                 contentHtml+= `<div class="book_title"><span><b>相关图书推荐</b></span></div>`;
+                 let listHtml = `<div class="lists">`;
+                 for(var i=0;i<list.length;i++){
+                    // 使用接口返回的recommendFrom，如果不存在则使用默认值
+                    const recommendFromValue = list[i].recommendFrom || 'related-books';
+                    let itemHtml = ` <div class="list_item">
+                    [${i+1}] <a target="_blank" title="${list[i].title}" href="${bookStoreData.bookHref+list[i].id}&recommendFrom=${recommendFromValue}&promotionPosition=kns-text-bottom${list[i].recID ? '&recID='+list[i].recID : ''}">${list[i].title}</a>. ${list[i].author?list[i].author+'. ':''}
+                    ${list[i].publisher?list[i].publisher:''}
+                    <span style="display: inline-block;vertical-align: middle;box-sizing: border-box;width: 20px;height: 20px;text-align: center;line-height: 18px;font-size: 12px;color: #FF9812;border: 1px solid #FF9812;border-radius: 4px;">纸</span>
+                    <input class="exportparams" type="hidden" >
+                  </div>`;
+                  listHtml+=itemHtml;
+                }
+                 listHtml+=`</div>`;
+                 contentHtml+=listHtml;
+                 //渲染
+                 $(bookStoreData.relatedIdName).append(contentHtml);
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown) {
+                bookStoreFuns.consoleAd(XMLHttpRequest.status + XMLHttpRequest.statusText + " " + XMLHttpRequest.readyState + " " + textStatus);
+                $(bookStoreData.relatedIdName).hide();
+            }
+        });
+    }
+    catch (e) {
+      console.log('catch',e);
+    }
+  },
+  consoleAd: function(val) {
+    if (console.log) {
+      console.log(":" + val);
+    }
+  }
+};
+// 书店推荐列表
+!(function WriteRelatedbooks() {
+  bookStoreFuns.addCss(bookStoreData.relatedCss);
+  var hasloadBookJS = false;
+  $(window).scroll(function () {
+    try {
+      // 获取目标元素
+      var targetElement = $(bookStoreData.relatedIdName);
+      if (targetElement.length === 0) {
+        return;
+      }
+      // 获取目标元素相对于文档顶部的位置
+      var targetOffsetTop = targetElement.offset().top;
+      // 获取当前滚动位置
+      var scrollTop = $(window).scrollTop();
+      // 获取窗口高度
+      var windowHeight = $(window).height();
+
+      // 检查目标元素是否出现在可视区域
+      if (scrollTop + windowHeight >= targetOffsetTop && !hasloadBookJS) {
+        console.log('滚动到--开始调用');
+        hasloadBookJS = true;
+        setTimeout(function () {
+          try {
+             var code = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "code");
+             var keyword = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "keyword");
+             var subject = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "subject");
+            //动态获取数据并渲染到指定位置
+            bookStoreFuns.requestRelatedList({code,keyword,subject});
+          }
+          catch (e) {
+            bookStoreFuns.consoleAd('setTimeout 内部异常: ' + e.message);
+          }
+        }, 100);
+      }
+    } catch (e) { }
+  });
+})();
+// 推荐图表
+!(function WriteHotbooks() {
+  bookStoreFuns.addCss(bookStoreData.hotCss);
+  var hasloadBookJS = false;
+  $(window).scroll(function () {
+    try {
+      // 获取目标元素
+      var targetElement = $(bookStoreData.hotIdName);
+      if (targetElement.length === 0) {
+        return;
+      }
+      // 获取目标元素相对于文档顶部的位置
+      var targetOffsetTop = targetElement.offset().top;
+      // 获取当前滚动位置
+      var scrollTop = $(window).scrollTop();
+      // 获取窗口高度
+      var windowHeight = $(window).height();
+
+      // 检查目标元素是否出现在可视区域
+      if (scrollTop + windowHeight >= targetOffsetTop && !hasloadBookJS) {
+        console.log('滚动到--开始调用');
+        hasloadBookJS = true;
+        setTimeout(function () {
+          try {
+             var code = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "code");
+             var keyword = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "keyword");
+             var subject = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "subject");
+            //动态获取数据并渲染到指定位置
+            bookStoreFuns.requestHotList({code,keyword,subject});
+             // 数据加载完成后调用一次调整函数
+             setTimeout(adjustBookCount, 0);
+          }
+          catch (e) {
+            bookStoreFuns.consoleAd('setTimeout 内部异常: ' + e.message);
+          }
+        }, 100);
+      }
+    } catch (e) { }
+  });
+  // 监听窗口大小变化--调整书籍显示数量
+  $(window).on('resize', adjustBookCount);
+})();
+// 定义调整书籍显示数量的函数
+function adjustBookCount() {
+  const hotBooksWidth = $(bookStoreData.hotIdName).width();
+  const books = $(bookStoreData.hotIdName+' .book');
+  if (hotBooksWidth <= 1000) {
+    // 宽度小于等于 1000px 时，显示 4 个，隐藏第 5 个及之后的元素
+    books.css('width', 'calc((100% - 3 * 10px) / 4)');
+    // 从第 5 个元素开始（索引为 4）隐藏
+    books.slice(4).hide();
+  } else {
+    // 宽度大于 1000px 时，显示 5 个，显示所有元素
+    books.css('width', 'calc((100% - 4 * 10px) / 5)');
+    books.show();
+  }
+}
+
+//轮播图推荐图书数据加载 - 规范图片比例
+$(window).on('load', function() {
+  const $bookList = $('#booklist');
+  if (!$bookList.length) { 
+    console.log('未检测到 id="booklist" 元素，终止数据加载');
+    return;
+  }
+  // 追加轮播样式到head
+  $(bookStoreData.carouselCss).appendTo('head');
+
+  var code = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "code");
+  var keyword = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "keyword");
+  var subject = bookStoreFuns.GetScriptSrcQueryString(bookStoreData.fileName+"?", "subject");
+  let queryObj={code,keyword,subject};
+  // 从隐藏input中读取fileId和productId参数
+  queryObj = bookStoreFuns.getHiddenInputParams(queryObj);
+  // 添加promotionPosition参数
+  queryObj.promotionPosition = 'kns-pic-right';
+  
+  $.ajax({
+    url: bookStoreData.baseUrl+'/bookstore-shop/zongku-recommend/related-books',
+    type: "GET",
+    dataType: "json",
+    data: queryObj,
+    success: function(resdata) {
+      if(resdata && resdata.code && resdata.code != "200" || !resdata.data || resdata.data.length == 0) {
+        $bookList.hide();
+        return false;
+      }
+
+      // 1. 取消只截取2条数据，使用全部数据
+      const bookList = resdata.data;
+      // 2. 计算总页数（每页2条）
+      const pageSize = 2;
+      const totalPages = Math.ceil(bookList.length / pageSize);
+      if (totalPages === 0) {
+        $bookList.hide();
+        return;
+      }
+
+      // 3. 构建轮播核心结构（无缝滚动：末尾复制第一页内容）
+      let carouselHtml = `
+      <button class="carousel-btn prev-btn"><img style="margin-left:-1px;" src="data:image/png;base64,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" alt="上一页"></button>
+      <div class="booklist-con">
+        <div class="carousel-track">
+      `;
+      // 4. 按页拆分数据，生成每页的内容
+      for (let page = 0; page < totalPages; page++) {
+        const pageBooks = bookList.slice(page * pageSize, (page + 1) * pageSize);
+        let pageHtml = `<div class="carousel-page">
+          <div class="books">`;
+        pageBooks.forEach(book => {
+          // 使用接口返回的recommendFrom，如果不存在则使用默认值
+          const recommendFromValue = book.recommendFrom || 'related-books';
+          pageHtml += `
+            <a href="${bookStoreData.bookHref+book.id}&recommendFrom=${recommendFromValue}&promotionPosition=kns-pic-right${book.recID ? '&recID='+book.recID : ''}" target="_blank" rel="noopener noreferrer" class="book">
+              <div class="img_box">
+                <img src="${book.coverImage}" alt="${book.title}" srcset="">
+              </div>
+              <p class="title" title="${book.title}">${book.title}</p>
+            </a>
+          `;
+        });
+        pageHtml += `</div></div>`;
+        carouselHtml += pageHtml;
+      }
+      // 关键：无缝滚动 - 复制第一页内容到轨道末尾
+      const firstPageBooks = bookList.slice(0, pageSize);
+      let firstPageCopyHtml = `<div class="carousel-page">
+        <div class="books">`;
+      firstPageBooks.forEach(book => {
+        // 使用接口返回的recommendFrom，如果不存在则使用默认值
+        const recommendFromValue = book.recommendFrom || 'related-books';
+        firstPageCopyHtml += `
+          <a href="${bookStoreData.bookHref+book.id}&recommendFrom=${recommendFromValue}&promotionPosition=kns-pic-right${book.recID ? '&recID='+book.recID : ''}" target="_blank" rel="noopener noreferrer" class="book">
+            <div class="img_box">
+              <img src="${book.coverImage}" alt="${book.title}" srcset="">
+            </div>
+            <p class="title" title="${book.title}">${book.title}</p>
+          </a>
+        `;
+      });
+      firstPageCopyHtml += `</div></div>`;
+      carouselHtml += firstPageCopyHtml;
+
+      // 5. 闭合轮播轨道，移除分页圆点HTML结构
+      carouselHtml += `
+        </div>
+        </div>
+        <button class="carousel-btn next-btn"><img src="data:image/png;base64,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" alt="下一页"></button>
+      `;
+      // 6. 渲染轮播结构到页面
+      $bookList.html(carouselHtml);
+
+      // 7. 初始化轮播逻辑
+      let currentPage = 0; // 当前页码（仅对应真实页数）
+      const $track = $('.carousel-track');
+      const $prevBtn = $('.prev-btn');
+      const $nextBtn = $('.next-btn');
+      let autoPlayTimer;
+      let isTransitioning = false; // 标记是否正在过渡，防止快速点击
+
+      // 切换页面的核心方法（优化无缝滚动）
+      function switchPage(targetPage, isManual = false) {
+        // 防止过渡中重复触发
+        if (isTransitioning) return;
+        isTransitioning = true;
+
+        // 处理下一页无缝滚动：最后一页 → 复制的第一页 → 瞬间切回真实第一页
+        if (targetPage >= totalPages) {
+          // 先滑到复制的第一页（视觉上是平滑的）
+          $track.css('transform', `translateX(-${totalPages * 100}%)`);
+          // 过渡完成后，瞬间切回真实第一页（无过渡动画）
+          setTimeout(() => {
+            $track.css({
+              'transition': 'none',
+              'transform': 'translateX(0%)'
+            });
+            currentPage = 0;
+            // 恢复过渡动画
+            setTimeout(() => {
+              $track.css('transition', 'transform 0.5s ease-in-out');
+              isTransitioning = false;
+            }, 50);
+          }, 500); // 与CSS过渡时长一致
+        } 
+        // 处理上一页无缝滚动：第一页 → 瞬间切到复制的最后一页 → 滑到真实最后一页
+        else if (targetPage < 0) {
+          // 先瞬间切到复制的最后一页（无过渡）
+          $track.css({
+            'transition': 'none',
+            'transform': `translateX(-${totalPages * 100}%)`
+          });
+          // 强制重绘后恢复过渡，滑到真实最后一页
+          setTimeout(() => {
+            $track.css({
+              'transition': 'transform 0.5s ease-in-out',
+              'transform': `translateX(-${(totalPages - 1) * 100}%)`
+            });
+            currentPage = totalPages - 1;
+            setTimeout(() => {
+              isTransitioning = false;
+            }, 500);
+          }, 50);
+        } 
+        // 正常页面切换
+        else {
+          const offset = -targetPage * 100;
+          $track.css('transform', `translateX(${offset}%)`);
+          currentPage = targetPage;
+          setTimeout(() => {
+            isTransitioning = false;
+          }, 500);
+        }
+      }
+
+      // 8. 自动轮播逻辑（优化间隔，避免过快）
+      function startAutoPlay() {
+        autoPlayTimer = setInterval(() => {
+          switchPage(currentPage + 1);
+        }, 4000); // 延长自动轮播间隔到4秒，更舒适
+      }
+      startAutoPlay();
+
+      // 9. 鼠标悬停时暂停自动轮播，离开后恢复
+      $bookList.hover(
+        () => clearInterval(autoPlayTimer),
+        () => startAutoPlay()
+      );
+
+      // 10. 点击下一页按钮
+      $nextBtn.click(() => {
+        switchPage(currentPage + 1, true);
+      });
+
+      // 11. 点击上一页按钮
+      $prevBtn.click(() => {
+        switchPage(currentPage - 1, true);
+      });
+
+    },
+    error:  function (XMLHttpRequest, textStatus, errorThrown) {
+      bookStoreFuns.consoleAd(XMLHttpRequest.status + XMLHttpRequest.statusText + " " + XMLHttpRequest.readyState + " " + textStatus);
+      $bookList.hide();
+    }
+  });
+});

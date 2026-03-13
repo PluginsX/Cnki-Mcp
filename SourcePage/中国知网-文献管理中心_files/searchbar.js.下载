@@ -1,0 +1,228 @@
+﻿/*
+ * 一筐式检索界面元素事件
+ */
+(function ($) {
+
+    // Document加载完毕
+    $(function () {
+        searchBar.sugInit();
+        // var dbprefix = GetQueryStringByName("dbcode");
+        // if (!!dbprefix) {
+        //     if (fliter.hasDangerousChar(dbprefix)) {
+        //         dbprefix = "SCDB";
+        //     }
+        //     $("#dbcode").val(dbprefix.toUpperCase())
+        // } else {
+        //     dbprefix = $("#dbcode").val();
+        // }
+        //
+        // var korder = GetQueryStringByName("korder");
+        // if (fliter.hasDangerousChar(korder)) {
+        //     korder = "SU";
+        // }
+        // searchBar.LoadSearchFields(dbprefix, korder, null);
+        // searchBar.searchField();
+        modifyHrefAndSearch();
+        searchBar.simpleSearch();
+        var oneBoxWordsGuid = window.wordsGuid.getOneBoxWordsGuid("div.droplist", "input.search-input");//检索引导
+        oneBoxWordsGuid.privateEvent();
+    });
+
+})(jQuery);
+
+//
+(function ($) {
+    function SearchBar() {
+    }
+
+    SearchBar.prototype = {
+        searchField: function () {
+            $("body").on("click", ".sort",
+                function (event) {
+                    var $selectList = $(this).find(".sort-list");
+
+                    var targ = $(event.target);
+                    if (targ.closest($selectList.find("li.tit")).length != 1) {//点击的不是分类标题时
+                        $selectList.toggle();
+                    }
+
+                    $selectList.find("li").unbind("click").click(function () {
+                        $selectList.find("li.cur").addClass("prevCur"); //具有引导的检索词使用  年鉴名称、文献来源等
+
+                        //排除“期刊”检索词的分类标题 点击当前选中项不响应
+                        if ($(this).hasClass("tit") || $(this).hasClass("cur"))
+                            return;
+                        var titSpan = $selectList.siblings().find("span"),
+                            titInput = $selectList.siblings().find("input[type=text]"); //高级检索 起始年/结束年
+                        if (titSpan.length > 0)
+                            titSpan.html($(this).find("a").text());
+                        else if (titInput.length > 0)
+                            titInput.val($(this).find("a").text());
+
+                        //一框部分字段使用sug推荐
+                        if (message.ThemeArr.indexOf($.trim($(this).text())) > -1) {
+                            $(this).parents(".reopt").siblings("input.search-input").attr("id", "txt_search");
+                        } else {
+                            $(this).parents(".reopt").siblings("input.search-input").removeAttr("id");
+                        }
+
+                        $selectList.find("li").removeClass("cur");
+                        $(this).addClass("cur");
+                        $selectList.hide();
+
+                        //当下拉框的选择发生变化才更改检索字段
+                        if (!!$('.search-main .input-box')) {
+                            searchBar.setSearchField($(this));
+                        }
+
+                    });
+                });
+            $("body").on("mouseleave", ".sort",
+                function () {
+                    $(this).find(".sort-list").hide();
+                });
+        },
+        // 设置检索字段
+        setSearchField: function (cLi) {
+            var titSpan = cLi.parents(".sort-list").siblings().find("span");
+            if (titSpan.length > 0)
+                titSpan.html(cLi.find("a").text().trim());
+
+            $("#selectfield").attr("korder", cLi.attr("data-val"));
+            $("#selectfield").val(cLi.attr("data-val"));
+            $("#selectfield").attr("data-opt", cLi.find("a").attr("value"))
+        },
+        LoadSearchFields: function (dbcode, korder, callback, isSCDBResultZero) {
+            if (!dbcode) {
+                dbcode = "SCDB";
+            }
+            if (!korder) {
+                korder = "SU";
+            }
+            if (GetQueryStringByName("language") || GetQueryStringByName("uniplatform")) {
+                //绑定高检按钮URL
+                $(".search-main .btn-grade-search").attr("href", $("#hidKnsUrl").val() + "/AdvSearch?dbcode=" + dbcode + "&language=" + GetQueryStringByName(window.location.href, "language")
+                    + "&uniplatform=" + GetQueryStringByName(window.location.href, "uniplatform"));
+            }
+            else {
+                $(".search-main .btn-grade-search").attr("href", $("#hidKnsUrl").val() + "/AdvSearch?dbcode=" + dbcode);
+            }
+            var setSearchField = function () {
+                //切换数据库产品后 搜索框默认选择第一项。如果url有korder,则选择该项
+                var cLi = $(".sort-list li[data-val='" + korder + "']").length > 0
+                    ? $(".sort-list li[data-val='" + korder + "']")
+                    : $(".sort-list").find("li[name='defult']");
+
+                if (cLi.length > 0) {
+                    searchBar.setSearchField(cLi)
+                    $(".sort-list").find("li").removeClass("cur");
+                    cLi.addClass("cur");
+                }
+            }
+            $.ajax({
+                url: APPPATH + "/defaultResult/loadSearchFields?dbcode=" + dbcode.toUpperCase() + "&language=" + GetQueryStringByName(window.location.href, "language")
+                + "&uniplatform=" + GetQueryStringByName(window.location.href, "uniplatform"),
+                type: "Get",
+                success: function (htmlString) {
+                    //加载检索下拉框
+                    $(".sort-list").remove();
+                    $(".sort.reopt").append(htmlString);
+                    // "总库"检索切换检索
+                    if (!korder) {
+                        var sf = $("#selectfield").val();
+                        korder = sf;
+                    }
+
+                    var pf = $("#postfield").val();
+
+                    if (pf) {
+                        if (pf.indexOf("$") >= 0) {
+                            var pfield = pf.split("$")[0];
+                            korder = pfield;
+                        } else {
+                            korder = pf;
+                        }
+                        // 第一次用完了清空该值
+                        $("#postfield").val("");
+                    }
+
+                    setSearchField();
+
+                    /**
+                     * 如果配置的检索项不包含默认的检索项，就默认选取配置的第一个作为选择默认项
+                     */
+                    var liListDom = $(".search-main").find(".reopt .sort-list li");
+                    if ("undefined" != typeof(liListDom) && liListDom.length > 0) {
+                        var initField = $(".sort-default #selectfield").val();
+                        var hasSameFields = false;
+                        liListDom.each(function () {
+                            var dataVal = $(this).attr("data-val");
+                            if ("undefined" != typeof(dataVal) && initField.toLowerCase() == dataVal.toLowerCase()) {
+                                hasSameFields = true;
+                            }
+                        });
+                        if (!hasSameFields) {
+                            $(".search-main").find(".sort.reopt").trigger('click');
+                            var domLi = $(".search-main").find(".reopt .sort-list ul:eq(" + 0 + ")").find('[data-val]').eq(0);
+                            domLi.trigger('click');
+                            $(".search-main").find(".sort.reopt>.sort-default>span").attr("value", domLi.find("a").text());
+                            $(".search-main").find(".reopt .sort-list").hide();
+                        }
+                    }
+
+                    // 是否在参考跨库检索，并且结果是0，则不去检索，直接返回静态HTML.
+                    if (isSCDBResultZero) {
+                        return;
+                    }
+
+                    if (callback && typeof callback == "function") {
+                        callback();
+                    }
+
+                }//end success
+
+            });
+            modifyHrefAndSearch();//更换头部连接，因为CHKD平台比较特殊，单独处理
+
+        },
+        sugInit: function () {
+            var url = $("#hidRecommendApi").val();
+            InitSug(url);
+
+            $(document).on("click", ".dictdiv .dictlistCol li.rw", function () {
+                $(".search-btn").click();
+            })
+        },
+        //检索
+        simpleSearch: function () {
+            $(".search-box").on("click", ".search-btn", function () {
+
+                var dbcode = $("#dbcode").val();
+                if (dbcode == "" || !dbcode || $("#isscdb").val() == "1") {
+                    dbcode = "SCDB";
+                }
+                var kw = $(".search-box .search-input").val();
+                if ($.getUniplatform() == "CHKD") {
+                    var href = "https://chkdx.cnki.net/kns8";
+                    var kw = $(".search-box .search-input").val();
+                    // var query = $(".sort-default #selectfield").attr("korder");
+                    var yikuangSearch = href + "/#/?kw=" + kw ;
+                    window.location.href = yikuangSearch;
+                } else if ($.getUniplatform() == "XKKB") {
+                    window.location.href = $.getUniplatformAndLanguageUrl($("#hidKnsUrlXKKB").val() + "korder=SU&kw=" + encodeURIComponent(kw));
+                } else if ($.getUniplatform() == "OVERSEA") {
+                    window.location.href = $.getUniplatformAndLanguageUrl($("#hidKnsUrlOVERSEA").val() + "korder=SU&kw=" + encodeURIComponent(kw));
+                } else if ($.getUniplatform() == "FZPT") {
+                    window.location.href = $.getUniplatformAndLanguageUrl($("#hidKnsUrlFZPT").val() + "korder=SU&kw=" + encodeURIComponent(kw));
+                } else {
+                    window.location.href = $.getUniplatformAndLanguageUrl($("#hidKnsUrl").val() + "starter?fd=SU&kw=" + encodeURIComponent(kw));
+                }
+
+            })
+        },
+    }
+
+    window.searchBar = new SearchBar();
+
+})(jQuery);
+

@@ -1,0 +1,351 @@
+/**
+ * 统一收集数据js
+ */
+$(document).ready(function () {
+    //文献管理检索
+    var searchOpsModule = "D01",
+        //切换检索方式
+        searchOpsFunction = ["D0101"],
+        searchAction = [
+            //一框检索 提示词
+            ["D010101", "D010102"]
+        ];
+    //文献管理首页
+    var homepageOpsModule = "D02",
+        //批量操作 选择 点击删除
+        homepageOpsFunction = ["D0201", "D0202", "D0203"],
+        homepageAction = [
+            //批量删除 导出题录 生成检索报告 计量分析 , AI文献综述, AI文献综述按钮
+            ["D020101", "D020102", "D020103", "D020104", "D020105", "D0201046"],
+            //选择文献  取消选择文献 全选 取消全选
+            ["D020201", "D020202", "D020203", "D020204",],
+            //点击删除
+            ["D020301"]
+        ];
+    //文献管理导出
+    var exportOpsModule = "D03",
+        //导出格式 预览 批量下载 复制 打印 已选文献 排序 导出文本 生成检索报告
+        exportOpsFunction = ["D0301", "D0302", "D0303", "D0304", "D0305", "D0306", "D0307", "D0308", "D0309"],
+        exportAction = [
+            //GB/T 7714-2015 格式引文
+            // 知网研学（原E-Study）
+            // CAJ-CD格式引文
+            // MLA格式引文
+            // APA格式引文
+            // 查新（引文格式）
+            // 查新（自定义引文格式）
+            // Refworks
+            // EndNote
+            // NoteExpress
+            // NoteFirst
+            // 自定义
+            // BibTex
+            ["D030101", "D030102", "D030103", "D030104", "D030105", "D030106", "D030107", "D030108", "D030109", "D030110", "D030111", "D030112", "D030113"],
+            //预览
+            ["D030201"],
+            //批量下载
+            ["D030301"],
+            //复制到剪切板
+            ["D030401"],
+            //打印
+            ["D030501"],
+            //已选文献
+            ["D030601"],
+            //发表时间  被引频次
+            ["D030701", "D030702"],
+            //导出txt  导出xls 导出doc
+            ["D030801", "D030802", "D030803"],
+            //列表模式  摘要模式 保存检索报告 打印检索报告
+            ["D030901", "D030902", "D030903", "D030904"]
+        ];
+    //公共方法
+    var commonFunction = {
+        search: function (obj) {
+            var $clickObj = $(obj);
+            var localUrl = window.location.href;
+            var opsData = $(".search-input").val();
+            if ($clickObj.attr('class') === "search-btn") {
+                saveLog(searchOpsModule, searchOpsFunction[0], searchAction[0][0], opsData, localUrl, true);
+            }
+            /**
+             * 自动补全提示词
+             */
+            //一框主题检索 仅支持一级  search.cnki.net/sug/su.ashx?
+            if ($clickObj.attr("class") == "rw drop_selected") {
+                saveLog(searchOpsModule, searchOpsFunction[0], searchAction[0][1], $clickObj.text(), opsData, true);
+                return;
+            }
+            else if ($clickObj.parent().attr("class") == "rw drop_selected") {
+                saveLog(searchOpsModule, searchOpsFunction[0], searchAction[0][1], $clickObj.parent().text(), opsData, true);
+                return;
+            }
+        },
+        homepage: function (obj) {
+            var $clickObj = $(obj);
+            var opsData = $.filenameSelectGet();
+            if ($clickObj.attr("id") == "adelete") {
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][0], opsData, "");
+                return;
+            } else if ($clickObj.parent().attr("id") == "adelete") {//点的是icon
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][0], opsData, "");
+                return;
+            }
+            if ($clickObj.children().hasClass("icon-export")&&$clickObj.parents("ul").attr("id")=="batchOpsBox") {
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][1], opsData, "",true);
+                return;
+            } else if ($clickObj.hasClass("icon-export")&&$clickObj.parents("ul").attr("id")=="batchOpsBox") {//点的是icon
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][1], opsData, "",true);
+                return;
+            }
+            if ($clickObj.children().hasClass("icon-report")) {
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][2], opsData, "");
+                return;
+            } else if ($clickObj.hasClass("icon-report")) {//点的是icon
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][2], opsData, "");
+                return;
+            }
+            if ($clickObj.children().hasClass("icon-analy")) {
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][3], opsData, "");
+                return;
+            } else if ($clickObj.hasClass("icon-analy")) {//点的是icon
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][3], opsData, "");
+                return;
+            }
+            if ($clickObj.children().hasClass("icon-read")||$clickObj.hasClass("icon-read")) {
+                var filenameString = $.filenameAIGet();
+                var filenameObj ={};
+                try{
+                    filenameObj = JSON.parse(filenameString);
+                }catch (e){
+                    return;
+                }
+                var result="",count=0;
+                for (var filenameItem in filenameObj) {
+                    result+=filenameObj[filenameItem]["resource"]+"|"+filenameObj[filenameItem]["title"]+",";
+                    count++;
+                }
+                saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][4], count, result);
+                return;
+            }
+            else if ($(obj).parent().attr("id") == "layer-wxzs" ||$(obj).parent().parent().attr("id") == "layer-wxzs" ||$(obj).attr("id") == "layer-wxzs") {//AI文献综述按钮
+                var filenameString = $.filenameAIGet();
+                var count=filenameString?filenameString.split(",").length:0;
+                if($(obj).parent().is(':visible')||$(obj).is(':visible')){
+                    saveLog(homepageOpsModule, homepageOpsFunction[0], homepageAction[0][5], count, $(obj).text().trim());
+                }
+                return;
+            }
+            //选择文献 取消选择文献
+            if ($clickObj.attr("name") == "CookieName") {
+                if ($clickObj.is(':checked')) {
+                    saveLog(homepageOpsModule, homepageOpsFunction[1], homepageAction[1][0], $clickObj.attr("value"), "");
+                    return;
+                } else {
+                    saveLog(homepageOpsModule, homepageOpsFunction[1], homepageAction[1][1], $clickObj.attr("value"), "");
+                    return;
+                }
+            }
+            //批量操作
+            if ($clickObj.attr("id") == "selectCheckAll1") {//"全选", "取消全选"
+                var count = $("#batchOpsBox").text().substring($("#batchOpsBox").text().indexOf("（") + 1, $("#batchOpsBox").text().indexOf("）"));
+                if ($clickObj.is(':checked')) {
+                    saveLog(homepageOpsModule, homepageOpsFunction[1], homepageAction[1][2], $.filenameGet(), count);
+                    return;
+                } else {
+                    saveLog(homepageOpsModule, homepageOpsFunction[1], homepageAction[1][3], $.filenameGet(), count);
+                    return;
+                }
+            }
+            //单篇删除
+            if ($clickObj.parent().hasClass("del")) {
+                saveLog(homepageOpsModule, homepageOpsFunction[2], homepageAction[2][0], $(obj).parent().siblings(".seq").find("input").attr("value"), "");
+                return;
+            }
+        },
+        export: function (obj) {
+            var $clickObj = $(obj);
+            var opsData = $.filenameGet();
+            if (GetQueryStringByName(window.location.href, "select") == 1) {
+                opsData = $.filenameSelectGet(); //从文献管理中心manage.html跳转过来的，前台取值是已选文献中的已勾选
+            }
+            var count = $("#result ul.literature-list").find("li").length;
+            if ($clickObj.attr("displaymode") == ("GBTREFER")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][0], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("elearning")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][1], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("REFER")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][2], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("MLA")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][3], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("APA")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][4], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("NEW")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][5], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("newdefine")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][6], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("Refworks")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][7], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("EndNote")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][8], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("NoteExpress")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][9], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("NodeFirst")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][10], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("selfDefine")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][11], opsData, count);
+                return;
+            } else if ($clickObj.attr("displaymode") == ("BibTex")) {
+                saveLog(exportOpsModule, exportOpsFunction[0], exportAction[0][12], opsData, count);
+                return;
+            }
+            //预览
+            if ($clickObj.children().hasClass("icon-preview")) {
+                saveLog(exportOpsModule, exportOpsFunction[1], exportAction[1][0], opsData, count);
+                return;
+            } else if ($clickObj.hasClass("icon-preview")) {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[1], exportAction[1][0], opsData, count);
+                return;
+            }
+            //批量下载
+            if ($clickObj.children().hasClass("icon-download")) {
+                saveLog(exportOpsModule, exportOpsFunction[2], exportAction[2][0], opsData, count);
+                return;
+            } else if ($clickObj.hasClass("icon-download")) {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[2], exportAction[2][0], opsData, count);
+                return;
+            }
+            //复制到剪切板
+            if ($clickObj.children().hasClass("icon-copy")) {
+                saveLog(exportOpsModule, exportOpsFunction[3], exportAction[3][0], opsData, count);
+                return;
+            } else if ($clickObj.hasClass("icon-copy")) {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[3], exportAction[3][0], opsData, count);
+                return;
+            }
+            //打印
+            if ($clickObj.children().hasClass("icon-print")) {
+                saveLog(exportOpsModule, exportOpsFunction[4], exportAction[4][0], opsData, count);
+                return;
+            } else if ($clickObj.hasClass("icon-print")) {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[4], exportAction[4][0], opsData, count);
+                return;
+            }
+            //已选文献
+            if ($clickObj.children().hasClass("icon-hasselected")) {
+                saveLog(exportOpsModule, exportOpsFunction[5], exportAction[5][0], opsData, count,true);
+                return;
+            } else if ($clickObj.hasClass("icon-hasselected")) {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[5], exportAction[5][0], opsData, count,true);
+                return;
+            }
+            //发表时间  被引频次
+            if ($clickObj.attr("orderparam") == "0") {
+                saveLog(exportOpsModule, exportOpsFunction[6], exportAction[6][0], opsData, $clickObj.attr("ordertype") == "asc" ? "升序" : "降序");
+                return;
+            } else if ($clickObj.attr("orderparam") == "1") {
+                saveLog(exportOpsModule, exportOpsFunction[6], exportAction[6][1], opsData, $clickObj.attr("ordertype") == "asc" ? "升序" : "降序");
+                return;
+            }
+            //导出txt  导出xls 导出doc
+            if ($clickObj.parent().attr("id")=="litotxt") {
+                saveLog(exportOpsModule, exportOpsFunction[7], exportAction[7][0], opsData, count);
+                return;
+            } else if ($clickObj.parent().parent().attr("id")=="litotxt") {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[7], exportAction[7][0], opsData, count);
+                return;
+            }
+            if ($clickObj.parent().attr("id")=="litoexcel") {
+                saveLog(exportOpsModule, exportOpsFunction[7], exportAction[7][1], opsData, count);
+                return;
+            } else if ($clickObj.parent().parent().attr("id")=="litoexcel") {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[7], exportAction[7][1], opsData, count);
+                return;
+            }
+            if ($clickObj.parent().attr("id")=="litoword") {
+                saveLog(exportOpsModule, exportOpsFunction[7], exportAction[7][2], opsData, count);
+                return;
+            } else if ($clickObj.parent().parent().attr("id")=="litoword") {//点的是icon
+                saveLog(exportOpsModule, exportOpsFunction[7], exportAction[7][2], opsData, count);
+                return;
+            }
+            //列表模式  摘要模式
+            if ($clickObj.attr("id")=="searchreportlist") {
+                if($clickObj.attr("listtype")=="list"){
+                    saveLog(exportOpsModule, exportOpsFunction[8], exportAction[8][0], opsData, $("ul.searchreport-form").find("p").length);
+                    return;
+                }else {
+                    saveLog(exportOpsModule, exportOpsFunction[8], exportAction[8][1], opsData, $("ul.searchreport-form").find("tr").length-1);
+                    return;
+                }
+            }
+            //保存检索报告
+            if ($clickObj.attr("id")=="btnSave") {
+                saveLog(exportOpsModule, exportOpsFunction[8], exportAction[8][2], opsData, $("ul.searchreport-form").find("p").length||$("ul.searchreport-form").find("tr").length-1);
+                return;
+            }
+            //打印检索报告
+            if ($clickObj.attr("id")=="btnPrint") {
+                saveLog(exportOpsModule, exportOpsFunction[8], exportAction[8][3], opsData, $("ul.searchreport-form").find("p").length||$("ul.searchreport-form").find("tr").length-1);
+                return;
+            }
+        }
+    }
+
+    /**
+     * 日志记录公共方法
+     * @param opsModule
+     * @param opsFunction
+     * @param opsAction
+     * @param opsData
+     * @param opsRelation
+     * @param isResirect 点击后跳转出去的传true 立即写入日志
+     */
+    function saveLog(opsModule, opsFunction, opsAction, opsData, opsRelation, isResirect) {
+        //日志记录
+        var data = {
+            "m": "模块名称",
+            "f": "功能名称",
+            "a": "操作名称",
+            "d": "操作界面数据",
+            "r": "操作关联数据"
+        };
+        data["m"] = opsModule;
+        data["f"] = opsFunction;
+        data["a"] = opsAction;
+        data["d"] = opsData;
+        data["r"] = opsRelation;
+        //打印文献题录 打印检索报告 D030501 删除文献已在相关的js里调用了记录
+        //下面的是需要记录的数据
+        var saveModule=["D0202"];
+        var saveActions=["D010101","D010102","D020101","D020301","D030401"];
+        if(saveModule.indexOf(opsFunction)>-1||saveActions.indexOf(opsAction)>-1){
+            var select=GetQueryStringByName(window.location.href, "select");
+            var filename = select == 1?$.filenameSelectGet():$.filenameGet();
+            var expandsMap= {};
+            saveAppLog("文献管理","","","",
+                GetQueryStringByName(window.location.href, "language"),filename,
+                opsAction,expandsMap,0);
+        }
+    }
+
+
+//监听页面所有点击事件
+    $("body").click(function (event) {
+        var $this = $(event.target);
+        commonFunction.search($this);
+        commonFunction.export($this);
+        commonFunction.homepage($this);
+    });
+})
+;

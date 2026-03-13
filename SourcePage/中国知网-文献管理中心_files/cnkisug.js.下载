@@ -1,0 +1,1934 @@
+﻿//补全扩展初始化参数
+if (typeof ISIE == "undefined")
+    ISIE = navigator.userAgent.indexOf("MSIE") != -1 && !window.opera;
+if (typeof sugPara != "Object") {
+    sugPara = {
+        IsTopK: false,
+        IsExp: true,
+        Expara: {DefaultPicS: "http://c61.cnki.net", CSYDPicS: "http://c61.cnki.net"},
+        IsAttr: false,
+        AttrCallFun: function (obj) {
+            try {
+                var c = $(obj).find("input[name='codevalue']").val();
+                var n = $(obj).find("b").text();
+                if (c) {
+                    categoryClick(c, n);
+                    return false;
+                }
+            } catch (e) {
+            }
+        },
+        attrSet: function (obj) {
+            try {
+                var c = $(obj).find("input[name='codevalue']").val();
+                var n = $(obj).find("b").text();
+                if (ge("hiddenNavi"))
+                    ge("hiddenNavi").innerHTML = SpecilNavi(c, n);
+            } catch (e) {
+            }
+        },
+        searchClick: function () {
+            try {
+                $('#btnSearch').click();
+            } catch (e) {
+            }
+        },
+        getHistoryWords: function () {
+            var cookieName = "UserInputs";
+            var newgetCookie = function (name) {
+                var cvalue = "";
+                if (window.localStorage) {
+                    cvalue = localStorage.getItem(name);
+                } else {
+                    var arr, reg = new RegExp("(^| )" + name + "=([^;]*)(;|$)");
+                    if (arr = document.cookie.match(reg)) {
+                        cvalue = unescape(arr[2]);
+                    }
+                }
+                if (cvalue == null) {
+                    cvalue = "";
+                }
+                return cvalue;
+            }
+            var words = newgetCookie(cookieName);
+            words = words.replace(/\',\"/g, "");
+            if (words) {
+                var rows = words.split("<#>");
+                var len = rows.length;
+                var reArray = new Array();
+                for (var i = 0; i < len; i++) {
+                    if (rows[i] == null || rows[i] == "")
+                        continue;
+                    reArray.push(rows[i]);
+                }
+                return reArray;
+            }
+            return [];
+        },
+        clearHistory: function (name, divObj) {
+            var getCookie = function (Name) {
+                var search = Name + "=";
+                if (document.cookie.length > 0) {
+                    offset = document.cookie.indexOf(search);
+                    if (offset != -1) {
+                        offset += search.length;
+                        end = document.cookie.indexOf(";", offset);
+                        if (end == -1)
+                            end = document.cookie.length;
+                        return unescape(document.cookie.substring(offset, end));
+                    }
+                }
+            }
+            if (window.localStorage) {
+                localStorage.removeItem("UserInputs");
+            } else {
+                var exp = new Date();
+                exp.setTime(exp.getTime() - 1);
+                var cval = getCookie("UserInputs");
+                if (cval != null) document.cookie = "UserInputs=| ;expires=" + exp.toGMTString() + ";path=/";
+            }
+            $("#newsearchhis").html("");
+            $("#history_js").hide();
+            $("#newsearchhis").hide();
+            if (typeof CoreDomainLoadJson == "function") {
+                var cdlj = new CoreDomainLoadJson();
+                cdlj.Load("../request/GetUserInputsHandler.ashx?action=UserInputs", function () {
+                }, "AyclearHistoryScrpitO");
+            }
+        }
+    };
+}
+
+function J(C) {
+    return document.createElement(C)
+}
+
+function createdroplist() {
+    var droplist = document.getElementById("__droplist");
+    if (droplist) {
+        document.body.removeChild(droplist)
+    }
+    droplist = J("div");
+    droplist.id = "__droplist";
+    droplist.name = "__droplist";
+    if (droplist.className != "undefined")
+        droplist.className = "dictdiv";
+    droplist.setAttribute("class", "dictdiv");
+    document.body.appendChild(droplist);
+}
+
+//初始自动补全绑定
+function InitSug(sugserver) {
+    createdroplist();
+    if (!this.space1) {
+        this.space1 = CreateCacheSpace(20, 0);
+    }
+    if (!this.space2) {
+        this.space2 = CreateCacheSpace(20, 0);
+    }
+    var exp = "input[id^=txt_][type!='checkbox'],input[id^=buttom_],input[id^=au_],input[id^=base],input[id^=magazine_],input[id^=sen_]";
+    if (Object.prototype.toString.call(sugserver) != "[object String]") {
+        sugserver = "";
+    }
+    BindDroplist(exp, sugserver, sugPara);
+}
+
+//绑定输入提示
+function BindDroplist(exp, sugserver, sPara) {
+    if (sugserver == undefined)
+        return;
+    sugUrlComm.Server = sugserver;
+    var isExpanEvent = function (evt) {
+        var expandContentDiv = document.getElementById("expandarea");
+        if (expandContentDiv) {
+            evt = evt || window.event;
+            var ele = evt.srcElement || evt.target;
+            while (ele) {
+                if (ele == expandContentDiv) {//|| ele == input_elem
+                    return true;
+                }
+                ele = ele.parentNode
+            }
+        }
+    };
+    //try {
+    var objouter = $("#__droplist"),
+        dictType = "",
+        dbType = "",
+        objinput = null,
+        preinput = "",
+        preDictType = "",
+        inputid = "",
+        listIputID = "",
+        selindex = -1,
+        listLength = 0,
+        rawKey = "",
+        isTopKey = sPara.IsTopK || false,
+        isAttrW = sPara.IsAttr || false,
+        attrCallFun = sPara.AttrCallFun || function () {
+        },
+        attrSetF = sPara.attrSet || function () {
+        },
+        isExpandTip = sPara.IsExp || false,
+        getHistoryWords = sPara.getHistoryWords || function () {
+            return []
+        },
+        clearHistory = function () {
+            if (sPara.clearHistory) {
+                sPara.clearHistory();
+            }
+            objouter.empty();
+        },
+        isExistsExpandTip = false,
+        minHeight = "180px",
+        tipWordType = 0;
+    $(document.body).bind("click", function (evt) {
+        if (isExpanEvent(evt)) {
+            return;
+        }
+        objouter.css("display", "none");
+    });
+
+    function bind(elem, evt, func) {
+        if (elem) {
+            return elem.addEventListener ? elem.addEventListener(evt, func, false) : elem.attachEvent("on" + evt, func)
+        }
+    }
+
+    function keyDown(evt) {
+
+        inputid = $(this).attr('id');
+        objinput = $("#" + inputid);
+        var key = objinput.val();
+        //key = key.replace(/(^\s*)|(\s*$)/g, "");
+        key = key.replace(/\s+/g, " ");
+        if (key == "" && tipWordType != 1) {
+            objouter.hide();
+            return;
+        }
+        FillDBType();
+        FillKeyType();
+        var keycode = (evt.keyCode) || (evt.which) || (evt.charCode);
+        if (!(keycode == 40 || keycode == 38 || keycode == 13 || keycode == 9 || keycode == 27)) {//tab 未实现，tab事件被外边事件打劫了
+            if (key == preinput && preDictType == dictType) {
+                PreReturn(key);
+                return;
+            }
+        }
+        if ((keycode == 37 || keycode == 39) && inputid == listIputID && preDictType == dictType) {
+            PreReturn(key);
+            return;
+        }
+        if (keycode == 9 || keycode == 40 || keycode == 38) { //上下
+
+            var isUp = false;
+            if (keycode == 9 || keycode == 40)
+                isUp = true;
+            if (keycode == 9)
+                stopEvent(evt);
+            changeSelList(isUp);
+        } else if (keycode == 13) { //回车
+            if (typeof firstTag != "undefined" && firstTag == true) {
+                objouter.hide();
+                firstTag = false;
+            } else if (selindex != -1) {
+                selectText();
+                //attrCallFun($("#rw" + selindex, objouter).get(0));
+
+                objouter.hide();
+                selindex = -1;
+            } else if (key != preinput || inputid != listIputID || preDictType != dictType) {
+                searchKeyWord();
+            } else objouter.hide();
+        } else if (keycode == 27) {//Esc
+            objouter.hide();
+        } else {
+            searchKeyWord();
+        }
+        preDictType = dictType;
+        preinput = key;
+    }
+
+    //$(exp).live("blur", function (evt) { if (isExpanEvent(evt)) { return; } objouter.css("display", "none"); });
+    //$(exp).live("keyup", function (evt) { });
+    function getTopW(callback) {
+        callback = callback || function () {
+        };
+        if (typeof top_Words_Json == "undefined") {
+            var CoreDomainClass = new CoreDomainLoadJson();
+            CoreDomainClass.Load(sugUrlComm.getTopUrl(sugserver), callback, "TopWords_Request");
+        }
+        callback();
+    }
+
+    if (isTopKey) {
+        getTopW(function () {
+        });
+        $(document).on("click", exp, mousedown);
+    }
+    $(document).on("keyup", exp, keyDown);
+
+    function mousedown(evt) {
+        objinput = evt.srcElement || evt.target;
+        objinput = $(objinput)
+        inputid = objinput.attr('id');
+
+        var key = objinput.val();
+        key = key.replace(/(^\s*)|(\s*$)/g, "");
+        if (!key) {
+            objouter.empty();
+            listLength = 0;
+            showHistoryWord(evt);
+            showTopWord(evt);
+            getDropListItems().mousedown(function (ev) {
+                BindTipEvent(this, ev);
+            });
+            divPosition();
+            selindex = -1;
+        }
+
+        //stopEvent(evt);
+    }
+
+    function showHistoryWord(evt) {
+        var hWordArray = getHistoryWords();
+        if (hWordArray && hWordArray.length > 0) {
+            tipWordType = 0;
+            new Array().slice
+            var tipHtml = HtmlCreater.getTitleTipHtml(hWordArray.length > 3 ? hWordArray.slice(0, 3) : hWordArray, "", getIntutV(), "");//搜索历史
+            if (tipHtml) {
+                if ($("#sugtip_ULlist").length <= 0) {
+                    objouter.append(HtmlCreater.getTipIframe());
+                }
+                $("#sugtip_ULlist").append(tipHtml + "<div class=\"topRecom\" style=\"line-height:18px;padding-bottom:3px;padding-left:28px;border-bottom:1px solid #ddd;\"><a id=\"clearHistoryO\">" + message.ClearSearchHistory + "</a></div>");
+                $("#clearHistoryO").mousedown(function (ev) {
+                    clearHistory();
+                });
+            }
+        }
+    }
+
+    //获取当前输入词
+    function getIntutV() {
+        var key = objinput.val().replace('\\', '').replace(/(^\s*)|(\s*$)/g, "");
+        key = key.toLowerCase();
+        return key;
+    }
+
+    //热词
+    function showTopWord(evt) {
+        getTopW(function () {
+            tipWordType = 1;
+            var html = "";
+            if (typeof top_Words_Json == "undefined")
+                return;
+            if (Object.prototype.toString.call(top_Words_Json) == "[object Array]") {
+                html = top_Words_Json.join(";");
+            } else if (typeof top_Words_Json != "undefined") {
+                if (top_Words_Json.Count != "0") {
+                    html = top_Words_Json.sug;
+                }
+            }
+            if (!html) {
+                return;
+            }
+            html = filterMark(html);
+            var tipHtml = HtmlCreater.getTitleTipHtml(html, "", getIntutV(), message.todayHot);
+            if (tipHtml) {
+                if ($("#sugtip_ULlist").length <= 0) {
+                    objouter.append(HtmlCreater.getTipIframe());
+                }
+                $("#sugtip_ULlist").append(tipHtml);
+            }
+            //getDropListItems().mousedown(function (ev) {
+
+            //    BindTipEvent(this, ev);
+            //});
+            if (document.activeElement.id == inputid)
+                tipShow();
+        });
+    }
+
+    function stopEvent(evt) {
+        if (evt.preventDefault) {
+            evt.preventDefault()
+        }
+        evt.cancelBubble = true;
+        return evt.returnValue = false
+    }
+
+    //提前返回处理
+    function PreReturn(key) {
+        divPosition();
+        objouter.show();
+        preDictType = dictType;
+        preinput = key;
+    }
+
+    //添加监听事件
+    function O(G, U, C) {
+        if (ISIE) {
+            if (U == "load") {
+                G.onreadystatechange = function () {
+                    if (this.readyState == "loaded") {
+                        C();
+                    }
+                }
+            } else
+                G.attachEvent("on" + U, (function (V) {
+                    return function () {
+                        C.call(V)
+                    }
+                })(G))
+
+        } else {
+            G.addEventListener(U, C, false)
+        }
+    }
+
+    //做跨域脚本支持
+    function CoreDomainLoadJson() {
+        this.C;
+        this.J = J;
+        this.O = O;
+        this.Load = function (src, onJsonLoaded, id) {
+            if (!src) {
+                return
+            }
+
+            //提示词申请最后一次js加载有效
+            var oldscript = document.getElementById(id);
+            if (oldscript) {
+                document.body.removeChild(oldscript);
+            }
+            this.C = J("SCRIPT");
+            this.C.type = "text/javascript";
+            if (typeof id == "string" && id.length > 0) {
+                this.C.id = id;
+            } else {
+                this.C.id = "callScriptE";
+            }
+            this.C.src = src + "&td=" + (new Date()).getTime();
+            this.C.charset = "utf-8";
+            document.body.appendChild(this.C);
+            O(this.C, "load", onJsonLoaded);
+        }
+    }
+
+    //填充检索项词典类型
+    function FillKeyType() {
+        var selID = inputid.replace('value1', 'sel1').replace('value2', 'sel2');
+        if ($("#" + selID).length <= 0)
+            selID = inputid.replace('value1', 'sel').replace('value2', 'sel');
+
+        var selValue = $("#" + selID).find("option:selected").text();
+
+        if (!selValue || selValue == undefined)
+            dictType = GetSpecKeyType();
+        else
+            dictType = selValue;
+    }
+
+    function FillDBType() {
+        dbType = $("#singleDB").val();
+        if (!dbType) {
+            dbType = $("#dbPrefix").val();
+        }
+        if (!dbType) {
+            dbType = $("#dbcode").val();
+        }
+    }
+
+    //获取特殊字段绑定词典类型
+    function GetSpecKeyType() {
+        if (inputid.indexOf('magazine_') == 0) {
+            return "source";
+        }
+        if (inputid.indexOf('base') == 0) {
+            return "base";
+        }
+        return "";
+    }
+
+    //提交检索，返回提示词内容列表
+    function searchKeyWord() {
+        listIputID = inputid;
+        var kw = $("#" + inputid).val().replace(/(^\s*)/g, "");///(^\s*)|(\s*$)/g
+        var tDictType = dictType;
+        var tIsAttrW = isAttrW;
+        if (kw == "") {
+            objouter.hide();
+            return;
+        }
+        kw = kw.replace(/\s+/g, " ");
+        var sPos = kw.lastIndexOf(" ");
+        var preKw = "";
+        rawKey = kw;
+        if (sPos > 0) {
+            preKw = kw.substring(0, sPos + 1);
+            if (sPos == kw.length - 1) {
+                kw = kw.replace(/(^\s*)|(\s*$)/g, "");
+                sPos = kw.lastIndexOf(" ");
+                tDictType = "GJGXC";
+                tIsAttrW = false;
+            }
+            kw = kw.substring(sPos + 1, kw.length);
+        }
+
+        divPosition();
+
+        selindex = -1;
+        tipWordType = 0;
+        objouter.empty();
+        //加入js 缓存机制 读取格式text|*|attr
+        var cachesu = space1.getExData(kw);
+        if (cachesu) {
+            datahandle(cachesu);
+        } else {
+            var geturl = sugUrlComm.getURL(sugserver, tDictType, kw, (dbType ? "&dbt=" + dbType : "") + (!tIsAttrW || sPos > 0 ? "" : "&attr=1")); //&jsonvar=oJson
+            var CoreDomainClass = new CoreDomainLoadJson();
+
+            CoreDomainClass.Load(geturl, function () {
+                var html = "";
+                var attr = "";
+                if (typeof oJson != "undefined") {
+                    if (oJson && Object.prototype.toString.call(oJson) == "[object Array]") {
+                        html = oJson.join(";");
+                    } else if (oJson.Count != "0") {
+                        try {
+                            html = oJson.sug;
+                            attr = oJson.attr;
+                        } catch (e) {
+                        }
+                    }
+                }
+                if (html != null && html != ""
+                    && $("#" + inputid).val().replace(/(^\s*)|(\s*$)/g, "") != "") {
+                    objouter.empty();
+                    var tipHtml = HtmlCreater.createlist(html, preKw, getIntutV(), attr);
+                    //js缓存机制存入
+                    space1.pushSpace(kw, tipHtml);
+                    datahandle(tipHtml);
+                } else {
+                    objouter.hide();
+                }
+            }, "sugkewword_JS");
+        }
+
+        function datahandle(tipHtml) {
+
+            if (tipHtml) {
+                objouter.append(tipHtml);
+            }
+
+            getDropListItems().mousedown(function (ev) {
+
+                BindTipEvent(this, ev);
+            });
+            if (document.activeElement.id == inputid)
+            //                    objouter.show();
+                tipShow();
+        }
+
+
+    }
+
+    function tipShow() {
+        objouter.show();
+
+        if (isExistsExpandTip) {
+
+            var tipListObj = $("#tipWordList");
+            if (tipListObj.length <= 0) {
+                tipListObj = $("#sugtip_ULlist ul").first();
+            }
+            var tipWordListHeight = tipListObj.height();
+            var exHeight = 0;
+            $("#expandarea .dictmore").each(function () {
+                exHeight += $(this).height();
+            });
+
+            if (exHeight + 20 > tipWordListHeight) {
+                tipListObj.height(exHeight + 20);
+            } else {
+                $("#expandarea .dictmore").height(tipWordListHeight - 20);
+            }
+        } else {
+            setSugContent();
+        }
+    }
+
+    function getExKW(word, pKw) {
+        if (word && pKw) {
+            var re = new RegExp("^" + pKw, "i");
+            return word.replace(re, "");
+        }
+        return word;
+    }
+
+    function bold(data, input) {
+        var ret = data;
+        if (input && data.indexOf(input) == 0) {
+            ret = input + "<strong>" + filterMark(data.substr(input.length)) + "</strong>"
+        }
+        return ret
+    }
+
+    var HtmlCreater = (function ($) {
+        this.CreateContentEle = function (tag, id, className, innerHtml, eventAttr) {
+            var htmlWriter = "<" + tag + " " + (id ? "id='" + id + "'" : "") + (className ? " class='" + className + "'" : "") + (eventAttr ? eventAttr : "") + ">";
+            htmlWriter += innerHtml;
+            htmlWriter += "</" + tag + ">";
+            return htmlWriter;
+        }
+
+        //Old Fun
+        function createTBlist(result, preKw) {
+            var rows = result.toLowerCase().split(";");
+            var shtml = "";
+            var key = objinput.val().replace('\\', '').replace(/(^\s*)|(\s*$)/g, "");
+            key = key.toLowerCase();
+
+            for (var ix = 0; ix < rows.length; ix++) {
+                if (rows[ix] == null || rows[ix] == "")
+                    continue;
+
+                shtml += createListTR(rows[ix], key, listLength, preKw);
+                listLength++;
+            }
+            return shtml;
+        }
+
+        function createListTR(trC, key, n, preKw) {
+            var trHtml = "";
+            //var cols = trC.split(",");//
+            var tipW = preKw + filerWord(trC);//cols[0]
+            var re = RegExp("^" + key, "ig"); //eval("/^" + key.replace("/", "\/") + "/ig")
+            //var tipWFormate = tipW.replace(re, "<strong>" + key + "</strong>");
+            var tipWFormate = addTopMark(bold(tipW, key), n);
+
+            var isExistEx = false;
+            if (isExpandTip) {//add expand sign
+                if (isExpendWord(tipW)) {
+                    tipWFormate = filterMark(tipWFormate) + "<i></i>";
+                    isExistEx = true;
+                }
+            }
+            var jsClick = "try {ge('btnSearch').click();} catch (e) {};";
+            if (inputid.indexOf("buttom_") >= 0 || inputid.indexOf("sen_") >= 0)
+                jsClick = "";
+            var lastKw = getExKW(tipW, preKw);
+            //        trHtml = "<div onmouseover=\"this.className='drop_selected';\" onmouseout=\"this.className=''\" onmousedown=\"$('#'+'" + inputid + "').val('"
+            trHtml = "<div " + getTipOnMouseover(isExistEx, tipW, lastKw) + getTipOnMouseout(isExistEx) + " onmousedown=\"$('#'+'" + inputid + "').val('"
+                + valueFilter(filterMark(tipW)) + "');" + jsClick + "\">" +
+                "<span class='rw' id='rw" + n.toString() + "'>" + tipWFormate + "</span>" +
+                "</div>";
+            return trHtml;
+        }
+
+        function addTopMark(c, n) {
+            if (tipWordType == 1) {
+                switch (n) {
+                    case 0:
+                        return "<em class='num num1'>1</em>" + c;
+                    case 1:
+                        return "<em class='num num2'>2</em>" + c;
+                    case 2:
+                        return "<em class='num num3'>3</em>" + c;
+                }
+                return "<em class='num'>" + (n + 1).toString() + "</em>" + c;
+            } else if (tipWordType == 2) {
+                return "<em class='num numx'></em>" + c;
+            }
+            return c;
+        }
+
+        function filerWord(str) {
+            var markStr = "";
+            if (SugExpand.MarkRegex.test(str)) {
+                markStr = str.match(SugExpand.MarkRegex)[0];
+                str = filterMark(str);
+            }
+            str = str.split(",")[0] + markStr;
+            return str;
+        }
+
+        function getTipOnMouseover(isEx, w, kw) {
+            return " onmouseover=\"return tipDivOnMouseOverEvent(this," + isEx.toString() + ",'" + w + "','" + kw + "',event);\"";
+            //        var eventHtml = " onmouseover=\"this.className='drop_selected';";
+            //        if (isEx) {
+            //            eventHtml += "SugExpand.expendTR('" + w + "');";
+            //        } else {
+            //            eventHtml += " $('#expandarea').hide();";
+            //        }
+            //        eventHtml += " return false;\"";
+            //        return eventHtml;
+        }
+
+        function getTipOnMouseout(isEx) {
+            return " onmouseout=\"tipDivOnMouseOutEvent(this," + isEx.toString() + ",event);\"";
+            //eventHtml += " return false; \"";
+            //return eventHtml;
+        }
+
+        //Old Fun
+        //New Fun Star
+        this.CreateDiv = function (id, className, innerHtml) {
+            return CreateContentEle("div", id, className, innerHtml);
+        }
+        this.CreateUL = function (id, className, innerHtml) {
+            return CreateContentEle("ul", id, className, innerHtml);
+        }
+        this.CreateLI = function (id, className, innerHtml, eventAttr) {
+            return CreateContentEle("li", id, className, innerHtml, eventAttr);
+        }
+
+        this.createListLi = function (trC, key, n, preKw, curNum) {
+            var liHtml = "";
+            var tipW = preKw + filerWord(trC);
+            // var re = RegExp("^" + key, "ig");
+            var tipWFormate = addTopMark(bold(tipW, key), curNum);
+            var isExistEx = false;
+            if (isExpandTip) {//add expand sign
+                if (isExpendWord(tipW)) {
+                    tipWFormate = filterMark(tipWFormate) + "<i></i>";
+                    isExistEx = true;
+                }
+            } else {
+                tipWFormate = filterMark(tipWFormate);
+            }
+            //var jsClick = "try {ge('btnSearch').click();} catch (e) {};";
+            //if (inputid.indexOf("buttom_") >= 0 || inputid.indexOf("sen_") >= 0)
+            //    jsClick = "";
+            var lastKw = getExKW(tipW, preKw);
+            liHtml = CreateLI("rw" + n.toString(), "rw", tipWFormate, this.getLiEvent(isExistEx, tipW, lastKw, inputid));
+            return liHtml;
+        }
+        this.getLiEvent = function (isExistEx, tipW, lastKw, inputid) {
+            //var jsClick = "try {ge('btnSearch').click();} catch (e) {};";
+            //if (inputid.indexOf("buttom_") >= 0 || inputid.indexOf("sen_") >= 0)
+            //    jsClick = "";
+            return getLiMouseEvent(isExistEx, tipW, lastKw, inputid, "");
+        }
+        this.getLiMouseEvent = function (isExistEx, tipW, lastKw, inputid, clickEvent) {
+            //return getTipOnMouseover(isExistEx, tipW, lastKw) + getTipOnMouseout(isExistEx) + " onmousedown=\"$('#'+'" + inputid + "').val('" + valueFilter(filterMark(tipW)) + "');" + (clickEvent ? clickEvent : "") + "\"";
+            return getTipOnMouseover(isExistEx, tipW, lastKw) + getTipOnMouseout(isExistEx);
+        }
+        //New Fun End
+        return {
+            createlist: function (result, preKw, curKey, attrD, title) {
+                listLength = 0;
+                //return this.getWordsC(result, preKw, attrD, title);
+                var reHtml = CreateDiv("sugtip_list", "dictlistX", this.getWordsC(result, preKw, curKey, attrD, title));
+
+                return reHtml;
+            },
+            splitRemoveEmptyEntries: function (result) {
+                var rows = result.toLowerCase().split(";");
+                var len = rows.length;
+                var reArray = new Array();
+                for (var i = 0; i < len; i++) {
+                    if (rows[i] == null || rows[i] == "")
+                        continue;
+                    reArray.push(rows[i]);
+                }
+                return reArray;
+            },
+            getAttrC: function (k, attrV, inputKW) {
+                //空格后无前端匹配词
+                var htmlWriter = "";
+                var listWriter = ""
+                if (k && attrV) {
+
+                    var tipW = filerWord(filterMark(k));
+                    var tipWFormate = bold(tipW, inputKW);
+                    listWriter += CreateLI("rw" + listLength.toString(), "rw1", tipWFormate, getLiEvent(false, tipW, lastKw, inputid));
+                    var lastKw = getExKW(tipW, "");
+                    var cns = attrV.split("$$");
+                    var cs = cns[0].split(";");
+                    var ns = cns[1].split(";");
+                    var hiddenValue = "<input type=\"hidden\" name=\"inputvalue\" value=\"" + filterMark(k) + "\"/>";
+                    if (cs.length == ns.length) {
+                        for (var i = 0; i < cs.length; i++) {
+                            if (ns[i]) {
+                                listLength++;
+                                listWriter += CreateLI("rw" + listLength.toString(), "rw2", "在<b>" + ns[i] + "</b>分类中检索" + hiddenValue + "<input type=\"hidden\" name=\"codevalue\" value=\"" + cs[i] + "\"/>", getLiMouseEvent(false, tipW, lastKw, inputid));
+                            }
+                        }
+                    }
+                    listLength++;//提示词列表直接用，所以这里要++
+                }
+                if (listWriter) {
+                    htmlWriter += CreateDiv("Attr_Div", "dictlistTop", CreateUL("", "l", listWriter));
+                }
+                return htmlWriter;
+            },
+            getTipWHtml: function (k, results, prek) {
+                var wArray = results;
+                if (Object.prototype.toString.call(results) == "[object String]") {
+                    wArray = this.splitRemoveEmptyEntries(results);
+                }
+                var shtml = "";
+                for (var ix = 0; ix < wArray.length; ix++) {
+                    shtml += createListLi(wArray[ix], k, listLength, prek, ix);
+                    listLength++;
+                }
+                return shtml;
+            },
+            getWordsC: function (result, preKw, curKey, attrD, title) {
+                var rows = this.splitRemoveEmptyEntries(result);
+                var shtml = "";
+                //var key = objinput.val().replace('\\', '').replace(/(^\s*)|(\s*$)/g, "");
+                //key = key.toLowerCase();
+                //var key = curKey;
+                var titleHtml = "";
+                if (title) {
+                    titleHtml = "<div class=\"topRecom\" >" + title + "</div>";
+                }
+                var attrHtml = "";
+                if (attrD) {
+                    attrHtml = this.getAttrC(rows[0], attrD, curKey);
+                }
+                //return CreateDiv("sugtip_list", "dictlistX", attrHtml + CreateDiv("sugtip_ULlist", "dictlistCol clearfix", titleHtml + CreateUL("sugtip_ULlist_UL", "", shtml)));
+                shtml = this.getTipWHtml(curKey, rows, preKw);
+                return attrHtml + CreateDiv("sugtip_ULlist", "dictlistCol clearfix", titleHtml + CreateUL("", "", shtml));
+            },
+            getTipIframe: function () {
+                return CreateDiv("sugtip_list", "dictlistX", CreateDiv("sugtip_ULlist", "dictlistCol clearfix", ""));
+            },
+            getTitleTipHtml: function (rows, preKw, curKey, title) {
+                var shtml = "";
+                var titleHtml = "";
+                if (title) {
+                    titleHtml = "<div class=\"topRecom\" >" + title + "</div>";
+                }
+                shtml = this.getTipWHtml(curKey, rows, preKw);
+                return titleHtml + CreateUL("", "", shtml);
+            }
+        }
+    })(jQuery);
+
+    function getDropListItems() {
+        //return $("#Attr_Div li,#sugtip_ULlist_UL li", objouter);
+        return $("#Attr_Div li,#sugtip_ULlist > UL li", objouter);
+    }
+
+    //更改提示选择
+    function changeSelList(isUp) {
+        var $childs = getDropListItems();
+        if ($childs.length == 0) {
+            return;
+        }
+        var setselindex = function () {
+            if (isUp)
+                selindex++;
+            else
+                selindex--;
+        }
+        if (objouter.css("display") == 'none') {
+            objouter.css("display", "");
+        } else {
+            setselindex();
+        }
+        if (selindex >= $childs.length || selindex < 0) {
+            $childs.removeClass("drop_selected");
+            objinput.val(valueFilter(rawKey));
+            selindex = isUp ? -1 : $childs.length;
+            return;
+        }
+        var getItem = function () {
+            var i = $childs.length;
+            while (i--) {
+                if ($($childs[i]).attr("id") == ("rw" + selindex.toString())) {
+                    return $($childs[i]);
+                }
+            }
+            return $(null);
+        }
+        $($childs[selindex]).mouseout();
+        var item = getItem();
+        if (item.length <= 0) {
+            setselindex();
+            item = getItem();
+        }
+        var tempTxt = getSearchValue(item);//item.text();
+        if (!tempTxt) {
+            var k = "";
+        }
+        var maxindex = $childs.length - 1;
+        if (selindex < 0) {
+            selindex = 0;
+        }
+        if (selindex > maxindex) {
+            selindex = maxindex;
+        }
+        $childs.removeClass("drop_selected");
+        $($childs[selindex]).mouseover();
+        objinput.val(valueFilter(tempTxt));
+        if (typeof attrSetF == "function") {
+            attrSetF(item);
+        }
+    }
+
+    function getSearchValue(item) {
+        if (item) {
+            var emItem = item.find("em");
+            var emV = emItem.text();
+            var value = item.text();
+            if (emV) {
+                return value.replace(new RegExp("^\w*?" + emV, "g"), "");
+            } else {
+                var hiddenItem = item.find("input[name='inputvalue']");
+                if (hiddenItem.length > 0) {
+                    return hiddenItem.val();
+                }
+            }
+            return value;
+        }
+        return "";
+    }
+
+    //过滤检索提示词
+    function valueFilter(sValue) {
+        sValue = sValue.replace("<strong>", "").replace("</strong>", "");
+        sValue = sValue.replace(/\<i\>\<\/i\>/ig, "");
+        if (sValue.indexOf("/") >= 0)
+            sValue = sValue.substring(0, sValue.indexOf("/"));
+        return sValue;
+    }
+
+    function selectText() {
+        if (selindex == -1)
+            return;
+        var tempChilds = getDropListItems();
+        //var item = $(tempChilds[selindex]).find("#rw" + selindex);
+        var item = $(tempChilds[selindex]);
+        objinput.val(valueFilter(item.html().substring(item.html().indexOf("</em>") + 5)));
+
+    }
+
+    function divPosition(evt) {
+        var offset = objinput.offset();
+        var width = objinput.outerWidth();
+        var height = objinput.outerHeight();
+        objouter.css("top", offset.top + height);
+        objouter.css("left", offset.left);
+        //        objouter.css("width", width - 12);
+    }
+
+    function setSugContent() {
+        //var objSugList = $("#sugtip_list");
+        //var offset = objinput.offset();
+        //var width = objinput.outerWidth();
+        //var height = objinput.outerHeight();
+        //objSugList.css("top", offset.top + height);
+        //objSugList.css("left", offset.left);
+        $("#sugtip_list").width(objinput.outerWidth() - 2);
+    }
+
+    //----------------------New Code-------------
+
+    function filterMark(w) {
+        return w.replace(SugExpand.MarkRegex, "");
+    }
+
+    function isExpendWord(curKey) {
+        if (typeof curKey == "string" && (curKey.indexOf("$") >= 0 || curKey.indexOf("#") >= 0)) {
+            return true;
+        }
+        return false;
+    }
+
+    function BindTipEvent(o, ev) {
+        tipOnMouseDownEvent(o, ev);
+    }
+
+    function isAttr(o) {
+        return $(o).find("input[name='inputvalue']").length > 0;
+    }
+
+    function tipOnMouseDownEvent(o, ev) {
+        var kv = getSearchValue($(o));
+        $('#' + inputid).val(valueFilter(kv));
+        if (isAttr(o)) {
+            attrCallFun(o);
+        } else {
+            if (inputid.indexOf("buttom_") < 0 || inputid.indexOf("sen_") < 0) {
+                try {
+                    if (typeof sPara.searchClick == "function") {
+                        sPara.searchClick();
+                    } else {
+                        $('#btnSearch').click();
+                    }
+                } catch (e) {
+                }
+                ;
+            }
+        }
+    }
+
+    //}
+    //catch (e) { }
+}
+
+function tipClass(curO, cn) {
+    if ($("#tipWordList div").length > 0) {
+        $("#tipWordList div").each(function () {
+            $(this).removeClass(cn);
+        });
+    } else {
+        $("#sugtip_list li").each(function () {
+            $(this).removeClass(cn);
+        });
+    }
+    $(curO).addClass(cn);
+}
+
+function tipDivOnMouseOverEvent(curObj, isEx, w, kw, ev) {
+    var exEvent = function () {
+        var curOCN = $(curObj).attr("class")
+        if (curOCN.indexOf("drop_selected") >= 0) {
+            return true;
+        }
+        tipClass(curObj, 'drop_selected');
+        //        curObj.className = 'drop_selected';
+        if (isEx) {
+            SugExpand.expendTR(w, kw, curObj, sugPara.Expara || {});
+        } else {
+            $('#expandarea').hide();
+        }
+    }
+    var e = window.event || ev;
+    var s = e.fromElement || e.relatedTarget;
+    if (s) {
+
+        if (document.all) {
+            if (!(s == curObj || curObj.contains(s))) {
+                exEvent();
+            }
+        } else {
+            var res = curObj.compareDocumentPosition(s);
+            if (!(s == curObj || res == 20 || res == 0)) {
+                exEvent();
+            }
+        }
+    } else {
+        exEvent();
+    }
+}
+
+function tipDivOnMouseOutEvent(curObj, isEx, ev) {
+    var e = window.event || ev;
+    var s = e.toElement || e.relatedTarget;
+    var expandAreaO = document.getElementById("expandarea");
+    var exEvent = function () {
+        tipClass(curObj, "");
+        if (isEx) {
+            $('#expandarea').hide();
+        }
+        return false;
+    }
+    var isExpandareaIE = function (s) {
+        if ((s && s.id == "expandarea") || (expandAreaO && expandAreaO.contains(s))) {
+            return true;
+        }
+        if (!curObj.contains(s)) {
+            return exEvent();
+        }
+        return true;
+    }
+
+    var isExpandareaNotIE = function (s) {
+        var isContains = function (source, mother) {
+            if (mother && source) {
+                var res = mother.compareDocumentPosition(source);
+                if (!(res == 20 || res == 0)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        if (!!(curObj && curObj.nodeName && curObj.nodeType == 1) && !!(s && s.nodeName && s.nodeType == 1)) {
+            if (!isContains(s, expandAreaO)) {
+                return true;
+            }
+            if (isContains(s, curObj)) {
+                return exEvent();
+            }
+        }
+    }
+
+    if (document.all) {
+        return isExpandareaIE(s);
+    } else {
+
+        return isExpandareaNotIE(s);
+    }
+
+}
+
+
+var sugUrlComm = (function () {
+    this.URLType = {
+        APP: 0,
+        SUG: 1,
+        EXPAND: 2,
+        TOP: 3
+    }
+    this.getSugUrl = function (s, f, k, ap) {
+        var addP = ap ? ap : "";
+        return s + "/su.ashx?action=getsmarttips&kw=" + encodeURIComponent(k)
+            + "&t=" + encodeURIComponent(f) + addP + "&p=" + Math.random() + "&isex=1";
+
+    }
+    this.getAppUrl = function (s, f, k, ap) {
+        var addP = ap ? ap : "";
+        return s + "/Parts/Suggest/GetForJquery?source=kms&item=" + encodeURIComponent(f) + "&text=" + encodeURIComponent(k) + "&jsonvar=oJson" + addP + "&p=" + Math.random();
+    }
+    this.gUrlType = function (server, k) {
+        if (Object.prototype.toString.call(server) == "[object String]") {
+            var re = /app\.cnki\.net/ig;
+            if (re.test(server)) {
+                return URLType.APP;
+            }
+        }
+        return URLType.SUG;
+    }
+    return {
+        Server: "",
+        getURL: function (s, f, k, ap, ut) {
+            var t = gUrlType(s);
+            if (t == URLType.APP) {
+                this.getURL = getAppUrl;
+            } else {
+                this.getURL = getSugUrl;
+            }
+            return this.getURL(s, f, k, ap);
+        },
+        getTopUrl: function (s, ap) {
+            var addP = ap ? ap : "";
+            return s + "/topk.ashx?jsonvar=top_Words_Json" + addP + "&v=" + ((new Date()).getTime());
+        }
+    }
+
+})();
+//----------------------------------------
+var SugExpand = (function () {
+    this.getExpandData = function (server, dt, kw, callback) {
+        //errordu
+        //        var geturl = getURL(sugserver, dictType, kw);
+        var geturl = sugUrlComm.getURL(server, dt, kw, "&jsonvar=eoJson").replace("&isex=1", "");
+        var CoreDomainClass = new CoreDomainLoadJson();
+
+        CoreDomainClass.Load(geturl, function () {
+            if (typeof callback == "function") {
+                callback();
+            }
+        }, "sugExpandData_JS");
+    }
+
+    this.creatExpandarea = function () {
+        $("#expandarea").remove();
+        if ($("#sugtip_ULlist").length > 0) {
+            $("#__droplist #sugtip_ULlist").append("<div id='expandarea' name='expandarea' class='dictexpand' ></div>");
+        } else {
+            $("#__droplist").append("<div id='expandarea' name='expandarea' class='dictexpand' ></div>");
+        }
+        //$("#expandarea").bind("click", function () { return false;});
+    }
+
+    return {
+        MarkRegex: new RegExp("\#([\\\d|,]*?)\#$", "i"),//new RegExp("[\#|\$]$"),
+        filterMark: function (w) {
+            return w.replace(SugExpand.MarkRegex, "");
+        },
+        expendTR: function (word, kw, curObj, ePara) {
+            var cachObj = curObj;
+            //SugExpand.creatExpandarea();
+            creatExpandarea();
+            var isExistsExpandTip = false;
+            var objExpander = $("#expandarea");
+
+            /**
+             * @author malei 2021-06-04
+             * 获取knavi的api地址
+             * @param name 要查询的数据库字段值
+             * @param value 对应的值
+             * @param type DICTCenter里的Dmap值
+             * @param callback 回调函数
+             */
+            function getNaviData(name, value, type, callback) {
+                var hidKnaviApi = $("#hidKnaviApi").val();
+                var url = {
+                    CJFD_EX: hidKnaviApi + "/journals/query",
+                    CCND_EX: hidKnaviApi + "/newspapers/query",
+                    CMFD_EX: hidKnaviApi + "/degreeunits/query",
+                    IMAGE_EX: sugUrlComm.Server, //图片和统计图片依然调用老的sug接口,这里不做调用
+                    CSYD_EX: sugUrlComm.Server,
+                    CDFD_EX: hidKnaviApi + "/degreeunits/query",
+                    CYFD_EX: hidKnaviApi + "/yearbooks/query",
+                    CRFD_EX: hidKnaviApi + "/refbooks/query"
+                }
+                var param ={q: name +"="+ value,"scope":"","sequence":"DESC","size":10,"start":1,"sort":name} ;
+                $.ajax({
+                    url: url[type],
+                    type: "POST",
+                    data: JSON.stringify(param),
+                    dataType: "json",
+                    contentType:'application/json;charset=UTF-8',
+                    headers: {
+                        'language': "CHS",
+                        'uniplatform': "NZKPT"
+                    },
+                    success: function (data) {
+                        callback(data);
+                    },
+                    error: function () {
+                        alert("提交请求失败！");
+                    }
+                });
+            }
+
+            function tipWordExpand(word) {
+                objExpander.empty();
+                if (typeof word != "string") {
+                    return;
+                }
+                var dType = getDataType(word);
+                if (dType == "") {
+                    objExpander.hide();
+                    isExistsExpandTip = false;
+                    return false;
+                }
+                word = word.replace(SugExpand.MarkRegex, "");
+                //加入js 缓存机制 s
+                var exData = space2.getExData(word);
+                if (exData) {
+                    getHtml(word, dType, exData);
+                    objExpander.show();
+                    isExistsExpandTip = true;
+                }//end
+                else {
+                    if (dType == "IMAGE_EX" || dType == "CSYD_EX") {
+                        getExpandData(sugUrlComm.Server, dType, word, function () {
+                            if (typeof eoJson != "undefined") {
+                                space2.pushSpace(word, eoJson.sug);
+                                getHtml(word, dType, eoJson.sug);
+                                objExpander.show();
+                                isExistsExpandTip = true;
+                            } else {
+                                objExpander.hide();
+                                isExistsExpandTip = false;
+                            }
+                        });
+                    } else {
+                        getNaviData("TI", word, dType, function (data) {
+                            if (data) {
+                                space2.pushSpace(word, data);
+                                getHtml(word, dType, data);
+                                objExpander.show();
+                                isExistsExpandTip = true;
+                            } else {
+                                objExpander.hide();
+                                isExistsExpandTip = false;
+                            }
+                        });
+                    }
+                }
+                return isExistsExpandTip;
+            }
+
+            function getDataType(word) {
+                //errordu
+                //根据word末尾标示，判断类型
+                if (SugExpand.MarkRegex.test(word)) {
+                    //return word.match(SugExpand.MarkRegex);
+                    return SugExpand.DICTCenter.getDICTKey(RegExp.$1);
+                }
+                return "";
+            }
+
+            function getHtml(word, dt, data) {
+                if (data) {
+                    objExpander.empty();
+                    var sugExpand = new SugExpandTip(SugExpand.filterMark(word), data, dt, 1, ePara);
+                    objExpander.append(sugExpand.getHtml());
+                    tipShow();
+                    //objExpander.height($("#tipWordList").height() - 20);
+                    objExpander.mousemove(function () {
+                        curObj.onmouseout = function () {
+                        };
+                    });
+                    objExpander.mouseout(function () {
+                        curObj.onmouseout = cachObj.onmouseout;
+                        return false;
+                    });
+                }
+            };
+
+            function tipShow() {
+                //var exHeight = $("#expandarea").height();
+                var tipListObj = $("#tipWordList");
+                if (tipListObj.length <= 0) {
+                    //tipListObj = $("#sugtip_list ul").first();
+                    tipListObj = $("#sugtip_ULlist ul").first();
+                }
+                var tipWordListHeight = tipListObj.height();
+                //if (exHeight > tipWordListHeight) {
+                //    $("#tipWordList").height(exHeight + 20);
+                //} else {
+                //    $("#expandarea").height(tipWordListHeight - 20);
+                //}
+                var exHeight = 0;
+                $("#expandarea .dictmore").each(function () {
+                    exHeight += $(this).height();
+                });
+
+                if (exHeight + 20 > tipWordListHeight) {
+                    tipListObj.height(exHeight + 20);
+                } else {
+                    //$("#expandarea").height(tipWordListHeight - 20);
+                    $("#expandarea .dictmore").height(tipWordListHeight - 20);
+                }
+            }
+
+            tipWordExpand(kw);
+        },
+        DICTCenter: (function () {
+            this.DMap = {
+                A1: "CJFD_EX",
+                A2: "CCND_EX",
+                A3: "CMFD_EX",
+                A4: "IMAGE_EX",
+                A5: "CSYD_EX",
+                A6: "CDFD_EX",
+                A7: "CYFD_EX",
+                A8: "CRFD_EX"
+            }
+            this.PriorityMap = {
+                A1: 1,
+                A2: 2,
+                A3: 3,
+                A4: 3,
+                A5: 3,
+                A6: 6,
+                A7: 7,
+                A8: 8
+            }
+            this.getPri = function (dt) {
+                return PriorityMap[dt];
+            }
+            this.getDTArray = function (dts) {
+                var tArray = dts.split(',');
+                for (var i = 0; i < tArray.length; i++) {
+                    tArray[i] = "A" + tArray[i];
+                }
+                return tArray;
+            }
+            return {
+                getDICTKey: function (k) {
+                    var dtArray = getDTArray(k);
+                    var v = DMap[dtArray[0]];
+                    if (v && v != undefined) {
+                        return v;
+                    }
+                    return "";
+                }
+            }
+        })()
+    }
+})();
+
+function SugExpandTip(sw, data, dt, mixCount, ePara) {
+    if (typeof ePara != "object") {
+        this.ExpPara = {}
+    } else {
+        this.ExpPara = ePara;
+    }
+    this.CurData = data;
+    this.DataType = dt;
+    this.CurDataHanlerFun = function () {
+    };
+    this.delGetHtml = function () {
+        return "";
+    };
+    this.CurSearchWord = sw;
+    this.MixTipCount = mixCount || 1;
+    this.LinkArray = {};
+    this.PicServerHosts = {};
+    this.Init();
+
+};
+SugExpandTip.prototype.getHtml = function () {
+    var returnHtml = "";
+    if (Object.prototype.toString.call(this.CurData) == "[object Array]") {
+        //var i = this.CurData.length;
+        for (var i = 0; i < this.MixTipCount && i < this.CurData.length; i++) {
+            returnHtml += this.delGetHtml(this.CurData[i]);
+        }
+        //while (i--) {
+        //    returnHtml += this.delGetHtml(this.CurData[i]);
+        //}
+    } else {
+        returnHtml = this.delGetHtml(this.CurData);
+    }
+    return returnHtml;
+}
+SugExpandTip.prototype.Init = function () {
+    this.LinkArray = {
+        //CJFD: (this.ExpPara.CJFDLinkS || "") + "/kns/NaviBridge.aspx?LinkType=BaseLink&DBCode=cjfd&TableName=cjfdbaseinfo&Field=BaseID&Value={0}",
+        //CMFD: (this.ExpPara.CMFDLinkS || "") + "/KNS/NaviBridge.aspx?dbcode=CMFD&UnitCode={0}",
+        //CDFD: (this.ExpPara.CDFDLinkS || "") + "/KNS/NaviBridge.aspx?dbcode=CDFD&UnitCode={0}",
+        //CCND: (this.ExpPara.CCNDLinkS || "") + "/KNS/NaviBridge.aspx?LinkType=BaseLink&DBCode=ccnd&TableName=ccndbaseinfo&Field=BaseID&Value={0}&JourName={1}&PYKM={0}",
+        //CYFD: (this.ExpPara.CYFDLinkS || "") + "/kns/NaviBridge.aspx?LinkType=BaseLink&DBCode=cyfd&TableName=njzkjb&Field=BaseID&Value={0}",
+        CJFD: (this.ExpPara.CJFDLinkS || "") + APPPATH + "/Navi?&DBCode=CJFQ&BaseID={0}",
+        CMFD: (this.ExpPara.CMFDLinkS || "") + APPPATH + "/Navi?&DBCode=CMFD&BaseID={0}",
+        CDFD: (this.ExpPara.CDFDLinkS || "") + APPPATH + "/Navi?&DBCode=CDFD&BaseID={0}",
+        CCND: (this.ExpPara.CCNDLinkS || "") + APPPATH + "/Navi?&DBCode=CCND&BaseID={0}",
+        CYFD: (this.ExpPara.CYFDLinkS || "") + APPPATH + "/Navi?&DBCode=CYFD&BaseID={0}",
+        CRFD: (this.ExpPara.CRFDLinkS || "http://gongjushu.cnki.net") + "/refbook/{0}.html",
+        //{URLEncode((中央)图书馆公用支出)}http://tongji.cnki.net/kns55/Dig/DigResult.aspx?postZones=xj35%3B&postTar={0}3B&postYear=ra2000&areaSelType=xjSel&refersource=kdn
+        CSYD: (this.ExpPara.CSYDLinkS || "javascript:void(0);"),
+        IMAGE: (this.ExpPara.IMAGELinkS || "http://image.cnki.net") + "/detail.aspx?ref=kcms&id={0}"
+    }
+    this.PicServerHosts = {
+        CJFD: this.ExpPara.CJFDPicS || this.ExpPara.DefaultPicS || "/fengmian",
+        CMFD: this.ExpPara.CMFDPicS || this.ExpPara.DefaultPicS || "/fengmian",
+        CDFD: this.ExpPara.CDFDPicS || this.ExpPara.DefaultPicS || "/fengmian",
+        CCND: this.ExpPara.CCNDPicS || this.ExpPara.DefaultPicS || "/fengmian",
+        CYFD: this.ExpPara.CYFDPicS || this.ExpPara.DefaultPicS || "/fengmian",
+        CRFD: this.ExpPara.CRFDPicS || "https://refbookimg.cnki.net/",
+        //{URLEncode((中央)图书馆公用支出)}
+        CSYD: this.ExpPara.CSYDPicS || this.ExpPara.DefaultPicS || "/fengmian",
+        IMAGE: this.ExpPara.IMAGEPicS || "http://image.cnki.net"
+    }
+    this.HandlerFunMaps(this.DataType);
+    this.CurData = this.CurDataHanlerFun(this.CurData);
+};
+
+SugExpandTip.prototype.HandlerFunMaps = function (mark) {
+    switch (mark) {
+        case "CSYD_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCSYD;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CSYD;
+            break;
+        case "CJFD_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCJFD;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CJFD;
+            break;
+        case "CCND_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCCND;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CCND;
+            break;
+        case "CMFD_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCDMD;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CMFD;
+            break;
+        case "CDFD_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCDMD;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CDFD;
+            break;
+        case "IMAGE_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gIMAGE;
+            this.CurDataHanlerFun = this.InstanceDataHanler.IMAGE;
+            break;
+        case "CYFD_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCYFD;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CYFD;
+            break
+        case "CRFD_EX":
+            this.delGetHtml = this.ExpandHtmlMode.gCRFD;
+            this.CurDataHanlerFun = this.InstanceDataHanler.CRFD;
+            break;
+    }
+    return function (data) {
+        return null;
+    };
+}
+
+SugExpandTip.prototype.getSplitDataArray = function (data) {
+    data = data.indexOf("||") > -1 ? data.substring(0, data.indexOf("||")) : data;
+    return data.split("$$");
+}
+
+SugExpandTip.prototype.InstanceDataHanler = (function () {
+    this.getHref = function (linkFormat, v) {
+        if (v && linkFormat) {
+            return linkFormat.replace(/\{\d\}/ig, v);
+        }
+        return "";
+    }
+    this.getPicSRC = function (server, path) {
+        return server + path;
+    }
+    /**
+     *
+     * @param data json对象
+     * @param attribute1 metadata或者relation
+     * @param attribute2 metadata或者relation的name的节点值
+     * @returns {*}
+     */
+    this.findData=function (data,attribute1,attribute2) {
+        if(!data||!data["data"]){
+            return "";
+        }
+        var metadata=data["data"]["data"][0]["metadata"];
+        var relation=data["data"]["data"][0]["relation"];
+        if(attribute1=="metadata"){
+            for(var i=0;i<metadata.length;i++){
+                if(metadata[i]["name"]==attribute2){
+                    return metadata[i]["value"];
+                }
+            }
+        }else  if(attribute1=="relation"){
+            for(var i=0;i<relation.length;i++){
+                if(relation[i]["scope"]==attribute2){
+                    return relation[i]["url"];
+                }
+            }
+        }
+        return "";
+    }
+    return {
+        CSYD: function (data) {
+            var temp = data;
+            var infoArray = temp.split("||");
+            if (infoArray && infoArray.length > 0) {
+                var getPicSrc = function (id, picServer) {
+                    if (id) {
+                        var t = id.substring(id.length - 1);
+                        return picServer + "/suginfo/CSYD/" + t + "/" + id + ".jpg";
+                    }
+                    return "";
+                };
+                var reArray = new Array();
+                for (var i = 0; i < infoArray.length; i++) {
+
+                    var tinfoArr = this.getSplitDataArray(infoArray[i]);
+                    if (tinfoArr.length == 2) {
+                        reArray.push({
+                            PICSRC: getPicSrc(tinfoArr[0], this.PicServerHosts.CSYD),
+                            HREF: getHref(this.LinkArray.CSYD, tinfoArr[0]),
+                            AT: tinfoArr[1]
+                        });
+                    }
+                }
+                //"/kns/RedirectPage.aspx?action=indexpage&code=csyd&korder=1&kw=" + encodeURI(this.CurSearchWord)
+                return {
+                    TN: this.CurSearchWord,
+                    TT: "数据",
+                    HREF: getHref("http://tongji.cnki.net/kns55/Dig/DigResult.aspx?postZones=xj35%3B&postTar={0}&postYear=ra2000&areaSelType=xjSel&refersource=kdn", encodeURI(this.CurSearchWord)),
+                    IARR: reArray
+                };
+            }
+        },
+        IMAGE: function (data) {
+            //{ TN: "草原", TT: "图片", IARR: [{PICSRC:"",HREF:"",AT:""}, {PICSRC:"",HREF:"",AT:""}] }
+            //
+            var temp = data;
+            var infoArray = temp.split("||");
+            if (infoArray && infoArray.length > 0) {
+                var reArray = new Array();
+                for (var i = 0; i < infoArray.length; i++) {
+                    var tinfoArr = this.getSplitDataArray(infoArray[i]);
+                    if (tinfoArr.length == 2) {
+                        reArray.push({
+                            PICSRC: getPicSRC(this.PicServerHosts.IMAGE, "/getimage.ashx?id=" + tinfoArr[0]),
+                            HREF: getHref(this.LinkArray.IMAGE, tinfoArr[0]),
+                            AT: tinfoArr[1]
+                        });
+                    }
+                }
+
+                return {
+                    TN: this.CurSearchWord,
+                    TT: "图片",
+                    HREF: "//kns.cnki.net/kns/RedirectPage.aspx?action=indexpage&code=IMAGE&korder=1&kw=" + encodeURI(this.CurSearchWord),
+                    IARR: reArray
+                };
+            }
+        },
+        CJFD: function (data) {
+            var dataArray = data.split("||");
+            var dataJsonArray = new Array();
+            for (var i = 0; i < dataArray.length; i++) {
+                var tinfoArr = this.getSplitDataArray(dataArray[i]);
+                //拼音刊名,刊名,英文刊名,主办单位,刊期1,CBD_403,影响因子,综合影响因子,期刊各库代码,优先出版否
+                dataJsonArray[i] = {
+                    ID: tinfoArr[0],
+                    TN: tinfoArr[1],
+                    TT: tinfoArr[2],
+                    PicSrc: getPicSRC(this.PicServerHosts.CJFD, "/CJFD/small/" + tinfoArr[0] + ".jpg"),
+                    HREF: getHref(this.LinkArray.CJFD, tinfoArr[0]),
+                    IARR: {
+                        ZB: tinfoArr[3],
+                        ZQ: tinfoArr[4],
+                        CBD: tinfoArr[5],
+                        FYZ: tinfoArr[6],
+                        ZYZ: tinfoArr[7],
+                        TZ: [tinfoArr[8].indexOf("T") >= 0 ? "T" : "", tinfoArr[9] == "1" ? "Y" : ""]
+                    }
+                };
+            }
+            //var tinfoArr = this.getSplitDataArray(data);
+            ////拼音刊名,刊名,英文刊名,主办单位,刊期1,CBD_403,影响因子,综合影响因子,期刊各库代码,优先出版否
+            //return { ID: tinfoArr[0], TN: tinfoArr[1], TT: tinfoArr[2], PicSrc: getPicSRC(this.PicServerHosts.CDFD, "/fengmian/CJFD/small/" + tinfoArr[0] + ".jpg"), HREF: getHref(this.LinkArray.CJFD, tinfoArr[0]), IARR: { ZB: tinfoArr[3], ZQ: tinfoArr[4], CBD: tinfoArr[5], FYZ: tinfoArr[6], ZYZ: tinfoArr[7], TZ: [tinfoArr[8].indexOf("T") >= 0 ? "T" : "", tinfoArr[9] == "1" ? "Y" : ""] } };
+            return dataJsonArray;
+        },
+        CMFD: function (data) {
+            //{ TN: "刊名|标题|学位授予单位", TT: "类型|英文刊名|学位", PICSRC: "图片地址", YI: "年期（2011年12期）", LC: "文献数", SCF: "总被引", SDF: "总下载", MORE: "更多链接"
+            //DM,NAME,province,S211,载文量,被引频次,下载频次,统计范围
+            var tinfoArr = this.getSplitDataArray(data);
+            return {
+                ID: tinfoArr[0],
+                TN: tinfoArr[1],
+                TT: tinfoArr[7],
+                PicSrc: getPicSRC(this.PicServerHosts.CMFD, "/cmfd/" + tinfoArr[0] + ".jpg"),
+                HREF: getHref(this.LinkArray.CMFD, tinfoArr[0]),
+                IARR: {
+                    ZB: tinfoArr[2],
+                    IS211: tinfoArr[3],
+                    LC: tinfoArr[4],
+                    SCF: tinfoArr[5],
+                    SDF: tinfoArr[6],
+                    FW: tinfoArr[7]
+                }
+            };
+        },
+        CDFD: function (data) {
+            if (typeof data == "string") {//string类型是旧的，sug接口新的data是object对象
+                var tinfoArr = this.getSplitDataArray(data);
+                return {
+                    ID: tinfoArr[0],
+                    TN: tinfoArr[1],
+                    TT: tinfoArr[7],
+                    PicSrc: getPicSRC(this.PicServerHosts.CDFD, "/cdfd/" + tinfoArr[0] + ".jpg"),
+                    HREF: getHref(this.LinkArray.CDFD, tinfoArr[0]),
+                    IARR: {
+                        ZB: tinfoArr[2],
+                        IS211: tinfoArr[3],
+                        LC: tinfoArr[4],
+                        SCF: tinfoArr[5],
+                        SDF: tinfoArr[6],
+                        FW: tinfoArr[7]
+                    }
+                };
+            } else {
+                return {
+                    ID: findData(data,"metadata","AFC"),
+                    TN: findData(data,"metadata","TI"),
+                    TT: "博士",
+                    PicSrc: findData(data,"relation","cover"),
+                    HREF: findData(data,"relation","detail"),
+                    IARR: {
+                        ZB: findData(data,"metadata","SZS"),
+                        IS211: findData(data,"metadata","OTC"),
+                        LC: findData(data,"metadata","CT"),
+                        SCF: findData(data,"metadata","CF"),
+                        SDF: findData(data,"metadata","DFR"),
+                        FW: "博士"
+                    }
+                };
+            }
+        },
+        CCND: function (data) {
+            //报纸拼音名,CHNAME,主办单位,主管单位,出版地,刊期,国内统一刊号
+            //http://192.168.20.170/fengmian/ccnd/JJRB.jpg
+            var tinfoArr = this.getSplitDataArray(data);
+            return {
+                ID: tinfoArr[0],
+                TN: tinfoArr[1],
+                TT: "",
+                PicSrc: getPicSRC(this.PicServerHosts.CCND, "/ccnd/" + tinfoArr[0] + ".jpg"),
+                HREF: getHref(this.LinkArray.CCND, tinfoArr[0]),
+                IARR: {ZB: tinfoArr[2], ZG: tinfoArr[3], CBD: tinfoArr[4], ZQ: tinfoArr[5], CN: tinfoArr[6]}
+            };
+        },
+        CYFD: function (data) {
+            //拼音刊名,年鉴中文名,年鉴英文名,年鉴年份,ISBN,出版者,出版时间,编号
+            //年鉴中文名，年鉴英文名，年鉴年份，ISBN，出版者，出版日期
+            ///fengmian/CYFD/N2007080113.jpg
+            var tinfoArr = this.getSplitDataArray(data);
+            if (tinfoArr.length >= 8) {
+                return {
+                    ID: tinfoArr[0],
+                    TN: tinfoArr[1],
+                    TT: tinfoArr[2],
+                    PicSrc: getPicSRC(this.PicServerHosts.CYFD, "/cyfd/" + tinfoArr[7] + ".jpg"),
+                    HREF: getHref(this.LinkArray.CYFD, tinfoArr[0]),
+                    IARR: {YE: tinfoArr[3], ISBN: tinfoArr[4], ZB: tinfoArr[5], PT: tinfoArr[6]}
+                };
+            }
+            return {};
+        },
+        CRFD: function (data) {
+            //工具书编号,书名,分辑名,主要责任者,出版者,ISBN,出版日期,封面照片
+            //责任者,出版者，ISBN,出版时间
+            var temp = data;
+            var infoArray = temp.split("||");
+            if (infoArray && infoArray.length > 0) {
+                var reArray = new Array();
+                for (var i = 0; i < infoArray.length; i++) {
+                    var tinfoArr = this.getSplitDataArray(infoArray[i]);
+                    if (tinfoArr.length >= 8) {
+                        reArray.push({
+                            ID: tinfoArr[0],
+                            TN: tinfoArr[1],
+                            TT: tinfoArr[2],
+                            PicSrc: getPicSRC(this.PicServerHosts.CRFD, tinfoArr[7]),
+                            HREF: getHref(this.LinkArray.CRFD, tinfoArr[0]),
+                            IARR: {ZR: tinfoArr[3], ZB: tinfoArr[4], ISBN: tinfoArr[5], PT: tinfoArr[6]}
+                        });
+                    }
+                }
+                return reArray;
+            }
+            return [];
+            //var tinfoArr = this.getSplitDataArray(data);
+            //if (tinfoArr.length >= 8) {
+            //    return { ID: tinfoArr[0], TN: tinfoArr[1], TT: tinfoArr[2], PicSrc: getPicSRC(this.PicServerHosts.CRFD, tinfoArr[7]), HREF: getHref(this.LinkArray.CRFD, tinfoArr[0]), IARR: { ZR: tinfoArr[3], ZB: tinfoArr[4], ISBN: tinfoArr[5], PT: tinfoArr[6] } };
+            //}
+            //return {};
+        }
+    }
+})()
+
+SugExpandTip.prototype.ExpandHtmlMode = (function () {
+    this.Template = {
+        dataImage: {TN: "草原", TT: "图片", IARR: [{PICSRC: "", HREF: "", AT: ""}, {PICSRC: "", HREF: "", AT: ""}]},
+        TITLE: "<h3><a target=\"_blank\" href=\"<%[HREF]%>\" onclick=\"<%[SCRIPT]%>\"><b><%[TN]%></b><%[TT]%></a></h3>",
+        //TITLEJS: "<h3><a onclick=\"<%[HREF]%>\"><b><%[TN]%></b><%[TT]%></a></h3>",
+        Picture: "<div class=\"floatL\"><img src=\"<%[PicSrc]%>\" class=\"picbor\" onerror=\"this.style.display='none'\" /></div>",
+        APicture: "<div class=\"floatL\"><a target=\"_blank\" href=\"<%[HREF]%>\" title=\"<%[TN]%>\"><img src=\"<%[PicSrc]%>\" class=\"picbor\" onerror=\"this.style.display='none'\"/></a></div>",
+        SpiteDivHT: "<div class=\"HT10\"></div>",
+        SpiteDivBD: " <div class=\"BD10\"></div>",
+        ShowMore: "<div class=\"botlink floatR\"><%[MORE]%></div>",
+        MoreLink: "<a href=\"javascript:void(0);\">阅读全部<span class=\"arrow\">&gt;&gt;</span></a>",
+        ALink: "<a target=\"_blank\" href=\"<%[ASRC]%>\" title=\"<%[FTI]%>\"><%[FTI]%></a>",
+        LITemplet: "<li><label><%[TITLE]%></label><%[TC]%></li>",
+        IMAGEDETAILLI: " <li><a target=\"_blank\" href=\"<%[HREF]%>\"><img src=\"<%[PICSRC]%>\" onerror=\"this.style.display='none'\"/></a><p><a target=\"_blank\" href=\"<%[HREF]%>\" title=\"<%[AT]%>\"><%[AT]%></a></p></li>",
+        IMAGEDETAILLINOLINK: "<li><span><img src=\"<%[PICSRC]%>\" onerror=\"this.style.display='none'\"/></span><p><span  title=\"<%[AT]%>\"><%[AT]%></span></p></li>"
+    }
+    this.DataExplain = {
+        TN: "刊名|标题|学位授予单位",
+        TT: "类型|英文刊名|学位",
+        PICSRC: "图片地址",
+        YI: "年期（2011年12期）",
+        LC: "文献数",
+        SCF: "总被引",
+        SDF: "总下载",
+        MORE: "更多链接",
+        HREF: "标题链接"
+    }
+    this.gTitle = function (info) {
+        //if (info.HREF && info.HREF.indexOf("javascript") >=0) {
+        //    return this.Replace(this.Template.TITLEJS, info);
+        //}
+        return this.Replace(this.Template.TITLE, info);
+    }
+
+    this.gPic = function (info) {
+        return this.Replace(this.Template.Picture, info);
+    }
+    this.gAPic = function (info) {
+        return this.Replace(this.Template.APicture, info);
+    }
+    this.gMore = function (info) {
+        return this.Replace(this.Template.MoreLink, info);
+    }
+    this.gALink = function (info) {
+        return this.Replace(this.Template.ALink, info);
+    }
+    this.gMixUL = function (info, tArray, tDKArray, call) {
+        var htmlUL = "";
+        var oJson = info["IARR"];
+        if (typeof call == "function") {
+            handlFun = call;
+        } else {
+            handlFun = function () {
+                return "";
+            }
+        }
+        if (oJson) {
+            htmlUL = "<ul class=\"infoList floatR\">";
+            htmlUL += this.gMixLi(oJson, this.Template.LITemplet, tArray, tDKArray);
+            htmlUL += handlFun();
+            htmlUL += "</ul>";
+        }
+        return htmlUL;
+    }
+    this.gExMixHtml = function (data, hFun, isDrawPic) {
+        var html = "<div class=\"dictmore\" >";//id=\"image\"
+        html += this.gTitle(data);
+        if (isDrawPic) {
+            html += this.gAPic(data);
+        }
+        if (typeof hFun == "function") {
+            html += hFun();
+            html += "<div class=\"HT10\"></div>";
+        }
+        html += "</div>";
+        return html;
+    }
+    this.gMixLi = function (jData, template, tArray, tDKArray) {
+        var html = "";
+        var len = tArray.length;
+        if (len == tDKArray.length) {
+            for (var i = 0; i < len; i++) {
+                //根据数据，从数据中取数据
+                var v = jData[tDKArray[i]];
+                if (v && v != undefined) {
+                    html += Replace(template, {"TITLE": tArray[i], "TC": v});
+                }
+            }
+        }
+        return html;
+    }
+    this.gIMAGEMode = function (info, template) {
+        var curTemplate = template || Template.IMAGEDETAILLI;
+        return gExMixHtml(info, function () {
+            //{ TN: "草原", TT: "数据", IARR: [{PICSRC:"",HREF:"",AT:""}, {PICSRC:"",HREF:"",AT:""}] }
+            var arrJson = info["IARR"];
+            if (arrJson && arrJson.length > 0) {
+                var html = "<div class=\"detail\"> <ul class=\"mode5\">";
+                var i = arrJson.length;
+                while (i--) {
+                    html += Replace(curTemplate, arrJson[i]);
+                }
+                html += "</ul></div>";
+            }
+            return html;
+        }, false);
+    }
+
+    MIX = function (infoJson) {
+        return this.Replace(this.Template.MIX, infoJson);
+    }
+    TEXTLIST = function (infoJson) {
+        return this.Replace(this.Template.TEXTLIST, infoJson);
+    }
+    IMAGE = function (infoJson) {
+        var html = this.H(infoJson);
+
+        return this.Replace(this.Template.IMAGE, infoJson);
+    }
+    EMPTY = function (infoJson) {
+        return "";
+    }
+    getV = function (oJson, key) {
+        if (oJson) {
+            for (var k in oJson) {
+                if (k == key) {
+                    return oJson[key];
+                }
+            }
+        }
+        return "";
+    }
+    Replace = function (t, infoObj) {
+        return t.replace(/\<\%\[(.*?)\]\%\>/g,
+            function (m, i) {
+                return infoObj[i];
+            });
+    }
+
+    return {
+        gCJFD: function (info) {
+            return gExMixHtml(info, function () {
+                var titleArray = ["主办：", "周期：", "出版地：", "复合影响因子：", "综合影响因子："];
+                var titleCKeyArray = ["ZB", "ZQ", "CBD", "FYZ", "ZYZ"];
+                return gMixUL(info, titleArray, titleCKeyArray, function () {
+                    var reStr = "";
+                    var iarr = info["IARR"];
+                    if (iarr) {
+                        var tArr = iarr["TZ"];
+                        if (tArr && tArr.lenth > 0) {
+                            reStr += "<li>";
+                            for (var g = 0; g < tArr.length; g++) {
+                                switch (tArr[g]) {
+                                    case "T":
+                                        reStr += "<b class=\"cMarkTip Glod\">独家授权</b>";
+                                        break;
+                                    case "P":
+                                        reStr += "<b class=\"cMarkTip Silver\">优先出版</b>";
+                                        break;
+                                }
+                            }
+                            reStr += "</li>";
+                        }
+                    }
+                    return reStr;
+                });
+            }, true);
+        },
+        gCSYD: function (info) {
+            return gIMAGEMode(info, Template.IMAGEDETAILLINOLINK);
+        },
+        gCCND: function (info) {
+            return gExMixHtml(info, function () {
+                var titleArray = ["主办单位：", "主管单位：", "出版地：", "周期：", "国内统一刊号："];
+                var titleCKeyArray = ["ZB", "ZG", "CBD", "ZQ", "CN"];
+                return gMixUL(info, titleArray, titleCKeyArray, null);
+            }, true);
+        },
+        gCYFD: function (info) {
+            return gExMixHtml(info, function () {
+                var titleArray = ["年鉴年份：", "ISBN：", "出版者：", "出版日期："];
+                var titleCKeyArray = ["YE", "ISBN", "ZB", "PT"];
+                return gMixUL(info, titleArray, titleCKeyArray, null);
+            }, true);
+        },
+        gCRFD: function (info) {
+            //工具书编号, 书名, 主要责任者, 出版者, ISBN, 出版日期, 封面照片
+            //责任者, 出版者，ISBN, 出版时间
+            //ZR: tinfoArr[2], ZB: tinfoArr[3], ISBN: tinfoArr[4], PT: tinfoArr[5]
+            return gExMixHtml(info, function () {
+                return gMixUL(info, ["责任者：", "出版者：", "ISBN：", "出版时间："], ["ZR", "ZB", "ISBN", "PT"], null);
+            }, true);
+        },
+        gIMAGE: function (info) {
+            return gIMAGEMode(info);
+        },
+        gCDMD: function (info) {
+            //DM, NAME, province, S211, 载文量, 被引频次, 下载频次, 统计范围
+            //ZB: tinfoArr[2], IS211: tinfoArr[3], LC: tinfoArr[4], SCF: tinfoArr[5], SDF: tinfoArr[6], FW: tinfoArr[7] }
+            var html = "<div class=\"dictmore\" >";//id=\"image\"
+            html += gTitle(info);
+            html += gAPic(info);
+            var titleArray = ["省份："];
+            var titleCKeyArray = ["ZB"];
+            html += gMixUL(info, titleArray, titleCKeyArray, function () {
+                var reStr = "";
+                var iarr = info["IARR"];
+                if (iarr) {
+                    var tArr = iarr["IS211"];
+                    if (tArr && tArr == "1") {
+                        reStr += "<li><b class=\"colorG\">211工程院校</b></li>";
+                    }
+                }
+                return reStr;
+            });
+            html += "<div class=\"HT10\"></div>";
+            var detailD = info["IARR"];
+            if (detailD) {
+
+                html += Replace("<div class=\"detail\"><div class=\"mode3\"><a href=\"javascript:void(0);\">文献数<em><%[LC]%></em></a> <a href=\"javascript:void(0);\">总被引<em><%[SCF]%></em></a><a href=\"javascript:void(0);\">总下载<em><%[SDF]%></em></a></div></div>", detailD);
+            }
+            html += "</div>";
+            return html;
+        }
+    }
+})();
+
+function searchWordEvent(c, w) {
+    if (c && w) {
+        $("input[id^=txt_],input[id^=buttom_],input[id^=au_],input[id^=base],input[id^=magazine_],input[id^=sen_]").val(w);
+        if ($("#" + c).length > 0) {
+            $("#" + c).click();
+        } else {
+            //dblistclick(this, '图片', 'IMAGE'); return false;
+        }
+    }
+    return false;
+}
+

@@ -1,0 +1,960 @@
+﻿/**
+ * 获取平台值 和 学科分类(如果有值的情况下)
+ *
+ * @returns {string|string}
+ */
+function getUniplatform() {
+    var uniplatform = $.getUniplatform();
+    var subject = $.getSubject();
+    return subject? uniplatform.toUpperCase()+subject.toUpperCase() :uniplatform.toUpperCase();
+}
+
+
+//文献管理中心 文献相关的js
+(function ($) {
+    var StorageType = {
+        Local: 1,
+        Session: 2,
+        Cookie: 3
+    };
+    var _StorageType = ''; //存储类型   StorageType.Session StorageType.Local
+    var _FileNameKey = 'FileNameS' + getUniplatform() ; //
+    var _FileNameAIKey = 'FileNameSAI' + getUniplatform(); //
+    function handlerRegexSpcileChar(input) {
+        if (input) {
+            return input.replace(/[\(|\)|\+|\.|\*]/g, function (m) {
+                return '\\' + m;
+            });
+        }
+        return input;
+    }
+    /**
+     * 选中的文献中是否含有新加的文献s
+     * @param s
+     * @returns {boolean}
+     */
+    function ifExists(s) {
+        if (!s) {
+            return false;
+        }
+        var filename = get();
+        if(!filename){
+            return false;
+        }
+        return filename.indexOf(getTableNameFileNames(s))>-1;
+    }
+    function getTableNameFileNames(s) {
+        if (!s || s.length <= 0) {
+            return "";
+        }
+        // var result = "";
+        // var tempArr = s.split(",");
+        // for (var item in tempArr) {
+        //     var temp = tempArr[item].split("!");
+        //     if (temp.length == 2) {
+        //         result += temp[0] + "!" + temp[1] + ",";
+        //     } else if (temp.length == 3) {
+        //         result += temp[0] + "!" + temp[1] + "!" + temp[2] + ",";
+        //     } else if (temp.length == 4) {
+        //         result += temp[0] + "!" + temp[1] + "!" + temp[2] + ",";
+        //     }
+        // }
+        // if (result) {
+        //     result = result.substring(0, result.length - 1);
+        // }
+        return s;
+    }
+
+    //当sql语句的queryid变化，但语句没变化的时候，修改filename的queryid值，使得可以匹配sql语句
+    function setFileNameNumber(oldValue, NewValue) {
+        var arr = new Array();
+        var filename = get();
+        if (!filename) return;
+        var replace = function (input, old, value) {
+            var re = new RegExp("!" + old + ",", "ig");
+            input = input.replace(re, "!" + value + ",");
+            re = new RegExp("!" + old + "$", "ig");
+            input = input.replace(re, "!" + value);
+            return input;
+        }
+        filename = replace(filename, oldValue, NewValue);
+        addCache(_FileNameKey, filename, _StorageType);
+    }
+
+    function get(key) {
+        if (window.localStorage) {
+            this.getFileNameS = function (n, t) {
+                var tmp = "";
+                if (t == StorageType.Session) {
+                    tmp = window.sessionStorage.getItem(n);
+                }
+                else {
+                    tmp = window.localStorage.getItem(n);
+                }
+                return tmp == null ? "" : tmp;
+            }
+        }
+        else {
+            this.getFileNameS = function (n, v) {
+                return $.cookie(n);
+            }
+        }
+        key = key ? key : _FileNameKey;
+        return this.getFileNameS(key, _StorageType);
+    }
+
+    function addCache(n, v, t) {
+        if (window.localStorage) {
+            this.setFileNameS = function (n, v, t) {
+                if (t == StorageType.Session) {
+                    window.sessionStorage.setItem(n, v);
+                }
+                else {
+                    window.localStorage.setItem(n, v)
+                }
+            }
+        }
+        else {
+            this.setFileNameS = function (n, v, t) {
+                $.cookie(n, v);
+            }
+        }
+        this.setFileNameS(n, v, t);
+    }
+
+    function add(value) {
+        var filename = get();
+        var bool = ifExists(value);
+        if (bool)
+            return false;
+        if(_FileNameKey== "FileNameS" + getUniplatform() ){
+            var fileNameIndex=filename?filename.trim(",").split(",").length+1:1;
+            var searinfoIndex=searchInfo.index(value);
+            searchAndFilenameIndex.add(searinfoIndex,fileNameIndex);
+        }
+        if (filename)
+            value = filename + "," + value;
+        addCache(_FileNameKey, value, _StorageType);
+        return true;
+    }
+
+    function del(value) {
+        var handlerRegexChar = handlerRegexSpcileChar;
+
+        var deleteV = function (input, value) {
+            var re = new RegExp("," + handlerRegexChar(value) + ",");
+            input = ("," + input + ",").replace(re, ",");
+            while (input.length != 0) {
+                if (input.startWith(","))
+                    input = input.substring(1);
+                if (input.endWith(","))
+                    input = input.substring(0, input.length - 1);
+                if (input.indexOf(",,") > -1)
+                    input = input.replace(",,", ",");
+                if (!input.startWith(",") && !input.endWith(",") && input.indexOf(",,") == -1)
+                    break;
+            }
+            return input;
+        }
+        var filename = get();
+        //初始化ai的已选文献
+        $.filenameAIInit();
+        if (_FileNameKey == "FileNameS" + getUniplatform()  && (!filename || filename.length <= 0)) {
+            $.searchinfoInit();
+            $.filenameInit();
+            return false;
+        }
+
+        var tableFileNames = getTableNameFileNames(value);
+        if (tableFileNames.length <= 0) {
+            filename = deleteV(filename, "");
+            addCache(_FileNameKey, filename, _StorageType);
+            return false;
+        }
+
+        if(_FileNameKey == "FileNameS" + getUniplatform() ){
+            var arrFilename=filename.trim(",").split(",");
+            var fileNameIndex=arrFilename.indexOf(value)+1;
+            //此处拿到的index是keyCollection的值，不需要再加1，中心网站的拿到的是index值，需要加1
+            var searinfoIndex=searchInfo.index(value);
+            searchAndFilenameIndex.del(searinfoIndex,fileNameIndex);
+        }
+        //CJFD0305!ZFLT200504008[^,]*
+        tableFileNames = handlerRegexChar(tableFileNames);
+        var re = new RegExp(tableFileNames + "[^,]*", "ig");
+
+        var tempMaths = filename.match(re);
+        if (tempMaths && tempMaths.length > 0) {
+            for (var i = 0; i < tempMaths.length; i++) {
+                filename = deleteV(filename, tempMaths[i]);
+            }
+            addCache(_FileNameKey, filename, _StorageType);
+            if (_FileNameKey == "FileNameS" + getUniplatform()  && (!filename || filename.length <= 0)) {
+                $.searchinfoInit();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    //当文献取消选中的时候，需要查看在selectFilenames中是否有，有则去掉
+    function delSelect(obj) {
+        var selectFilenameS = get("SelectFileNameS" + getUniplatform() );
+        if ($(obj).attr("name") == "CookieName") {
+            selectFilenameS = selectFilenameS.replace($(obj).val(), "");
+        }
+        else {
+            $("input:checkbox[name='CookieName']").each(function () {
+                selectFilenameS = selectFilenameS.replace($(this).val(), "");
+            });
+        }
+        addCache("SelectFileNameS" + getUniplatform() , selectFilenameS, _StorageType);
+    }
+
+    function checkAll(obj) {
+        if ($(obj).prop("checked")) {
+            $("input:checkbox[name='CookieName']").each(function () {
+                if ($.filenameCount() >= 500) {
+                    alert(message.most100);
+                    return false;
+                }
+                if (!$(this).prop("checked")) {
+                    // if (document.cookie.length + $(this).val().length > 4096) {
+                    //     alert(message.updateBrowser);
+                    //     return false;
+                    // }
+                    var sign = add($(this).val());
+                    if (sign) {
+                        $(this).prop("checked", true);
+                    }
+                }
+            });
+        }
+        else {
+            $("input:checkbox[name='CookieName']").each(function () {
+                var sign = del($(this).val());
+                if (sign) {
+                    $(this).removeAttr("checked");
+                }
+            });
+        }
+    }
+
+    //sign参数: true选中 false取消选中
+    function setCheckAll() {
+        var result = true;
+        var obj = $("input:checkbox[name='CookieName']");
+        if (!obj || obj.length == 0)
+            return false;
+        var sign = $(obj[0]).prop("checked");
+        if (sign) {
+            $(obj).each(function () {
+                if (!$(this).prop("checked")) {
+                    result = false;
+                    return false;
+                }
+            });
+            if (result)
+                $("#selectCheckAll1").prop("checked", true);
+            else
+                $("#selectCheckAll1").prop("checked", false);
+        }
+        else {
+            $("#selectCheckAll1").removeAttr("checked");
+        }
+    }
+
+    function setSelect() {
+        var filename = get();
+        filename = filename.replace(/cnki:/i, "");
+        addCache(_FileNameKey, filename, _StorageType);
+        $("input:checkbox[name='CookieName']").each(function () {
+            var bool = ifExists($(this).val());
+            if (bool) {
+                $(this).prop("checked", true);
+            }
+            else
+                $(this).prop("checked", false);
+
+        });
+        $("#selectCount,#anisys_select span").text($.filenameCount());
+        $("#batchOpsBox>li:eq(0)>span").text(message.selected + "（" + $.filenameCount() + "）");
+        setCheckAll();
+    }
+
+    function getQueryIDArray() {
+        var arr = new Array();
+        var filename = get();
+        if (!filename) return arr;
+        var tempArr = filename.split(",");
+        for (var i = 0; i < tempArr.length; i++) {
+            var a = tempArr[i].split("!");
+            if (a.length == 4 && arr.indexOf(a[3]) == -1) {
+                arr.push(a[3]);
+            }
+        }
+        return arr;
+    }
+
+    var searchInfo = {
+        saveKey: "SEARCHINFO"+ getUniplatform() ,
+        keyCollection: new Array(),
+        valueCollection: new Array(),
+        //    updateTimeCollection: new Array(),
+        count: 0,
+        get: function () {
+            return this.getCahce(this.saveKey, _StorageType) || $("#sqlVal").val() || "";
+        },
+        init: function () {
+            if (!this.isExistFileNames()) {
+                this.clear();
+                return;
+            }
+            var ts = this.get();
+            if (Object.prototype.toString.call(ts) == "[object String]" && ts != "") {
+                this.splitInfoStr(ts);
+                this.updataCount();
+                this.save();
+            }
+            else {
+                if (Object.prototype.toString.call(this.emptyCallBackFun) == "[object Function]") {
+                    this.emptyCallBackFun();
+                }
+            }
+        },
+        updataCount: function () {
+            this.count = this.keyCollection.length;
+        },
+        splitInfoStr: function (input) {
+            if (typeof input == "string") {
+                var mArr = input.split(",");
+                var i = mArr.length;
+                if (i > 0) {
+                    while (i--) {
+                        this.fillKV(mArr[i]);
+                    }
+                }
+            }
+        },
+        fillKV: function (v) {
+            if (typeof v == "string") {
+                var sArr = v.split("!");
+                if (sArr.length < 3)
+                    return;
+                var index = this.indexOfValue(sArr[1] + "!" + sArr[2]);
+                if (index > -1) {   //如果有相同的sql值，则更新queryid,并且fielname的queryid需要更新
+                    var temp = parseInt(this.keyCollection[index]);
+                    this.keyCollection.splice(index, 1);
+                    this.valueCollection.splice(index, 1);
+                    this.keyCollection.push(sArr[0]);
+                    this.valueCollection.push(sArr[1] + "!" + sArr[2]);
+                    return;
+                }
+                var t = this.indexOf(sArr[0]);
+                //if Exist to Replace ,Reason: new
+                if (t >= 0 && sArr[2]) {// && this.updateTimeCollection[t] != "") {
+                    this.keyCollection[t] = sArr[0];
+                    this.valueCollection[t] = sArr[1] + "!" + sArr[2];
+                    return;
+                }
+                this.keyCollection.push(sArr[0]);
+                this.valueCollection.push(sArr[1] + "!" + sArr[2]);
+                this.updataCount();
+            }
+        },
+        indexOf: function (k) {
+            if (this.count > 0) {
+                var i = this.count;
+                while (i--) {
+                    if (this.keyCollection[i] == k) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        },
+        indexOfValue: function (v) {//sql一样，不存储
+            if (this.count > 0) {
+                var i = this.count;
+                while (i--) {
+                    if (v == this.valueCollection[i]) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        },
+        index: function (filename) {//sql一样，不存储
+            var filenameObj="";
+            $(".manage-table tr").each(function (i,obj) {
+                if($(obj).find("input").attr("value")==filename){
+                    filenameObj=$(obj);
+                    return false;
+                }
+            })
+            var condition =$(filenameObj).prevAll(".condition").length==1?$(filenameObj).prevAll(".condition").find("td").text().trim("\n"):
+                $(filenameObj).prevAll(".condition:eq(0)").find("td").text().trim("\n");
+            condition=condition?condition.substring(condition.indexOf(":")+1):condition;
+            if (this.count > 0) {
+                var i = this.count;
+                while (i--) {
+                    if (this.valueCollection[i].endWith(condition)) {
+                        return this.keyCollection[i];
+                    }
+                }
+            }
+            return -1;
+        },
+        isExist: function (v) {
+            if (this.indexOfValue(v) >= 0) {
+                return true;
+            }
+            return false;
+        },
+        getV: function (k) {
+            var t = this.indexOf(k);
+            if (t >= 0) {
+                return this.valueCollection[t];
+            }
+            return "";
+        },
+        addKV: function (k, v) {
+            var index = this.indexOfValue(v);
+            if (index > -1) {   //如果有相同的sql值，则更新queryid,并且fielname的queryid需要更新
+                var temp = parseInt(this.keyCollection[index]);
+                this.keyCollection.splice(index, 1);
+                this.valueCollection.splice(index, 1);
+                this.keyCollection.push(k);
+                this.valueCollection.push(v);
+                this.save();
+                return temp;
+            }
+            var t = this.indexOf(k);
+            //if Exist to Replace ,Reason: new
+            if (t >= 0 && v) {// && this.updateTimeCollection[t] != "") {
+                this.keyCollection[t] = k;
+                this.valueCollection[t] = v;
+            }
+            //else add
+            else {
+                this.keyCollection.push(k);
+                this.valueCollection.push(v);
+            }
+            this.updataCount();
+            this.save();
+            return '';
+        },
+        getCahce: function (k, t) {
+            if (window.localStorage) {
+                if (t == StorageType.Session) {
+                    return window.sessionStorage.getItem(k);
+                }
+                else {
+                    return window.localStorage.getItem(k)
+                }
+            }
+            else {
+                return getCookie(k);
+            }
+        },
+        remove: function (k) {
+            var t = this.indexOf(k);
+            if (t >= 0) {
+                this.keyCollection = this.deletArray(this.keyCollection, t);
+                this.valueCollection = this.deletArray(this.valueCollection, t);
+                this.updataCount();
+                this.save();
+            }
+        },
+        deletArray: function (arr, pos) {
+            return arr.slice(0, pos).concat(arr.slice(++pos));
+        },
+        save: function (t) {
+            var v = this.getStr();
+            var k = this.saveKey;
+            if (window.localStorage) {
+                if (t == StorageType.Session) {
+                    window.sessionStorage.setItem(k, v);
+                }
+                else {
+                    window.localStorage.setItem(k, v)
+                }
+            }
+            else {
+                setCookie(k, v, t);
+            }
+        },
+        clear: function () {
+            this.count = 0;
+            this.keyCollection = new Array();
+            this.valueCollection = new Array();
+            this.save();
+        },
+        isExistFileNames: function () {
+            var filename = get();
+            if (!filename) {
+                return false;
+            }
+            return true;
+        },
+        getStr: function () {
+            var i = this.count;
+            var tempStr = "";
+            while (i--) {
+                if (this.keyCollection[i] && this.valueCollection[i]) {
+                    tempStr += "{0}!{1},".format(this.keyCollection[i], this.valueCollection[i]);
+                }
+            }
+            if (tempStr.length > 0) {
+                tempStr = tempStr.substring(0, tempStr.length - 1);
+            }
+            return tempStr;
+        },
+        emptyCallBackFun: function () {
+        },
+        //新增了个条件的时候，此时的index值为最大的数加1
+        getNextIndex:function(){
+            var result=0;
+            for(var i=0;i<this.keyCollection.length;i++){
+                if(result<this.keyCollection[i]){
+                    result=this.keyCollection[i];
+                }
+            }
+            return parseInt(result)+1;
+        },
+    }
+    var searchAndFilenameIndex = {
+        saveKey: "filenameIndex" + getUniplatform() ,
+        init: function () {
+            var arrIndexs =JSON.parse(this.get()) ;
+            var searhinfos = $.searchinfoGet();
+            var filenames = $.filenameGet();
+            if(!searhinfos||!filenames){
+                this.save("");
+                return;
+            }
+            var arrSearchinfo=searhinfos.split(",");
+            var arrFilenames=filenames.split(",");
+            var arrIndex;
+            if (!arrIndexs) {
+                arrIndex = new Array();
+                arrIndexs = {};
+                for(var i=0;i<arrFilenames.length;i++){
+                    arrIndex.push(i+1);
+                }
+                arrIndexs[arrSearchinfo[0].split("!")[0]] = arrIndex;
+            } else {
+                var count=0;
+                for(var searhInfoIndex in arrIndexs){
+                    count+=arrIndexs[searhInfoIndex].length;
+                }
+                if (count!=arrFilenames.length) {
+                    arrIndex = new Array();
+                    arrIndexs = {};
+                    for(var i=0;i<arrFilenames.length;i++){
+                        arrIndex.push(i+1);
+                    }
+                    arrIndexs[arrSearchinfo[0].split("!")[0]] = arrIndex;
+                }
+            }
+            this.save(arrIndexs);
+        },
+        get: function () {
+            function getCahce(k, t) {
+                if (window.localStorage) {
+                    if (t == StorageType.Session) {
+                        return window.sessionStorage.getItem(k);
+                    }
+                    else {
+                        return window.localStorage.getItem(k)
+                    }
+                }
+                else {
+                    return getCookie(k);
+                }
+            }
+            return getCahce(this.saveKey, _StorageType) ;
+        },
+        add: function (searchInfoIndex, fileNameIndex) {
+            if(searchInfoIndex<=-1||fileNameIndex<=-1){
+                return;
+            }
+            var arrIndexs =JSON.parse(this.get()) ;
+            var arrIndex;
+            if (!arrIndexs) {
+                arrIndex = new Array();
+                arrIndexs = {};
+                arrIndexs[searchInfoIndex] = arrIndex;
+            } else {
+                if (!arrIndexs[searchInfoIndex]) {
+                    arrIndex = new Array();
+                    arrIndexs[searchInfoIndex] = arrIndex;
+                } else {
+                    arrIndex = arrIndexs[searchInfoIndex];
+                }
+            }
+            if (!arrIndex) {
+                arrIndex.push(fileNameIndex);
+            } else {
+                var index = arrIndex.indexOf(fileNameIndex);
+                if (index == -1) {
+                    arrIndex.push(fileNameIndex);
+                }
+            }
+            if (arrIndex.length == 0) {
+                delete arrIndexs[searchInfoIndex]
+                this.save(arrIndexs);
+            } else {
+                arrIndexs[searchInfoIndex] = arrIndex;
+                this.save(arrIndexs);
+            }
+        },
+        del: function (searchInfoIndex, fileNameIndex) {
+            var arrIndexs =JSON.parse(this.get()) ;
+            var arrIndex;
+            if (!arrIndexs) {
+                arrIndex = new Array();
+                arrIndexs = {};
+                arrIndexs[searchInfoIndex] = arrIndex;
+            } else {
+                if (!arrIndexs[searchInfoIndex]) {
+                    arrIndex = new Array();
+                    arrIndexs[searchInfoIndex] = arrIndex;
+                } else {
+                    arrIndex = arrIndexs[searchInfoIndex];
+                }
+            }
+            var index = arrIndex.indexOf(fileNameIndex);
+            if (index > -1) {
+                arrIndex.splice(index, 1);
+                for(var searhInfoIndex in arrIndexs){
+                    for(var i=0;i<arrIndexs[searhInfoIndex].length;i++){
+                        if(arrIndexs[searhInfoIndex][i]>fileNameIndex){
+                            arrIndexs[searhInfoIndex][i]=arrIndexs[searhInfoIndex][i]-1;
+                        }
+                    }
+                }
+            }
+
+            if (arrIndex.length == 0) {
+                delete arrIndexs[searchInfoIndex]
+                this.save(arrIndexs);
+            } else {
+                arrIndexs[searchInfoIndex] = arrIndex;
+                this.save(arrIndexs);
+            }
+        },
+        save: function (v,saveType) {
+            var k = this.saveKey;
+            if (window.localStorage) {
+                if (saveType == StorageType.Session) {
+                    if(!v){
+                        window.sessionStorage.removeItem(k);
+                    }else{
+                        window.sessionStorage.setItem(k, JSON.stringify(v));
+                    }
+                }
+                else {
+                    if(!v){
+                        window.localStorage.removeItem(k);
+                    }else{
+                        window.localStorage.setItem(k, JSON.stringify(v))
+                    }
+                }
+            }
+            else {
+                setCookie(k, JSON.stringify(v));
+            }
+        },
+    }
+    //点击选中或者取消选中文献 包括全选
+    $.fn.filenameClick = function () {
+        searchInfo.init();//防止同时打开多个页面的时候没有更新searchinfo导致queryid不一致
+        var t = $(this).attr("name") == "CookieName" ? $(this).val() : $("input[name='CookieName']")[0].value;
+        if (!t) {
+            $(this).prop("checked", false);
+            return;
+        }
+        var k=1;
+        if ($(".result-con-l .search-his-tip .range").length == 1) {
+            var condition=$(".result-con-l .search-his-tip .range").text() + "!" + $(".result-con-l .search-his-tip .conditions").text();
+            if(searchInfo.isExist(condition)){
+                k=searchInfo.indexOfValue(condition);
+            }else {
+                k=searchInfo.getNextIndex();
+                searchInfo.addKV(k,condition );
+            }
+        } else if ($("#SearchHisTip").length == 1) {
+            var condition = $.trim($(".SearchHisTip").text());
+            condition = condition ? (condition.endWith("x") ? condition.substring(0, condition.length - 1) : condition) : $.showSearchCondition(cnkiSearch.getRootQueryGroup(cnkiSearch.GroupName.SUBJECT), true);
+            if(searchInfo.isExist(condition)){
+                k=searchInfo.indexOfValue(condition);
+            }else {
+                k=searchInfo.getNextIndex();
+                searchInfo.addKV(k, $("#dbTag .recur a").text() + "!" + condition);
+            }
+        }
+        if ($(this).prop("checked")) {
+            if ($(this).attr("name") == "CookieName") {
+                if ($.filenameCount() >= 500) {
+                    alert(message.most100);
+                    $(this).prop("checked", false);
+                    return false;
+                }
+                add($(this).val());
+                setCheckAll();
+            }
+            else {
+                checkAll(this);
+            }
+        }
+        else {
+            if ($(this).attr("name") == "CookieName") {
+                del($(this).val());
+                setCheckAll();
+            }
+            else {
+                checkAll(this);
+            }
+            delSelect(this);
+        }
+        setSelect();
+        $("#selectCount,#anisys_select span").text($.filenameCount());
+        $("#batchOpsBox>li:eq(0)>span").text(message.selected + "(" + $.filenameCount() + ")");
+
+    }
+    //选择部分已选中的文献时使用
+    $.fn.filenameSelect = function () {
+        _FileNameKey = "SelectFileNameS" + getUniplatform() ;
+        if ($(this).prop("checked")) {
+            if ($(this).attr("name") == "CookieName") {
+                if ($.filenameCount() >= 500) {
+                    alert(message.most100);
+                    return false;
+                }
+                add($(this).val());
+                setCheckAll();
+            }
+            else {
+                checkAll(this);
+            }
+        }
+        else {
+            if ($(this).attr("name") == "CookieName") {
+                del($(this).val());
+                setCheckAll();
+            }
+            else {
+                checkAll(this);
+            }
+        }
+        setSelect();
+        _FileNameKey = 'FileNameS' + getUniplatform() ;
+    }
+    //文献管理中心点击删除按钮
+    $.fn.filenameDel = function () {
+        //需要删除两次 一次是filenames 一次是selectfilenames
+        _FileNameKey = 'SelectFileNameS' + getUniplatform() ;
+        if ($(this).attr("name") == "CookieName") {
+            del($(this).val());
+        }
+        else {
+            $("input:checkbox[name='CookieName']:checked").each(function () {
+                del($(this).val());
+            });
+        }
+        _FileNameKey = 'FileNameS' + getUniplatform() ;
+        if ($(this).attr("name") == "CookieName") {
+            del($(this).val());
+        }
+        else {
+            $("input:checkbox[name='CookieName']:checked").each(function () {
+                del($(this).val());
+            });
+        }
+    }
+    $.filenameClear = function () {
+        //需要删除两次 一次是filenames 一次是selectfilenames
+        _FileNameKey = "SelectFileNameS" + getUniplatform() ;
+        addCache(_FileNameKey, '');
+        _FileNameKey = 'FileNameS' + getUniplatform() ;
+        addCache(_FileNameKey, '');
+        setSelect();
+        //清除AI已选文献
+        $.filenameAIInit();
+        $.searchinfoInit();
+        searchAndFilenameIndex.init();
+    }
+    $.filenameGet = function () {
+        return get();
+    }
+    $.filenameSave = function (filenames) {
+        _FileNameKey = 'FileNameS' + getUniplatform() ;
+        return addCache(_FileNameKey,filenames);
+    }
+    $.indexGet = function () {
+        var result= searchAndFilenameIndex.get();
+        if(!result){
+            result=searchAndFilenameIndex.init();
+        }
+        return result;
+    }
+    //懒加载根据pageindex和pagesize取相应的filename
+    $.filenameLazyloadGet = function (PageIndex, PageSize) {
+        var arrResult=new Array();
+        var tempFilenames=$.filenameGet();
+        var arrFilename=tempFilenames.split(",");
+        var tempSearchAndFilenameIndexs=$.indexGet();
+        var arrIndexs =JSON.parse(tempSearchAndFilenameIndexs);
+        var PageFrom=PageSize*(PageIndex-1)+1;
+        var PageEnd=PageFrom+PageSize-1;
+        for(var searhInfoIndex in arrIndexs){
+            for(var i=0;i<arrIndexs[searhInfoIndex].length;i++){
+                if(arrIndexs[searhInfoIndex][i]>=PageFrom&&arrIndexs[searhInfoIndex][i]<=PageEnd){
+                    arrResult.push(arrFilename[arrIndexs[searhInfoIndex][i]]);
+                }
+            }
+        }
+        return arrResult.join(",");
+    }
+    $.indexSave = function (v) {
+        return searchAndFilenameIndex.save(v);
+    }
+    $.filenameCount = function () {
+        var value = get();
+        var arr = value ? value.split(",") : new Array();
+        return arr ? arr.length : 0;
+    }
+    $.searchinfoGet = function () {
+        var result= searchInfo.get();
+        if(!result){
+            result="1!无!无";
+        }
+        return result;
+    }
+    $.searchinfoInit = function () {
+        searchInfo.init();
+        searchAndFilenameIndex.init();
+    }
+    $.filenameInit = function () {
+        setSelect();
+    }
+    $.filenameSelectInit = function () {
+        _FileNameKey = "SelectFileNameS" + getUniplatform() ;
+        setSelect();
+        _FileNameKey = 'FileNameS' + getUniplatform() ;
+    }
+    $.filenameSelectGet = function () {
+        var filenames = get("SelectFileNameS" + getUniplatform() );
+        _FileNameKey = 'FileNameS' + getUniplatform() ;
+        return filenames;
+    }
+    $.filenameSelectSave = function (filenames) {
+        _FileNameKey = "SelectFileNameS" + getUniplatform() ;
+        return addCache(_FileNameKey,filenames);
+    }
+    $.filenameAIGet = function () {
+        return get(_FileNameAIKey);
+    }
+    $.filenameAIInit = function () {
+        addCache(_FileNameAIKey, '');
+    }
+    $.filenameAISave = function (data) {
+        return addCache(_FileNameAIKey,data);
+    }
+    $.filenameAdd = function (filename) {
+        add(filename);
+    }
+    $.searchinfoAdd = function (searchinfo) {
+        var arrSearchinfo=searchinfo.split(",");
+        for(var i=0;i<arrSearchinfo.length;i++){
+            var index=arrSearchinfo[i].indexOf("!")>-1?arrSearchinfo[i].substring(0,arrSearchinfo[i].indexOf("!")):1;
+            searchInfo.addKV(index, arrSearchinfo[i].substring(2));
+        }
+
+    }
+})(jQuery)
+$.BrowserTab(function () {
+    var pattern = /(manage(.html)|manage(.html)?[\?|\#].*)$/i;
+    if (!pattern.test(window.location.href)) {
+        $.filenameSelectInit();
+    }
+    else {
+        window.location.reload();
+    }
+
+}); //浏览器切换tab选项卡触发
+//解决edge浏览器tab切换localstorage不同步的问题，不要在意红点点
+if (document.attachEvent) {
+    window.attachEvent('storage', function () {
+        window.localStorage.getItem('FileNameS' + getUniplatform() );
+    });
+}
+else if (document.addEventListener) {
+    window.addEventListener('storage', function () {
+        window.localStorage.getItem('FileNameS' + getUniplatform() );
+    });
+}
+
+
+function initTable() {
+    var obj = $("#manage-table tbody tr");
+    var index = 1, length = 0;
+    var arr = [];
+    $(obj).each(function () {
+        if ($(this).find("td").length == 1) {
+            if (arr.indexOf($(this).find("td").html()) > -1) {
+                $(this).remove();
+            } else {
+                index = 1;
+            }
+            arr.push($(this).find("td").html());
+            return true;
+        }
+        $(this).find("td.seq em").click(function () {
+            $(this).parent().find("input[type='checkbox']").click();
+        })
+        $(this).find("td.seq em").text(index);
+        index++;
+        length++;
+    });
+    $("#batchOpsBox em:eq(0)").text($.filenameCount());
+    $("#batchOpsBox em:eq(1)").text(length);
+    var count = 0;
+    $.each($(".manage-table").find('input[name="CookieName"]:checked'), function () {
+        count++;
+    });
+    $("#batchOpsBox>li:eq(0)>span").text(message.selected + "（" + count + "）");
+    $("#anisys_select span").text(length);
+
+    //初始化条件
+    $(obj).find(".condition").each(function () {
+        if ($(this).parent().next().find("td").length <= 1)
+            $(this).parent().remove();
+    })
+
+}
+
+function RemoveRepeat() {
+    var obj = $("#manage-table tbody tr");
+    var arrFilename = [], arrYxFilename = [];
+    $(obj).each(function () {
+        var item = $(this).find("td.seq input");
+        if (!item || item.length == 0) {
+            return true;
+        }
+        if (arrFilename.indexOf($(item).attr("filename")) > -1) {
+            $(this).remove();
+            return true;
+        }
+        arrFilename.push($(item).attr("filename"));
+        if (!$(item).attr("yxfilename")) {
+            return true;
+        }
+        if (arrYxFilename.indexOf($(item).attr("yxfilename")) > -1) {
+            $(this).remove();
+            return true;
+        }
+        arrYxFilename.push($(item).attr("yxfilename"));
+    });
+}

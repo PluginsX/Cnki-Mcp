@@ -1,0 +1,102 @@
+﻿//selector:需要添加等待的jquery选择器
+//param: 格式{ a: "", b: "", c: "" }
+var ajaxSubmit = {
+    smallwaiting: "#leftnavi",    //多个以逗号隔开
+    Submit: function (url, params, func, selector, datatype, method,contenttype) {
+        if (!method) method = "POST";
+        if (!datatype) datatype = "text";
+        if (!contenttype) contenttype = "application/x-www-form-urlencoded";
+        if (params)
+            params["random"] = Math.random();
+        var retryCount = 0; // 重试次数计数器
+        var lastRequestConfig = {"url":url,"params":params,"func":func,"selector":selector,"datatype":datatype,
+            "method":method,"contenttype":contenttype}; // 保存上一次请求的配置
+        $.ajax({
+            type: method,
+            contentType: contenttype,
+            url: url,
+            data: params,
+            jsonp: datatype == "jsonp" ? "callback" : "",
+            beforeSend: function (XMLHttpRequest) {
+                if (!selector || selector == "")
+                    return;
+                $(selector + " .loading").remove();
+                var screenHeight = $(window).height(); //当前浏览器窗口的 宽高 
+                var scrolltop = $(document).scrollTop();//获取当前窗口距离页面顶部高度 
+                var objTop = (screenHeight - 300) / 2 + scrolltop;
+                var objLeft = $(selector).width() / 2;
+                if ((ajaxSubmit.smallwaiting + ",").indexOf(selector + ",") > -1)
+                    $(selector).prepend("<div class='loading' style=' position: fixed;width: 16px; height: 16px;z-index: 300;background: url(" + APPPATH + "images/gb/waitingsmall.gif) no-repeat scroll center center transparent;position: relative;top: 30%;font-size: 16px;left: 40%;width: 110px;'></div>");
+                else
+                    $(selector).prepend("<div class='loading' style='position: fixed;height: 32px;z-index: 300; background: url(" + APPPATH + "/images/gb/waiting.gif) no-repeat scroll; padding-left: 35px;padding-top: 5px; top:" + objTop + "px;margin-left:" + (objLeft - 32) + "px'></div>");
+            },
+            complete: function (data) {
+            },
+            dataType: datatype,
+            error: function(XMLHttpRequest, textStatus, errorThrown) {
+                try {
+                    var errorMsg = XMLHttpRequest.responseText;
+                    var objErrorMsg=JSON.parse(errorMsg);
+                    //拦截  403 code:-403
+                    //未登录  401 code:-403
+                    if(XMLHttpRequest.status==403&&objErrorMsg.code==-403){
+                        let sliderInstance =  verification({
+                            container: '#slider-container',
+                            captchaChooseType: document.getElementById('clientVerify-captchaTypeput').value?document.getElementById('clientVerify-captchaTypeput').value:'blockPuzzle',
+                            ident: document.getElementById('clientVerify-ident').value?document.getElementById('clientVerify-ident').value:"", // 注册的项目id
+                            captchaQuoteType: document.getElementById('clientVerify-backgroundType').value?document.getElementById('clientVerify-backgroundType').value:"", // hasbg：有背景，可用作整个项目限制； 默认为空是遮罩弹层
+                            env:document.getElementById('clientVerify-env').value?document.getElementById('clientVerify-env').value:"prod", //使用的环境接口: dev:nxgp. ci:nxgp prod:kns beta: beta，默认为kns
+                            onSuccess: (param) => { //传出captchaId, 本次验证码的id
+                                // console.log('成功回调执行:', param.captchaId);
+                                // 处理成功逻辑
+                                if (retryCount < 1) {
+                                    retryCount++;
+                                    if (lastRequestConfig["url"]){
+                                        lastRequestConfig["url"]=SetQueryStringByName(lastRequestConfig["url"],"captchaId",param.captchaId);
+                                        var fingerprintId=localStorage.getItem('clientUid');
+                                        if(fingerprintId){
+                                            lastRequestConfig["url"]=SetQueryStringByName(lastRequestConfig["url"],"fingerprint",fingerprintId);
+                                            lastRequestConfig["url"]=SetQueryStringByName(lastRequestConfig["url"],"uniplatform",$.getUniplatform());
+                                        }
+                                    }
+                                    // 使用上一次的配置重新发送请求
+                                    ajaxSubmit.Submit(lastRequestConfig["url"],lastRequestConfig["params"],lastRequestConfig["func"],
+                                        lastRequestConfig["selector"],lastRequestConfig["datatype"],lastRequestConfig["method"],
+                                        lastRequestConfig["contenttype"]);
+                                }
+                                // 销毁验证码
+                                sliderInstance.destroy();
+                                sliderInstance = null;
+                            },
+                            onClose: () => {
+                                // console.log('关闭验证码');
+                                sliderInstance.destroy();
+                                sliderInstance = null;
+                            },
+                            onFail: () => {
+                                console.log('验证失败，执行错误事件');
+                            },
+                        });
+                    }else if(XMLHttpRequest.status==401&&objErrorMsg.code==-403){
+                        window.location.href=objErrorMsg.message;
+                    }
+                } catch (e) {
+                    $(selector + " .loading").remove();
+                }
+                $(selector + " .loading").remove();
+            },
+            success: function (data) {
+                retryCount=0;
+                $(selector + " .loading").remove();
+                if (func) {
+                    func(data);
+                }
+                else {
+                    if (!data) {
+                        return "";
+                    }
+                }
+            }
+        });
+    }
+};

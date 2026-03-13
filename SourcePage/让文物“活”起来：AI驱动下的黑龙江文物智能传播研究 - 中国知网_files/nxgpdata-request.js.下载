@@ -1,0 +1,1896 @@
+;(function () {
+    var lazyLoadObj = function () {
+    }
+    lazyLoadObj.prototype.Data = {
+        "funCommonTabNum": 0,//点击时每次走循环增加
+        "funCommonTabCnt": 0,//点击后每次走ajax增加，滚动时候不加
+        "funCommonTabNum1": 0,//计算当点击按钮之前的都请求过时候走callback
+        "anchor": "",//点击锚点按钮当前的data-anchor
+        "flag" : true,
+        "lazyLoadArr" : [
+            { id: "kcms-data-quoted-corefirerecomend", isRequest: false, fun: "corefileRecommend", isShow: true,param:"'kcms-data-quoted-corefirerecomend', $(\"#paramfilename\").val()", tabIndex: 0, sort: 0},
+           /* { id: "refpartdiv", isRequest: false, fun: "getRefCountHtml($(\"#paramfilename\").val(), \"quoted-refcountpart\",dtd)", isShow: false },*/
+            { id: "refpartdiv", isRequest: false, fun: "getRefCountHtml", isShow: false,param:"$(\"#paramfilename\").val(), \"quoted-refcountpart\"" , tabIndex: 1, sort: 0},
+            { id: "nxgp-kcms-data-ref-references-journal", isRequest: false, fun: "getrefdata", isShow: false,param : "\"references\", \"CJFDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-journal\"" , tabIndex: 1, sort: 1},
+            /*{ id: "refpartdiv", isRequest: false, fun: "moduleTwo", isShow: false },*/
+            { id: "nxgp-kcms-data-ref-references-dissertation-d", isRequest: false, fun: "getrefdata", isShow: false,param: "\"references\", \"CDFDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-dissertation-d\"" , tabIndex: 1, sort: 3},
+            { id: "nxgp-kcms-data-ref-references-dissertation-m", isRequest: false, fun: "getrefdata", isShow: false,param: "\"references\", \"CMFDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-dissertation-m\"" , tabIndex: 1, sort: 4},
+            { id: "nxgp-kcms-data-ref-references-conference-c", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"CPFDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-conference-c\"" , tabIndex: 1, sort: 5},
+            { id: "nxgp-kcms-data-ref-references-conference-i", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"IPFDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-conference-i\"" , tabIndex: 1, sort: 6},
+            { id: "nxgp-kcms-data-ref-references-yearbook", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"CYFDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-yearbook\"" , tabIndex: 1, sort: 6},
+            { id: "nxgp-kcms-data-ref-references-newpaper", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"CCNDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-newpaper\"" , tabIndex: 1, sort: 7},
+            { id: "nxgp-kcms-data-ref-references-journal-w", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"WWJDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-journal-w\"" , tabIndex: 1, sort: 8},
+            { id: "nxgp-kcms-data-ref-references-book", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"CBBDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-book\"" , tabIndex: 1, sort: 9},
+            { id: "nxgp-kcms-data-ref-references-patent", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"SCPDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-patent\"" , tabIndex: 1, sort: 10},
+            { id: "nxgp-kcms-data-ref-references-stand", isRequest: false, fun: "getrefdata", isShow: false, param: "\"references\", \"SCSDREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-stand\"" , tabIndex: 1, sort: 11},
+            { id: "nxgp-kcms-data-ref-references-crldeng", isRequest: false, fun: "getrefdata", isShow: false,param: "\"references\", \"NLNKREF\", $(\"#paramfilename\").val(), 1, \"nxgp-kcms-data-ref-references-crldeng\"", tabIndex: 1, sort: 12},
+
+            { id: "literature-recommend", isRequest: false, fun: "getSimilarDataFromApi", isShow: false, param: "'kcms-data-similar', $(\"#paramfilename\").val(),  $(\"#paramdbcode\").val()", tabIndex: 3, sort: 0 },
+/*
+            { id: "book-recommend", isRequest: false, fun: "getSimilarEbookFromApi", isShow: false, param: "'kcms-data-ebook', $(\"#paramfilename\").val(),  $(\"#paramdbcode\").val()", tabIndex: 4, sort: 0 },
+*/
+
+        ],
+        "lazyLoadArr1" : [],
+        "refPartTabs" : "references", //确定是引文网络点击的哪个tab
+        "refPartCheckArr" : [], //每次切换tab之后定义的数据放里面，每次都要加上相关推荐的id，才能移出监听，点击切换tab之后再重新监听
+        "refPartCheckArr1" : [], //每次切换tab之后都要清空，然后再将请求过的isrequst为true的放里面
+        "refPartTabArrs" : [
+            { type: "citations", data: []}, //引证文献
+            { type: "co-references", data: []}, //共引文献
+            { type: "co-citations", data: []}, //同被引文献
+            { type: "second-references", data: [] }, //二级参考文献
+            { type: "second-citations", data: []}, //二级引证文献
+        ],
+        "loadRefIndexObj" : {
+            'references':0,
+            'citations':0,
+            'co-references':0,
+            'co-citations':0,
+            'second-references':0,
+            'second-citations':0
+        }
+    }
+    lazyLoadObj.prototype.Funcs = {
+        scrollHandler: function (){
+            if ($lazyLoadObj.Data.refPartTabs === "references") {
+                if ($lazyLoadObj.Data.lazyLoadArr1.length == $lazyLoadObj.Data.lazyLoadArr.length) {
+                    window.removeEventListener("scroll", this.scrollHandler);
+                    window.removeEventListener("resize", this.scrollHandler);
+                    $lazyLoadObj.Data.flag = false;
+                }
+                $lazyLoadObj.Funcs.scrollHandlerArr($lazyLoadObj.Data.lazyLoadArr, $lazyLoadObj.Data.lazyLoadArr1);
+            } else {
+                if ($lazyLoadObj.Data.refPartCheckArr1.length == $lazyLoadObj.Data.refPartCheckArr.length) {
+                    window.removeEventListener("scroll",this.scrollHandler);
+                    window.removeEventListener("resize", this.scrollHandler);
+                    $lazyLoadObj.Data.flag = false;
+                }
+                $lazyLoadObj.Funcs.scrollHandlerArr($lazyLoadObj.Data.refPartCheckArr, $lazyLoadObj.Data.refPartCheckArr1);
+            }
+        },
+        // 滚动调用公共循环的方法
+        scrollHandlerArr:function(arr, arr1) {
+            for (var i = 0; i < arr.length; i++) {
+                if (arr[i].isShow && !arr[i].isRequest && $("#" + arr[i].id).length > 0){
+                    var el = $("#" + arr[i].id)[0];
+                    var topRect = el.getBoundingClientRect();
+                    var h = document.documentElement.clientHeight || document.body.clientHeight;
+                    if (topRect.top < h) {
+                        $lazyLoadObj.Funcs.funCommon(i,arr);
+                        arr1.push(arr[i]);
+                    }
+                }
+            }
+        },
+        funCommon: function(i,arr){
+            arr[i].isRequest = true;
+            // loadCondition(i);
+            var dtd = $.Deferred();  // 新建一个Deferred对象
+            var wait = function (dtd) {
+                var task = function () {
+                    // 执行的方法
+                    /*eval(func);*/
+                    if(arr[i].fun == "getSimilarDataFromApi"){
+                        eval(arr[i].fun + "("+arr[i].param+")");
+                    }else {
+                        eval(arr[i].fun + "("+arr[i].param+",dtd)");
+                    }
+
+                };
+                task();
+                return dtd;
+            };
+            $.when(wait(dtd))
+                .done(function () {
+                    $lazyLoadObj.Funcs.loadCondition(i,arr);
+                })
+                .fail(function () {
+                    $lazyLoadObj.Funcs.loadCondition(i,arr);
+                });
+        },
+
+        // 点击跳转方法  将他之前所有的没执行的都请求一遍
+        funCommonTab: function (index) {
+            $lazyLoadObj.Data.funCommonTabCnt = 0
+            $lazyLoadObj.Data.funCommonTabNum = 0
+            $lazyLoadObj.Data.funCommonTabNum1 = 0
+
+            var lazyLoadArr = $lazyLoadObj.Data.lazyLoadArr
+            for (var i = 0; i < lazyLoadArr.length; i++) {
+                if (lazyLoadArr[i].tabIndex <= index) {
+                    if (!lazyLoadArr[i].isRequest) {
+                        lazyLoadArr[i].isRequest = true
+                        lazyLoadArr[i].isShow = true
+                        $("#" + lazyLoadArr[i].id).addClass("dis-show").removeClass("dis-none");
+                        $lazyLoadObj.Data.funCommonTabNum++
+                        if (i == 0) {
+                            eval(lazyLoadArr[i].fun + "(" + lazyLoadArr[i].param + ",false,isTab=1)");
+                        }else{
+                            eval(lazyLoadArr[i].fun + "(" + lazyLoadArr[i].param + ",'',false,isTab=1)");
+                        }
+                    } else {
+                        $lazyLoadObj.Data.funCommonTabNum1++
+                    }
+                } else {
+                    //点击按钮的下一个 且不是最后一个，且没有请求过
+                    if (lazyLoadArr[i].tabIndex == (index + 1) && lazyLoadArr[i].sort == 0 && !lazyLoadArr[i].isRequest) {
+                        // 他的下一个也要显示
+                        $("#" + lazyLoadArr[i].id).addClass("dis-show").removeClass("dis-none");
+                        lazyLoadArr[i].isShow = true;
+                    }
+                    $lazyLoadObj.Data.funCommonTabNum1++
+                }
+
+                if ($lazyLoadObj.Data.funCommonTabNum1 == lazyLoadArr.length) {
+                    $lazyLoadObj.Funcs.tabCallback(0)
+                }
+
+            }
+        },
+        tabCallback: function (num) {
+            // 当走请求的时候++ 不走请求了直接为0
+            if (num != 0) {
+                $lazyLoadObj.Data.funCommonTabCnt++;
+            }
+            if ($lazyLoadObj.Data.funCommonTabNum == $lazyLoadObj.Data.funCommonTabCnt + 2 || num == 0) {
+                $("body,html").animate(
+                    { scrollTop: $("#literature-recommend").offset().top },
+                    500
+                );
+            }
+        },
+        // 公共方法
+        loadCondition: function(i,arr) {
+            if (arr.length == i + 1) return;
+            $("#" + arr[i + 1].id).addClass("dis-show").removeClass("dis-none");
+            arr[i + 1].isShow = true;
+            $lazyLoadObj.Funcs.scrollHandler();
+        },
+        // 节流
+        throttleDebounce: function(fn, delay, mustRunDelay) {
+        var timer = null;
+        var t_start;
+        return function () {
+            var context = this;
+            var args = arguments;
+            var t_curr = +new Date();
+
+            clearTimeout(timer);
+            if (!t_start) {
+                t_start = t_curr;
+            }
+            if (mustRunDelay != 0 && t_curr - t_start >= mustRunDelay) {
+                fn.apply(context, args);
+                t_start = t_curr;
+            } else {
+                timer = setTimeout(function () {
+                    fn.apply(context, args);
+                }, delay);
+            }
+        };
+    }
+    }
+    $lazyLoadObj = $.extend({}, new lazyLoadObj);
+})();
+$(function () {
+
+  /*  $(document).on('click', '.right-content .right-item .title', function() {
+        var $parent = $(this).parent();
+        if ($parent.hasClass('item-close')) {
+            $parent.removeClass('item-close');
+        } else {
+            $parent.addClass('item-close');
+        }
+    });*/
+
+    new sideInfo();
+    backTop();
+
+    // 获取当前页面的锚点
+    const hash = getKcmsUrlParam("anchor")
+    if (hash && hash.toLowerCase() == "citnet") {
+        $("#kcms-data-quoted-corefirerecomend").css("height","420px");
+         corefilerecTemp = document.getElementById("kcms-data-quoted-corefirerecomend");
+        if (corefilerecTemp) {
+            $("html,body").animate({scrollTop: $("#kcms-data-quoted-corefirerecomend").offset().top}, 500);
+            // 检测模块是否已加载
+            var checkInterval = setInterval(() => {
+                var citationElement = $("#corefilerecTemp .dot")[0];
+                var val = $(".yzwx #rc3").text();
+                if (citationElement && val) {
+                   $("html,body").animate({scrollTop: $("#refpartdiv").offset().top}, 500);
+                    clearInterval(checkInterval); // 停止检测
+                    $(".yzwx #citations").click();
+                }
+            }, 100); // 每 100ms 检查一次
+
+
+        }
+    }
+
+    /**
+     * 新年鉴页在线阅读地址
+     */
+    if($("#fulltext-frame").length >0){
+        var currentUrl = window.location.href;
+        var prefix = $("#almanac-readonline-url").val();
+        var params = currentUrl.split("?")[1];
+        var url = prefix  + "?" + params + "&onlineType=single";
+        var newParamValue = "trial";
+        // 创建URL对象
+        var urlObj = new URL(url);
+        // 获取URL中的参数
+        var params = new URLSearchParams(urlObj.search);
+        // 修改参数值
+        params.set("scope", newParamValue);
+        // 修改参数值
+        params.set("cflag", "pdf");
+        // 修改参数值
+        params.set("dflag", "pdf");
+        // 更新URL中的参数
+        urlObj.search = params.toString();
+        var readerUrl = urlObj.toString();
+        $("#fulltext-frame").attr("src",readerUrl)
+    }
+
+    var utype = getUInfoFromECP("utype");
+    if( $(".ad-ylan-4").length > 0){
+
+    }
+    if($("#kcms-data-common-service").length > 0){
+        var adhtml = "<a href=\"https://ai.cnki.net/sumup/professionalSumup/\" target=\"_blank\" title='AI文献综述'><span class=\"wxzs\">AI文献综述</span></a>";
+        adhtml += "<a href=\"https://ai.cnki.net/deepresearch/\" target=\"_blank\" title='AI深度研究'><span class=\"sdyj\">AI深度研究</span></a>";
+        adhtml += "<a href=\"https://cx.cnki.net/\" target=\"_blank\" title='个人查重'><span class=\"grcc\">个人查重</span></a>";
+        adhtml += "<a href=\"https://cx.cnki.net/aigc/\" target=\"_blank\" title='AIGC检测'><span class=\"aigc\">AIGC检测</span></a>";
+        adhtml += "<a href=\"https://book.cnki.net/\" target=\"_blank\" title='知网书店'><span class=\"zwsd\">知网书店</span></a>";
+        adhtml += "<a href=\"https://aidoc.cnki.net/createDoc/\" target=\"_blank\" title='智能写作'><span class=\"znxz\">智能写作</span></a>";
+        adhtml += "<a href=\"https://au.cnki.net/act/identifyDocument\" target=\"_blank\" title='职称评审材料'><span class=\"pscl\">职称评审材料</span></a>";
+        adhtml += "<a href=\"https://thesis.cnki.net/login\" target=\"_blank\" title='学位论文投稿'><span class=\"xwlw\">学位论文投稿</span></a>";
+        adhtml += "<a href=\"https://shendu.cnki.net\" target=\"_blank\" title='智能审校'><span class=\"znsx\">智能审校</span></a>";
+        if(utype && utype.toLowerCase() == 'bk'){
+            adhtml += "<a class=\"ad-ylan-4\" href=\"https://author.cnki.net/#/index\" target=\"_blank\" title='论文智能排版'><span class=\"znpb\">论文智能排版</span></a>";
+        }else {
+            adhtml += "<a class=\"ad-ylan-4\" href=\"https://pb.cnki.net/typeset\" target=\"_blank\" title='个人智能排版'><span class=\"znpb\">个人智能排版</span></a>";
+        }
+
+        adhtml += "<a  href=\"https://xs.cnki.net/#\" target=\"_blank\" title='学术评价支撑平台'><span class=\"zcpt\">学术评价支撑平台</span></a>";
+        adhtml += "<a  href=\"https://ai.cnki.net/bibliometrics\" target=\"_blank\" title='AI文献计量'><span class=\"wxjl\">AI文献计量</span></a>";
+        /*adhtml += "<a href=\"https://chaxin.cnki.net\" target=\"_blank\"><span class=\"kjcx\">科技查新</span></a>";*/
+
+
+       /* adhtml += "<a href=\"https://qb.cnki.net/\" target=\"_blank\"><span class=\"xsqb\">CNKI学术情报</span></a>";
+        adhtml += "<a href=\"https://wenku.cnki.net\" target=\"_blank\"><span class=\"zwwk\">知网文库</span></a>";*/
+        $(".Recommendedrelated  .service-list").append(adhtml);
+    }
+
+
+
+    /*$("html,body").animate({scrollTop: $(".doc").offset().top}, 500);*/
+    var isLazyLoad = $("#isLazyLoad").length > 0 ? $("#isLazyLoad").val() :  "0"
+    //图书知网节是否懒加载
+    var isLazyLoadBook = $("#isLazyLoadBook").length > 0 ? $("#isLazyLoadBook").val() :  "0"
+    //用于判断是否是图书知网节
+    var resourceType = $("#resourceType").length > 0 ? $("#resourceType").val() :  ""
+    //报纸、年鉴不走滚动加载、因为没有核心推荐和引文网络这俩个业务模块
+
+
+    /**
+     * 作者BRID标识
+     */
+    if($("#ly-code").length > 0){
+        var lyCode = $("#ly-code").val();
+        if(lyCode && (lyCode.toUpperCase() == "ZKJJ" || lyCode.toUpperCase() == "ZJJJ")){
+            authorBrid();
+        }
+    }
+
+    var refCountHtml = function () {
+        var refcountHtml = "<div id='div-nodeCount' style='display: none;height: 180px'>";
+        if(resourceType =="BOOK"){
+            refcountHtml = "<div id='div-nodeCount' class='book-nodeCount' style='display: none'>";
+            refcountHtml += "<div class='citnet'>";
+            refcountHtml += "<div class='gywx'><a  id='coreferences' data-id='co-references' onclick='changerefdata(this)' name='rl' title='"+message["co-references-describe"]+"'>"+message["co-references"]+"<span id='rc5'></span></a></div>";
+            refcountHtml += "<div class='tbywx'><a  id='cocitations' data-id='co-citations' onclick='changerefdata(this)' name='rl' title='"+message["co-citations-describe"]+"'>"+message["co-citations"]+"<span id='rc6'></span></a></div>";
+            refcountHtml += "<div class='rjckwx'><a  id='secondreferences' data-id='second-references'  onclick='changerefdata(this)' name='rl' title='"+message["second-references-describe"]+"'>"+message["second-references"]+"<span id='rc2'></span></a></div>";
+            refcountHtml += "<div class='ckwx'><a  id='references' data-id='references'  class='ReferLinkOn' onclick='changerefdata(this)' name='rl' title='"+message["references-describe"]+"'>"+message["references"]+"<span id='rc1'></span></a></div>";
+            refcountHtml += "<div class='yzwx'><a  id='citations' data-id='citations' onclick='changerefdata(this)' name='rl' title='"+message["citations-describe"]+"'>"+message["citations"]+"<span id='rc3'></span></a></div>";
+            refcountHtml += "<div class='rjyzwx'><a id='secondcitations' data-id='second-citations' onclick='changerefdata(this)' name='rl' title='"+message["second-citations-describe"]+"'>"+message["second-citations"]+"<span id='rc4'></span></a></div>";
+         }else{
+            refcountHtml += "<div class='map'>";
+            refcountHtml += "<div class='gywx'><a  id='coreferences' data-id='co-references' onclick='changerefdata(this)' name='rl' title='"+message["co-references-describe"]+"'>"+message["co-references"]+"</a><span id='rc5'></span></div>";
+            refcountHtml += "<div class='tbywx'><a  id='cocitations' data-id='co-citations' onclick='changerefdata(this)' name='rl' title='"+message["co-citations-describe"]+"'>"+message["co-citations"]+"</a><span id='rc6'></span></div>";
+            refcountHtml += "<div class='rjckwx'><a  id='secondreferences' data-id='second-references'  onclick='changerefdata(this)' name='rl' title='"+message["second-references-describe"]+"'>"+message["second-references"]+"</a><span id='rc2'></span></div>";
+            refcountHtml += "<div class='ckwx'><a  id='references' data-id='references'  class='ReferLinkOn' onclick='changerefdata(this)' name='rl' title='"+message["references-describe"]+"'>"+message["references"]+"</a><span id='rc1'></span></div>";
+            refcountHtml += "<div class='yzwx'><a  id='citations' data-id='citations' onclick='changerefdata(this)' name='rl' title='"+message["citations-describe"]+"'>"+message["citations"]+"</a><span id='rc3'></span></div>";
+            refcountHtml += "<div class='rjyzwx'><a id='secondcitations' data-id='second-citations' onclick='changerefdata(this)' name='rl' title='"+message["second-citations-describe"]+"'>"+message["second-citations"]+"</a><span id='rc4'></span></div>";
+        }
+        refcountHtml += "<div class='jdwx'>"+message["node-literatures"]+"</div>";
+        return refcountHtml;
+    }
+    var refcounthtm = refCountHtml();
+    $("#quoted-refcountpart").html(refcounthtm);
+
+    if(($("#kcms-data-quoted-corefirerecomend").length> 0 &&  isLazyLoad == "1") || $("#refpartdiv").length> 0 ){
+
+        if(isLazyLoadBook == "1"){
+            $lazyLoadObj.Data.lazyLoadArr = $lazyLoadObj.Data.lazyLoadArr.filter(
+                item => item.id !== "kcms-data-quoted-corefirerecomend" && item.id !== "literature-recommend"
+            );
+            if ($lazyLoadObj.Data.lazyLoadArr.length > 0) {
+                $lazyLoadObj.Data.lazyLoadArr[0].isShow = true;
+            }
+        }
+
+        if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+        }
+
+        // 滚动触发
+        $lazyLoadObj.Funcs.scrollHandler();
+        window.addEventListener(
+            "scroll",
+            $lazyLoadObj.Funcs.throttleDebounce($lazyLoadObj.Funcs.scrollHandler, 300, 300)
+        );
+        window.addEventListener(
+            "resize",
+            $lazyLoadObj.Funcs.throttleDebounce($lazyLoadObj.Funcs.scrollHandler, 300, 300)
+        );
+
+    }else{
+        if($("#kcms-data-quoted-corefirerecomend").length > 0){
+            $("#kcms-data-quoted-corefirerecomend").removeClass("dis-show");
+        }
+        if($("#refpartdiv").length > 0){
+            $("#refpartdiv").removeClass("dis-none");
+        }
+        if($("#literature-recommend").length > 0){
+            $("#literature-recommend").removeClass("dis-none");
+        }
+    }
+
+
+    var resource = $("#paramresource").length > 0 ? $("#paramresource").val() : "";
+    if(resource && resource.toLowerCase() != "almanac"){
+        /*var xiaoleDiv = " <div class=\"cnki-zxl-wrap\" style='display: none'>" +
+                                    " <a href=\"https://xiaole.cnki.net\" target=\"_blank\"><span class=\"icon-zxl dllink-sprite\"></span></a>" +
+                                    " <div class=\"zxl-text\"><a href=\"https://xiaole.cnki.net\" target=\"_blank\">知小乐为您服务</a></div>" +
+                                "</div>"*/
+        var xiaoleDiv = "<div class=\"cnki-zxl-wrap\" style='display: none'>" +
+            " <a href=\"https://xiaole.cnki.net\" target=\"_blank\"><span class=\"icon-zxl dllink-sprite\"></span></a>" +
+            " <div class=\"zxl-text\"><a href=\"https://xiaole.cnki.net\" target=\"_blank\">知小乐</a></div>" +
+            "</div>"
+
+        $(".container .doc").after(xiaoleDiv);
+
+        $(".cnki-zxl-wrap").on("mouseenter", function (){
+            $('.zxl-text').show();
+        })
+
+        $(".cnki-zxl-wrap").on("mouseleave", function (){
+            $('.zxl-text').hide();
+        })
+
+        // 第一次定时：5秒后淡入
+        /*setTimeout(function() {
+            $('.zxl-text').fadeIn(500);
+
+            // 第二次定时：再过5秒后淡出
+            setTimeout(function() {
+                $('.zxl-text').fadeOut(500);
+            }, 5000);
+
+        }, 5000);*/
+    }
+    if(resource && (resource.toUpperCase() == "JOURNAL"
+        || resource.toUpperCase() == "DISSERTATION" || resource.toUpperCase() == "CONFERENCE"
+        || resource.toUpperCase() == "NEWSPAPER")){
+        var uniplatform = getKcmsUrlParam("uniplatform");
+        if(!uniplatform || uniplatform.toUpperCase() == "NZKPT"){
+            aiQuestion()
+            setTimeout(getH5Qrcode, 3000);
+        }
+        if(uniplatform && uniplatform.toUpperCase() == "CHKD"){
+            $("#right_part_ai").hide();
+            $("#DownLoadParts .operate-right").hide();
+        }
+
+        if(utype && utype.toLowerCase() == 'jf'){
+            var sprites = $(".like-num").parent(".applaud");
+            handelLike(sprites,"check");
+        }
+        statisticsTotal("like");
+        statisticsTotal("share");
+        statisticsTotal("collect");
+
+    }
+    $(document).on('click', '.btn-share .copy,.xl', function () {
+        /*statisticsTotal("share");*/
+        if ($(".share-num").length > 0) {
+            $(".stats-moudle .share").addClass('show');
+            var numStr = $(".share-num").text() == "" ?  0 :$(".share-num").text();
+            var num = parseDisplayCount2(numStr,"share")
+            var resultNum = num + 1;
+            resultNum = formatNum(resultNum);
+            $(".share-num").text(resultNum);
+        }
+
+    });
+    $(document).on('click', '.applaud', function() {
+        if((!utype || (utype && utype.toLowerCase() == 'bk')) &&
+            $(this).hasClass("active")){
+            return;
+        }
+        var numStr = $(".like-num").text().trim() == "" ?  0 : $(".like-num").text();
+        var localStorageNum = localStorage.getItem("like-num");
+        if(localStorageNum && localStorageNum == numStr){
+
+        }
+        var num = parseDisplayCount2(numStr,"like")
+        if($(this).hasClass("active")){
+            $(this).removeClass("active");
+            if(num > 1){
+                var resultNum = num - 1;
+                resultNum = formatNum(resultNum);
+                $(".like-num").text(resultNum);
+            }else {
+                $(".like-num").text("");
+            }
+            if(utype && utype.toLowerCase() == 'jf'){
+                handelLike($(this),"cancel");
+            }
+        }else {
+            $(this).addClass("active");
+            var resultNum = num + 1;
+            resultNum = formatNum(resultNum);
+            $(".like-num").text(resultNum);
+            handelLike( $(this),"set");
+        }
+        if(!utype || (utype && utype.toLowerCase() == 'bk')){
+            $(this).addClass("active");
+        }
+
+    })
+
+    $(document).on('click', '.stats-item.collect', function(event) {
+        event.stopPropagation()
+        AddFavToMyCnki(1,0);
+    })
+
+    if($(".caj-tip").length > 0){
+        var today = new Date();
+        if(today.getDate() === 1) {
+            $(".caj-tip").show();
+        }
+    }
+
+
+    $(".side-menu .mulu").click(function () {
+        $(this).addClass("active");
+        $(".citation").removeClass("active");
+        $(".mulu-content").show();
+        $(".citation-content").hide();
+    })
+
+    // 检查是否是首次访问
+    if (!localStorage.getItem('hasSeenCajTip')) {
+        // 首次访问，显示提示
+        $('.caj-tip').show();
+        // 记录访问状态
+        localStorage.setItem('hasSeenCajTip', 'true');
+    }
+
+});
+// 初始化监听
+$(document).ready(function() {
+    observeListsContainer();
+});
+// 监听整个文档的DOM变化
+function observeListsContainer() {
+    const targetNode = document.body;
+    const config = {
+        childList: true,      // 监听子节点变化
+        subtree: true         // 监听所有后代节点
+    };
+
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            // 检查新增的节点中是否有 .lists
+            mutation.addedNodes.forEach(function(node) {
+                if (node.nodeType === 1) { // 元素节点
+                    // 检查当前节点
+                    if ($(node).hasClass('book_title')) {
+                        getSimilarEbookFromApi();
+                    }
+
+                }
+            });
+        });
+    });
+
+    observer.observe(targetNode, config);
+
+    // 返回observer以便后续可以取消监听
+    return observer;
+}
+function parseDisplayCount(displayText) {
+    if (String(displayText).indexOf('万')>-1) {
+        const num = parseFloat(displayText);
+        return Math.round(num * 10000); // 转回原始数值
+    }
+    return parseInt(displayText);
+}
+
+function parseDisplayCount2(displayText,type) {
+    if (String(displayText).indexOf('万')>-1) {
+        const num = parseFloat(displayText);
+        if(isNaN(num)){
+           var resultNum = localStorage.getItem(type+"-num");
+           return parseDisplayCount2(resultNum);
+        }
+        return Math.round(num * 10000); // 转回原始数值
+    }else{
+        if(isNaN(displayText)){
+            var resultNum = localStorage.getItem(type+"-num");
+            return parseInt(resultNum);
+        }else{
+            return parseInt(displayText);
+        }
+    }
+
+}
+//引证文献核心作者
+function refAuthor(div, filename,times) {
+    $(".citation").addClass("active");
+    $(".mulu").removeClass("active");
+    $(".mulu-content").hide();
+    $(".citation-content").show();
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if (!div || !filename || !times || !v) {
+        return;
+    }
+
+    if ($("#RefAuthorArea").length == 0) { return; }
+    if ($("#refAuthorDiv").text().length > 0) { return; }
+
+    var apiHost = $("#apiHost").val();
+   /* var kclientId = $("#citation-api-clientId").val();
+    var kvv = $("#citation-api-vv").val();
+    var wgpart = "?vv=" + kvv + "&clientId=" + kclientId;
+    var kurl = apiHost + "/literature-api/v1/articles/relations/ref-authors" + wgpart;*/
+    var kurl = apiHost + "/literature-api/v1/articles/relations/ref-authors" + "?" + v;
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        /*data: JSON.stringify({id:filename}),*/
+        headers: getHearder(),
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (data) {
+                if (data && data.data && data.data.length > 0) {
+                    var ulhtml = refauthor_data(data.data,times);
+                    $("#" + div).html(ulhtml);
+                } else {
+                    $("#"+div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+                }
+            } else {
+                $("#"+div).html("<h3 class=\"title2\" id=\"\"><b id=\"nodataText\" class=\"titleTotle\">未找到相关数据 </b></h3>");
+            }
+        }
+    });
+}
+
+
+//核心文献区域部分
+function corefileRecommend(div, filename,dtd,isTab) {
+    var cri = 0;
+    if (!div || !filename) {
+        return;
+    }
+    if (isTab == 1) {
+        $lazyLoadObj.Funcs.tabCallback()
+    }
+    if($("#" + div).text().length>0)
+    {
+        $("#" + div).show();
+        return;
+    }
+    var kclientId = $("#citation-api-clientId").val();
+    var kvv = $("#citation-api-vv").val();
+    var wgpart = "?vv=" + kvv + "&clientId=" + kclientId;
+
+    var showreffiles = function (o, t, k) {
+        if (!o || !t || !k) {
+            return;
+        }
+
+        if ($(o).siblings("div .tit-des").length > 0) {
+            $(o).siblings("div .tit-des").show();
+        }
+        else {
+            getrefnetfiles(k, t, $(o).parent("li"));
+        }
+    }
+
+    var hoverDelayRef = function (o, t, k, options) {
+        var defaults = {
+            hoverDuring: 500,
+            outDuring: 0,
+            hoverEvent: function () {
+                showreffiles($(o).find("a"), t, k);
+            },
+            outEvent: function () {
+                $(o).find("div.tit-des").hide();
+            }
+        };
+        var sets = $.extend(defaults, options || {});
+        var hoverTimer, outTimer, that = o;
+        return $(o).each(function () {
+            $(o).hover(function () {
+                clearTimeout(outTimer);
+                hoverTimer = setTimeout(function () { sets.hoverEvent.apply(that) }, sets.hoverDuring);
+            }, function () {
+                clearTimeout(hoverTimer);
+                outTimer = setTimeout(function () { sets.outEvent.apply(that) }, sets.outDuring);
+            });
+        });
+
+    }
+
+    var corefileHtml = function () {
+        var cfhtml = "<div id='corefilerecTemp' style='display: none;height: 413px' >";
+        //8版需要加标题
+        if($("#kcms-data-quoted-corefirerecomend-title").length == 0){
+            cfhtml += "<h5 class='module-title'><span><b>"+message["hxwxtj"]+"</b></span></h5>";
+        }
+        cfhtml += "<div class='module'>";
+        cfhtml += "<div class='module-core'>";
+        cfhtml += "<div class='node-box'><p class='node-tit icon-start' id='div-researchStarter'>"+message["research-starter"]+"</p><ul class='start-list'></ul></div>";
+        cfhtml += "<div class='node-box no-margin'><p class='node-tit icon-source' id='div-researchSource'>"+message["research-source"]+"</p><ul class='source-list'></ul></div>";
+        cfhtml += "<div class='node-middle' id='div-researchNode'></div>";
+        cfhtml += "<div class='node-box fr  no-margin'><p class='node-tit icon-go' id='div-researchBoost'>"+message["research-boost"]+"</p><ul class='go-list'></ul></div>";
+        cfhtml += "<div class='node-box fr'><p class='node-tit icon-branch' id='div-researchBranch'>"+message["research-branch"]+"</p><ul class='branch-list'></ul></div>";
+        cfhtml += "</div></div></div>";
+
+        return cfhtml;
+    }
+    $("#" + div).html(corefileHtml());
+
+    //单条数据metadata取值,dataarrdata 单条数据  mname:当前字段
+    var _findmetadatavalue = function (dataarrdata, mname) {
+        if (!dataarrdata.metadata || !dataarrdata.metadata.length > 0) {
+            return "";
+        }
+        for (var i = 0; i < dataarrdata.metadata.length; i++) {
+            if (!dataarrdata.metadata[i].name) {
+                continue;
+            }
+            if (dataarrdata.metadata[i].name == mname) {
+                return dataarrdata.metadata[i].value;
+            }
+        }
+        return "";
+    }
+    //单条数据relations取值,dataarrdata 单条数据  mname:当前字段
+    var _findrelationsvalue = function (dataarrdata, mname) {
+        if (!dataarrdata.relations || !dataarrdata.relations.length > 0) {
+            return "";
+        }
+        for (var i = 0; i < dataarrdata.relations.length; i++) {
+            if (!dataarrdata.relations[i].scope) {
+                continue;
+            }
+            if (dataarrdata.relations[i].scope == mname) {
+                return dataarrdata.relations[i].url;
+            }
+        }
+        return "";
+    }
+
+    var getfilelistBydomon = function (datadatadata) {
+        var ahtml = "";
+        ahtml += "<div class='tit-des'>";
+        for (var j = 0; j < datadatadata.length; j++) {
+            var title = _findmetadatavalue(datadatadata[j], "TI");
+            var link = _findrelationsvalue(datadatadata[j], "ABSTRACT");
+            if (!title) {
+                continue;
+            }
+            if(link){
+                ahtml += "<a target='_blank' title='" + title + "' href='" + link + "'>" + title + "</a>";
+            }else{
+                ahtml += "<span title='" + title + "'>" + title + "</span>";
+            }
+
+        }
+        ahtml += "</div>";
+
+        return ahtml;
+    }
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    //研究起点
+    var corefilestart = function () {
+
+        var kurl = $("#apiHost").val()+"/citation-api/v1/literature/starter/domains"+ "?" + v;
+        var kdata = {
+            id: filename, //filename
+            size: 10,
+            start: 1
+        };
+        $.ajax({
+            url: kurl,
+            type: "GET",
+            /*data: JSON.stringify(kdata),*/
+            dataType: "json",
+            xhrFields: {//设置withCredentials 允许带Cookie
+                withCredentials: true
+            },
+            contentType: "application/json",
+            headers: getHearder(),
+            success: function (data) {
+                cri++;
+                if (data) {
+                    if (!nxgpdata_stucture_check_datalist(data)) {
+                        reDtd(cri,dtd);
+                        return "";
+                    }
+                    var datadatadata = data.data.data ? data.data.data : data.data;
+                    var lihtml = "";
+                    for (var i = 0; i < datadatadata.length; i++) {
+                        var title = datadatadata[i].item;
+                        if (!title || i >= 10) {
+                            continue;
+                        }
+                        lihtml += " <li class='tooltip'><a title='" + title + "' ackey='" + title + "' actype='1'><i class='dot dot'></i>" + title + "</a></li>";
+                    }
+                    if (lihtml) {
+                        $(".start-list").html(lihtml);
+                    }
+                }
+
+                reDtd(cri,dtd);
+            }
+        });
+
+    }
+    //控制变量 当为 研究来源 和研究分支  都没有数据 时  不展示核心文献推荐
+    var isNoShowCoreLiterature = 0;
+    //研究来源
+    var corefilesource = function () {
+
+        var kurl = $("#apiHost").val()+"/citation-api/v1/literature/source/domains" + "?" + v;
+        var kdata = {
+            id: filename, //filename
+            size: 10,
+            start: 1
+        };
+        $.ajax({
+            url: kurl,
+            type: "GET",
+            /*data: JSON.stringify(kdata),*/
+            dataType: "json",
+            xhrFields: {//设置withCredentials 允许带Cookie
+                withCredentials: true
+            },
+            contentType: "application/json",
+            headers: getHearder(),
+            success: function (data) {
+                cri ++ ;
+                if (data) {
+                    if (!nxgpdata_stucture_check_datalist(data)) {
+                        isNoShowCoreLiterature ++ ;
+                        if(isNoShowCoreLiterature == 2){
+                            coreLiteraturesNoData();
+                        }
+                        reDtd(cri,dtd);
+                        return "";
+                    }
+                    $("#corefilerecTemp").show();
+                    var datadatadata = data.data.data ? data.data.data : data.data;
+                    coreLiteraturesShow();
+                    var lihtml = "";
+                    for (var i = 0; i < datadatadata.length; i++) {
+                        var title = datadatadata[i].item;
+                        if (!title || i >= 10) {
+                            continue;
+                        }
+                        lihtml += " <li class='tooltip'><a title='" + title + "' ackey='" + title + "' actype='2'><i class='dot dot'></i>" + title + "</a></li>";
+                    }
+                    if (lihtml) {
+                        $(".source-list").html(lihtml);
+                    }
+
+                }else{
+                    isNoShowCoreLiterature ++ ;
+                    if(isNoShowCoreLiterature == 2){
+                        coreLiteraturesNoData();
+                    }
+                }
+                reDtd(cri,dtd);
+
+            }
+        });
+
+    }
+    //研究分支
+    var corefilebranch = function () {
+
+        var kurl = $("#apiHost").val()+"/citation-api/v1/literature/branch/domains" + "?" + v;
+        var kdata = {
+            id: filename, //filename
+            size: 10,
+            start: 1
+        };
+        $.ajax({
+            url: kurl,
+            type: "GET",
+            /*data: JSON.stringify(kdata),*/
+            dataType: "json",
+            xhrFields: {//设置withCredentials 允许带Cookie
+                withCredentials: true
+            },
+            contentType: "application/json",
+            headers: getHearder(),
+            success: function (data) {
+                cri ++;
+                if (data) {
+                    if (!nxgpdata_stucture_check_datalist(data)) {
+                        isNoShowCoreLiterature ++ ;
+                        if(isNoShowCoreLiterature == 2){
+                            coreLiteraturesNoData();
+                        }
+                        reDtd(cri,dtd);
+                        return "";
+                    }
+                    $("#corefilerecTemp").show();
+                    var datadatadata = data.data.data ? data.data.data : data.data;
+                    coreLiteraturesShow();
+                    var lihtml = "";
+                    for (var i = 0; i < datadatadata.length; i++) {
+                        var title = datadatadata[i].item;
+                        if (!title || i >= 10) {
+                            continue;
+                        }
+                        lihtml += " <li class='tooltip'><a title='" + title + "' ackey='" + title + "' actype='3'><i class='dot dot'></i>" + title + "</a></li>";
+                    }
+                    if (lihtml) {
+                        $(".branch-list").html(lihtml);
+                    }
+                }else{
+                    isNoShowCoreLiterature ++ ;
+                    if(isNoShowCoreLiterature == 2){
+                        coreLiteraturesNoData();
+                    }
+                }
+                reDtd(cri,dtd);
+            }
+        });
+
+    }
+    //研究去脉
+    var corefileboost = function (){
+        var kurl = $("#apiHost").val()+"/citation-api/v1/literature/boost/domains" + "?" + v;
+        var kdata = {
+            id: filename, //filename
+            size: 10,
+            start: 1
+        };
+
+        $.ajax({
+            url: kurl,
+            type: "GET",
+            /*data: JSON.stringify(kdata),*/
+            dataType: "json",
+            xhrFields: {//设置withCredentials 允许带Cookie
+                withCredentials: true
+            },
+            contentType: "application/json",
+            headers: getHearder(),
+            success: function (data) {
+                cri ++;
+                if (data) {
+                    if (!nxgpdata_stucture_check_datalist(data)) {
+                        reDtd(cri,dtd);
+                        return "";
+                    }
+                    var datadatadata = data.data.data ? data.data.data : data.data;
+                    var lihtml = "";
+                    for (var i = 0; i < datadatadata.length; i++) {
+                        var title = datadatadata[i].item;
+                        if (!title || i >= 10) {
+                            continue;
+                        }
+                        lihtml += " <li class='tooltip'><a title='" + title + "' ackey='" + title + "' actype='4'><i class='dot dot'></i>" + title + "</a></li>";
+                    }
+                    if (lihtml) {
+                        $(".go-list").html(lihtml);
+                    }
+                }
+                reDtd(cri,dtd);
+
+
+            },
+            error: function () {
+                cri ++;
+                reDtd(cri,dtd);
+            }
+        });
+
+    }
+
+    var reDtd = function(cri,dtd){
+        if(cri == 4 && dtd){
+            setTimeout(function (){
+                dtd.resolve();
+            },0)
+        }
+    }
+
+    //节点文献
+    var corefilecenter = function () {
+        var nvsmkws = $("#params-nvsmkeywors").val();
+        if (!nvsmkws) {
+            return;
+        }
+        nvsmkws = nvsmkws.trim(';');
+        var kwsArr = nvsmkws.split(';');
+        var kwlength = kwsArr.length;
+        if (kwlength <= 0) {
+            return;
+        }
+        if (kwlength > 10) {
+            kwlength = 10;
+        }
+        var cnterhtml = "";
+        cnterhtml += "<div class='node-wx node-wx-" + kwlength+"'>";
+        cnterhtml += "<a class='node-center'>节点文献</a>";
+        for(var i = 0; i < kwlength; i++)
+        {
+            if (i >= 10) {
+                break;
+            }
+            var tempid = i + 1;
+            var tempkw = kwsArr[i];
+            if(tempkw){
+                cnterhtml += " <a class='list-item item-" + tempid + "' title='" + tempkw + "'>" + tempkw+"</a>";
+            }
+        }
+        $("#div-researchNode").html(cnterhtml);
+    }
+
+    var getrefnetfiles = function (vkw,vtype,o) {
+
+        if (!vkw || !o) {
+            return ;
+        }
+        var vpath = "";
+        if (vtype == "1") {
+            vpath = "second-references";
+        }
+        if (vtype == "2") {
+            vpath = "references";
+        }
+        if (vtype == "3") {
+            vpath = "citations";
+        }
+        if (vtype == "4") {
+            vpath = "second-citations";
+        }
+        if (!vpath) {
+            return ;
+        }
+
+        /*var apipath = $("#apiHost").val()+"/citation-api/v1/literature/" + vpath + wgpart;*/
+        var apipath = $("#apiHost").val()+"/citation-api/v1/literature/" + vpath + "?" + v +"&type=ALLREF&start=1&size=10&domain="+vkw;
+        var kdata = {
+            domain: vkw,
+            id: filename, //filename
+            type:"CJFDREF",
+            size: 10,
+            start: 1,
+            year: -1
+        };
+        $.ajax({
+            url: apipath,
+            type: "GET",
+            /*data: JSON.stringify(kdata),*/
+            dataType: "json",
+            xhrFields: {//设置withCredentials 允许带Cookie
+                withCredentials: true
+            },
+            contentType: "application/json",
+            headers: getHearder(),
+            success: function (data) {
+                if (data) {
+                    if (!nxgpdata_stucture_check_datalist(data)) {
+                        return ;
+                    }
+                    var datadatadata = data.data.data;
+                    $(o).append(getfilelistBydomon(datadatadata));
+                }
+            }
+        });
+    }
+    corefilestart();
+    corefilesource();
+    corefilebranch();
+    corefileboost();
+    corefilecenter();
+
+
+    var controlHtmlShow=function (){
+
+        var titlediv=div+"-title";
+
+        $("#tab-recommend-navi").show();
+
+        $("#"+titlediv).show();
+        $("#"+titlediv).addClass('active').siblings().removeClass('active');
+        $("#kcms-data-catalog").hide();
+        /*$("#kcms-data-fileimages").hide();*/
+    }
+
+    controlHtmlShow();
+
+    setTimeout(function () {
+        $("#corefilerecTemp .tooltip").each(function () {
+            hoverDelayRef($(this), $(this).find("a").attr("actype"), $(this).find("a").attr("ackey"));
+        })}, 2000);
+}
+//请求引文数据 t：引文类型，div：展示位置
+//reftype:references  citations  second-references second-citations  co-references co-citations
+function getrefdata(reftype,filetype,filename,pageno,div,dtd,isTrunPage,isTab,captchId) {
+    var kclientId = $("#citation-api-clientId").val();
+    var kvv = $("#citation-api-vv").val();
+    var wgpart = "?vv=" + kvv + "&clientId=" + kclientId;
+    if (!reftype || !filename) {
+        return "";
+    }
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    if(!isTrunPage){
+        $lazyLoadObj.Data.loadRefIndexObj[reftype] ++ ;
+    }
+    var citiationurl = $("#apiHost").val()+"/citation-api/v1/literature/" + reftype;
+    /*var kurl = citiationurl + wgpart;*/
+    var start = (pageno-1)*10+1;
+    var paramCaptchId= "";
+    if(captchId){
+        paramCaptchId = "&captchaId="+captchId
+    }
+    var kurl = citiationurl + "?" + v +"&type="+filetype +"&start="+start+"&size=10"+paramCaptchId;
+    var kdata = {
+        id: filename,
+        type: filetype,
+        size: 10,
+        start: (pageno-1)*10+1,
+        domain: "",
+        year:-1  //todo 引文API 参数 校验需要修改
+    };
+    var ajaxType = "GET";
+    var data = "";
+    var url = window.location.href;
+    if(url.indexOf("quoted/detail")> -1 || url.indexOf("quoted/detail")> -1){
+        ajaxType = "POST";
+        data = JSON.stringify(kdata);
+        kurl = citiationurl + wgpart;
+    }
+    $.ajax({
+        url: kurl,
+        type: ajaxType,
+        data: data,
+        dataType: "json",
+        xhrFields: {//设置withCredentials 允许带Cookie
+            withCredentials: true
+        },
+        contentType: "application/json",
+        headers: getHearder(),
+        timeout: 3000,
+        success: function (data) {
+            if (isTab == 1) {
+                $lazyLoadObj.Funcs.tabCallback()
+            }
+            if($lazyLoadObj.Data.loadRefIndexObj[reftype] === 12){
+                $('#div-literatureRef >div[data-id='+reftype+']').find(".article-loading").remove();
+            }
+            if (data && data.code == 0 && data.data && data.data.size > 0) {
+                var titlehtml = nxgpdata_stucture_analysis_titlepart(data,filetype);
+                var ulhtml = nxgpdata_stucture_analysis_urpart(data,filetype);
+                var pagenumberhtml = nxgpdata_stucture_analysis_pagetools(data, reftype, filename, pageno, div,filetype);
+                $("#" + div).show();
+                $("#" + div).addClass("essayBox");
+                $("#" + div).html(titlehtml + ulhtml + pagenumberhtml);
+                if($(".cokd-refpart").length > 0){
+                    $(".cokd-refpart").show();
+                    if(reftype == "citations"){
+                        $("#quoted-citations").show();
+                    }else{
+                        $("#quoted-secondcitations").show();
+                    }
+
+                }
+
+            }
+            if(dtd){
+                dtd.resolve();
+            }
+
+        },
+        error: function (XMLHttpRequest, textStatus, errorThrown) {
+            /*try {
+                if (XMLHttpRequest.status==403 && (objErrorMsg.code ==-403 || objErrorMsg.code==-1)) {
+                    sliderInstance = verification({
+                        container: '#slider-container',
+                        captchaChooseType: 'clickWord', //blockPuzzle, clickWord两种形式
+                        ident: 'bc397c', // 注册的项目id
+                        captchaQuoteType: '', // hasbg：有背景，可用作整个项目限制； 默认为空是遮罩弹层
+                        env: 'beta', // 使用的环境接口： dev:nxgp ci:nxgp prod:kns beta: beta, 默认为kns
+                        onSuccess: (param) => { //传出captchaId, 本次验证码的id
+                            that.filling(opts);
+                            typeof opts.callback === 'function' && opts.callback(that);
+                            var captchaId = param.captchaId;
+                            getrefdata(reftype,filetype,filename,pageno,div,dtd,isTrunPage,isTab,captchaId);
+                            // 处理成功逻辑
+                            // 销毁验证码
+                            sliderInstance.destroy();
+                            sliderInstance = null;
+                        },
+                        onClose: () => {
+                            console.log('关闭验证码');
+                            sliderInstance.destroy();
+                            sliderInstance = null;
+                        },
+                        onFail: () => {
+                            alert('验证失败，请重新验证');
+                            console.log('验证失败，执行错误事件');
+                        },
+                    });
+                }
+            } catch (e) {
+            }*/
+            if($lazyLoadObj.Data.loadRefIndexObj[reftype] === 12){
+                $('#div-literatureRef >div[data-id='+reftype+']').find(".article-loading").remove();
+            }
+            if(dtd){
+                dtd.resolve();
+            }
+        }
+    });
+
+}
+//引文数字区域部分
+function getRefCountHtml(filename,div,dtd,isTab) {
+   /* var kclientId = $("#citation-api-clientId").val();
+    var kvv = $("#citation-api-vv").val();
+    var wgpart = "?vv=" + kvv + "&clientId=" + kclientId;*/
+    if (!filename) {
+        return "";
+    }
+    var v = $("#paramkcmslink").val()  ? $("#paramkcmslink").val() : "v=" + getKcmsUrlParam("v");
+    /*var kurl = $("#apiHost").val()+"/citation-api/v1/literature/quotations/metrics" + wgpart;*/
+    var kurl = $("#apiHost").val()+"/citation-api/v1/literature/quotations/metrics" + "?" +v;
+    var kdata = {
+        id: filename,
+        size: 10,
+        start: 1
+    };
+
+    //引文数字区域HTML结构
+    /*var refCountHtml = function () {
+        var refcountHtml = "<div id='div-nodeCount'>";
+        refcountHtml += "<div class='map'>";
+        refcountHtml += "<div class='jdwx'>"+message["node-literatures"]+"</div>";
+        refcountHtml += "<div class='gywx'><a  id='coreferences' data-id='co-references' onclick='changerefdata(this)' name='rl' title='"+message["co-references-describe"]+"'>"+message["co-references"]+"</a><span id='rc5'>({coreferencescount})</span></div>";
+        refcountHtml += "<div class='tbywx'><a  id='cocitations' data-id='co-citations' onclick='changerefdata(this)' name='rl' title='"+message["co-citations-describe"]+"'>"+message["co-citations"]+"</a><span id='rc6'>({cocitationscount})</span></div>";
+        refcountHtml += "<div class='rjckwx'><a  id='secondreferences' data-id='second-references'  onclick='changerefdata(this)' name='rl' title='"+message["second-references-describe"]+"'>"+message["second-references"]+"</a><span id='rc2'>({secondreferencescount})</span></div>";
+        refcountHtml += "<div class='ckwx'><a  id='references' data-id='references'  class='ReferLinkOn' onclick='changerefdata(this)' name='rl' title='"+message["references-describe"]+"'>"+message["references"]+"</a><span id='rc1'>({referencescount})</span></div>";
+        refcountHtml += "<div class='yzwx'><a  id='citations' data-id='citations' onclick='changerefdata(this)' name='rl' title='"+message["citations-describe"]+"'>"+message["citations"]+"</a><span id='rc3'>({citationscount})</span></div>";
+        refcountHtml += "<div class='rjyzwx'><a id='secondcitations' data-id='second-citations' onclick='changerefdata(this)' name='rl' title='"+message["second-citations-describe"]+"'>"+message["second-citations"]+"</a><span id='rc4'>({secondcitationscount})</span></div>";
+        refcountHtml += "</div></div>";
+
+        return refcountHtml;
+    }*/
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        /*data: JSON.stringify(kdata),*/
+        dataType: "json",
+        xhrFields: {//设置withCredentials 允许带Cookie
+            withCredentials: true
+        },
+        contentType: "application/json",
+        headers: getHearder(),
+        success: function (data) {
+            if (data && data.data) {
+                if (isTab == 1) {
+                    $lazyLoadObj.Funcs.tabCallback()
+                }
+                var references = getreccountdata(data.data, "references");
+                var citations = getreccountdata(data.data, "citations");
+                var secondreferences = getreccountdata(data.data, "second-references");
+                var secondcitations = getreccountdata(data.data, "second-citations");
+                var coreferences = getreccountdata(data.data, "co-references");
+                var cocitations = getreccountdata(data.data, "co-citations");
+                if (references != "0" || citations != "0") {
+                    getRefTypeData("quoted-references", "references", filename);
+                    $("#rc1").html("(" + references +")");
+                    $("#rc3").html("(" + citations +")")
+                    $("#rc2").html("(" + secondreferences +")")
+                    $("#rc4").html("(" + secondcitations +")")
+                    $("#rc5").html("(" + coreferences +")")
+                    $("#rc6").html("(" + cocitations +")")
+                    $("#" + div +" #div-nodeCount").show();
+
+                    //引文文献有值时加载该js，翻页时显示滑块验证
+                    /*var basePath = $(".resource-url").val();
+                    var captchaUrl= basePath + "plugins/verify/m/js/slider.js";
+                    loadScript(captchaUrl);
+
+                    var cssUrl = basePath + "plugins/verify/m/css/slider.css";
+                    loadCSS(cssUrl);
+                    var captchaDiv="<div class='citation-mask-shade' style='display: none'></div><div class='citation-turnpage' style='display: none;user-select: none'>" +
+                        "        <div class='verify-title'>" +
+                        "            <p><span class=\"title-icon slider-sprite\"></span>请完成安全验证，或<a onclick='userClick()' style='color: #004ed9'>登录个人账号</a>后查看</p>" +
+                        "            <span class='verify-close slider-sprite' onclick='verifyClose()'></span>" +
+                        "        </div>" +
+                        "        <div id='canvas_wrap'></div>" +
+                        "    </div>";
+                    $('#div-literatureRef').append(captchaDiv);*/
+                }
+                //参考频次和被引配词都为0 咋不展示 核心推荐模块和 引文网络模块
+                if(references == "0" && citations == "0"){
+                    nodeCountNoData();
+                }
+            }
+            else {
+                nodeCountNoData();
+                $("#" + div).html("");
+            }
+            if(dtd){
+                dtd.resolve();
+                if(!$lazyLoadObj.Data.lazyLoadArr[$lazyLoadObj.Data.lazyLoadArr.length - 1].isShow){
+                    $lazyLoadObj.Data.lazyLoadArr[$lazyLoadObj.Data.lazyLoadArr.length - 1].isShow = true;
+                    $("#literature-recommend").addClass("dis-show").removeClass("dis-none");
+                }
+            }
+        },
+        error: function () {
+            if (isTab == 1) {
+                $lazyLoadObj.Funcs.tabCallback()
+            }
+            if(dtd){
+                dtd.resolve();
+                if(!$lazyLoadObj.Data.lazyLoadArr[$lazyLoadObj.Data.lazyLoadArr.length - 1].isShow){
+                    $lazyLoadObj.Data.lazyLoadArr[$lazyLoadObj.Data.lazyLoadArr.length - 1].isShow = true;
+                    $("#literature-recommend").addClass("dis-show").removeClass("dis-none");
+                }
+            }
+        }
+    });
+    var getreccountdata = function (datadata, id) {
+        if (!datadata || !id) {
+            return "0";
+        }
+        for (var i = 0; i < datadata.length; i++) {
+            if (!datadata[i].name) {
+                continue;
+            }
+            if (datadata[i].name == id) {
+                var tempvalue = datadata[i].value;
+                if (tempvalue) {
+                    return tempvalue;
+                }
+                else {
+                    return "0";
+                }
+            }
+        }
+        return "0";
+    }
+}
+
+//切换引文数字
+function changerefdata(obj) {
+    if (!obj) {
+        return;
+    }
+    var id = $(obj).attr("id");
+    $lazyLoadObj.Data.refPartTabs = $(obj).attr("id");
+    if(!$lazyLoadObj.Data.flag){
+        window.addEventListener(
+            "scroll",
+            $lazyLoadObj.Funcs.throttleDebounce($lazyLoadObj.Funcs.scrollHandler, 300, 300)
+        );
+        window.addEventListener(
+            "resize",
+            $lazyLoadObj.Funcs.throttleDebounce($lazyLoadObj.Funcs.scrollHandler, 300, 300)
+        );
+        $lazyLoadObj.Data.flag = true;
+    }
+    $(".tpl_lieteratures ." + id).addClass("cur");
+    $(".tpl_lieteratures ." + id).siblings("li").removeClass("cur");
+    var setCurClass = function (id) {
+        $("#coreferences").removeClass("ReferLinkOn");
+        $("#cocitations").removeClass("ReferLinkOn");
+        $("#secondreferences").removeClass("ReferLinkOn");
+        $("#references").removeClass("ReferLinkOn");
+        $("#citations").removeClass("ReferLinkOn");
+        $("#secondcitations").removeClass("ReferLinkOn");
+        $("#" + id).addClass("ReferLinkOn");
+    }
+
+
+    var preftypeid = $(obj).attr("data-id");
+    var pfilename = $("#paramfilename").val();
+    var divname = "quoted-" + id;
+    setCurClass(id);
+    if($(obj).next("span").text().trim() != "(0)"){
+        getRefTypeData(divname, preftypeid, pfilename);
+    }else{
+        $("#quoted-references").hide();
+        $("#quoted-citations").hide();
+        $("#quoted-coreferences").hide();
+        $("#quoted-cocitations").hide();
+        $("#quoted-secondreferences").hide();
+        $("#quoted-secondcitations").hide();
+    }
+
+}
+//获取引文数据部分
+function getRefTypeData(div, reftype, filename,pagesource) {
+    if (!div || !reftype || !filename) {
+        return "";
+    }
+    var setCurDivShow = function (div) {
+        $("#quoted-references").hide();
+        $("#quoted-citations").hide();
+        $("#quoted-coreferences").hide();
+        $("#quoted-cocitations").hide();
+        $("#quoted-secondreferences").hide();
+        $("#quoted-secondcitations").hide();
+        $("#" + div).show();
+    }
+
+    //reftype:references
+    var writeDataDiv = function (reftype) {
+        if (!reftype) {
+            return "";
+        }
+        var commonpart = "nxgp-kcms-data-ref-" + reftype;
+        var html = "<div id='" + commonpart+"-journal' class='quotation-journal' style='display: none' type='CJFDREF'></div>";
+        html += "<div id='" + commonpart +"-dissertation-d' class='quotation-dissertation-d' style='display: none' type='CDFDREF'></div>";
+        html += "<div id='" + commonpart +"-dissertation-m' class='quotation-dissertation-m' style='display: none' type='CMFDREF'></div>";
+        html += "<div id='" + commonpart +"-conference-c' class='quotation-conference-c' style='display: none' type='CPFDREF'></div>";
+        html += "<div id='" + commonpart +"-conference-i' class='quotation-conference-i' style='display: none' type='IPFDREF'></div>";
+        html += "<div id='" + commonpart +"-yearbook' class='quotation-yearbook' style='display: none' type='CYFDREF'></div>";
+        html += "<div id='" + commonpart +"-newpaper' class='quotation-newpaper' style='display: none' type='CCNDREF'></div>";
+        html += "<div id='" + commonpart +"-journal-w' class='quotation-journal-w' style='display: none' type='WWJDREF'></div>";
+        html += "<div id='" + commonpart +"-book' class='quotation-book' style='display: none' type='CBBDREF'></div>";
+        html += "<div id='" + commonpart +"-patent' class='quotation-patent' style='display: none' type='SCPDREF'></div>";
+        html += "<div id='" + commonpart +"-stand' class='quotation-stand' style='display: none' type='SCSDREF'></div>";
+        html += "<div id='" + commonpart + "-crldeng' class='quotation-crldeng' style='display: none' type='NLNKREF'></div>";
+        if(!pagesource){//引证文献页面过来不要loading
+            var piccachelink = $("#piccachelink").val();
+            html += "<div class='article-loading' id='tab-content-loading'><img src='"+piccachelink+"images/basic/loading.gif'></div>";
+        }
+        return html;
+    }
+    var writeDataRequest = function (reftype,filename) {
+        var commonpart = "nxgp-kcms-data-ref-" + reftype;
+        if(pagesource == "CITATION_PAGE" || pagesource == "COKD_CITATION_PART"){//引证文献页面过来直接走请求加载
+            getrefdata(reftype, "CJFDREF", filename, 1, commonpart +"-journal",null,false);
+            getrefdata(reftype, "CDFDREF", filename, 1, commonpart +"-dissertation-d",null,false);
+            getrefdata(reftype, "CMFDREF", filename, 1, commonpart +"-dissertation-m",null,false);
+            getrefdata(reftype, "CPFDREF", filename, 1, commonpart +"-conference-c",null,false);
+            getrefdata(reftype, "IPFDREF", filename, 1, commonpart +"-conference-i",null,false);
+            getrefdata(reftype, "CCNDREF", filename, 1, commonpart +"-newpaper",null,false);
+            getrefdata(reftype, "CYFDREF", filename, 1, commonpart +"-yearbook",null,false);
+            getrefdata(reftype, "CBBDREF", filename, 1, commonpart +"-book",null,false);
+            getrefdata(reftype, "WWJDREF", filename, 1, commonpart +"-journal-w",null,false);
+            getrefdata(reftype, "SCSDREF", filename, 1, commonpart +"-standard",null,false);
+            getrefdata(reftype, "SCPDREF", filename, 1, commonpart +"-patent",null,false);
+            getrefdata(reftype, "NLNKREF", filename, 1, commonpart +"-crldeng",null,false);
+        }
+
+    }
+    if(pagesource && pagesource == "COKD_CITATION_PART"){
+        $("#" + div).append(writeDataDiv(reftype));
+        writeDataRequest(reftype, filename);
+    }else{
+        if ($("#" + div).text().length > 0) {
+            setCurDivShow(div);
+        }else {
+            $("#" + div).html(writeDataDiv(reftype));
+            writeDataRequest(reftype, filename);
+            setCurDivShow(div);
+        }
+    }
+
+
+    /*-----------这里加要定义的数据*/
+    // 如果是当前页签且值的length为0 再定义，长度不为0时候要放到这里面refPartCheckArr，然后再追加一条相关推荐
+    refPartCheckArr1=[];
+    for(var r = 0; r < $lazyLoadObj.Data.refPartTabArrs.length; r++){
+        if(reftype === $lazyLoadObj.Data.refPartTabArrs[r].type){
+            if($lazyLoadObj.Data.refPartTabArrs[r].data.length == 0){
+                for (var i = 0; i < $("#" + div + ">div").length; i++) {
+                    var paramType = $($("#" + div + ">div")[i]).attr("type");
+                    if(paramType){
+                        var refTtems = {
+                            id:$("#" + div + ">div").eq(i).attr('id'),
+                            isRequest: false,
+                            fun: "getrefdata",
+                            isShow: i == 0 ? true : false,
+                            param: "'" + reftype + "', '"+paramType+"', '"+filename+"', 1, '"+$("#" + div + ">div").eq(i).attr('id')+"'"
+                        }
+                        $lazyLoadObj.Data.refPartTabArrs[r].data.push(refTtems);
+                    }
+                }
+                if($("#isLazyLoadBook").length == 0){
+                    for(var j=($lazyLoadObj.Data.lazyLoadArr.length-1);j<$lazyLoadObj.Data.lazyLoadArr.length;j--){
+                        if($lazyLoadObj.Data.lazyLoadArr[j].id === 'literature-recommend'){
+                            $lazyLoadObj.Data.refPartTabArrs[r].data.push($lazyLoadObj.Data.lazyLoadArr[j])
+                            break;
+                        }
+                    }
+                }
+
+            }else{
+                // 已有数组
+                for(var t=0; t < $lazyLoadObj.Data.refPartTabArrs[r].data.length; t++){
+                    if($lazyLoadObj.Data.refPartTabArrs[r].data[t].isRequest){
+                        refPartCheckArr1.push($lazyLoadObj.Data.refPartTabArrs[r].data[t])
+                    }
+                }
+            }
+            $lazyLoadObj.Data.refPartCheckArr = $lazyLoadObj.Data.refPartTabArrs[r].data;
+            $lazyLoadObj.Funcs.scrollHandler();
+            break;
+        }
+    }
+    /*-----------*/
+}
+
+function changeRefTypeTag(obj) {
+    if(!obj)
+    {
+        return;
+    }
+    $(obj).siblings().removeClass("cur").addClass("cur");
+    var dataid = $(obj).attr("data-id");
+    $("#"+dataid).click();
+}
+
+function getBookPrice(){
+    var pfilename = $("#paramfilename").val();
+    if(!pfilename){
+        return;
+    }
+    var vv = $("#citation-api-vv").val();
+    var clientId = $("#citation-api-clientId").val();
+    var url = $("#bookprice-url").val();
+    url = url + "?vv=" + vv+"&clientId="+clientId;
+    var kdata = {
+        fn: pfilename
+    };
+    var language = getCookie("language");
+    if(!language || (language.toLowerCase() != "chs"
+        && language.toLowerCase() != "tc"
+        && language.toLowerCase() != "en")){
+        language = "CHS";
+    }
+    var headerJson = {
+        'unitoken': '',
+        'uniplatform': "XKSG",
+        'language': language
+    };
+    $.ajax({
+        url: url,
+        type: "POST",
+        data: JSON.stringify(kdata),
+        dataType: "json",
+        xhrFields: {//设置withCredentials 允许带Cookie
+            withCredentials: true
+        },
+        contentType: "application/json",
+        headers:headerJson,
+        success: function (data) {
+            if (data && data.code ===0 &&data.data){
+                $("#cxPrice").html(`￥${data.data[0].Price}`);
+                $("#djPrice").html(`￥${data.data[0].OriginalPrice}`);
+                $("#bookPrice").show();
+            }
+        },
+        error: function () {
+        }
+    });
+}
+function getRecommendBook(){
+    var v = $("#paramkcmslink").val();
+    if(!v){
+        return;
+    }
+    var url = "../book/recommend?{0}";
+    url = url.format(v);
+    $.get(url, function (data) {
+        let html = '';
+        if (data) {
+            data.forEach(book=>{
+                var abstract = "";
+                var imgUrl = "";
+                var title  = "";
+                var author  = "";
+                if (book.metadata){
+                    book.metadata.forEach(meta=>{
+                        for (const meta of book.metadata) {
+                            switch (meta.name) {
+                                case "FN":
+                                    imgUrl = `https://bookfile.cnki.net/bookfiles/images/big/${meta.value}/${meta.value}.jpg`;
+                                    break;
+                                case "TI":
+                                    title = meta.value;
+                                    break;
+                                case "AU":
+                                    author = meta.value;
+                                    break;
+                            }
+                        }
+                    })
+                }
+                if (book.relations){
+                    book.relations.forEach(rel=>{
+                        if ("ABSTRACT" === rel.scope){
+                            abstract = rel.url;
+                        }
+                    })
+                }
+                if (abstract && imgUrl){
+                    html += `<div class="book">
+                         <a href="${abstract}" target="_blank">
+                         <div class="img_box"><img src="${imgUrl}" alt="$ti}">
+                         </div>
+                         <br>
+                         <p class="book-title" title="${title}">${title}</p>
+                         </a>
+                         <p class="au-title" title="${author}">${author}</p></div>`;
+                }
+            })
+            if (html){
+                $("#list-book").html(html);
+                $("#recommend-book").show();
+            }
+        }
+    });
+}
+
+function coreLiteraturesShow(){
+    //核心文献标题所在div展示、核心文献标题展示、核心文献内容展示、核心文献标题选中
+    $(".tab-recommend-navi").show();
+    $("#kcms-data-quoted-corefirerecomend-title").show();
+    $("#kcms-data-quoted-corefirerecomend").show();
+    $("#kcms-data-quoted-corefirerecomend-title").addClass("active");
+}
+
+function coreLiteraturesNoData (){
+    if($("#kcms-data-quoted-corefirerecomend").length>0){
+        $("#kcms-data-quoted-corefirerecomend").removeClass("dis-show").addClass("dis-none");
+    }
+    if($(".tab-recommend-navi").length>0){
+        var s = $("#coreLiteratureFlag").val();
+        s= parseInt(s)+1;
+        $("#coreLiteratureFlag").val(s);
+        //核心文献没内容,目录有值,优先展示目录且标题选中
+        if($("#coreLiteratureFlag").val() == "2" && $(".catalog-list").length > 0){
+            $("#kcms-data-quoted-corefirerecomend-title").addClass("active");
+            $("#quoted-corefirerecomend").show();
+        }else if($("#coreLiteratureFlag").val() == "2" && $(".catalog-list").length == 0 && $("#kcms-data-fileimages").text()!=''){
+            //核心文献没内容,目录没内容值,文内图片有内容,则展示文内图片且选中
+            $("#kcms-data-fileimages-title").addClass("active");
+            $("#kcms-data-fileimages").show();
+        }
+    }
+}
+
+
+function nodeCountNoData (){
+    $("#kcms-data-quoted-corefirerecomend").hide();
+    $("#refpartdiv").removeClass("dis-show").addClass("dis-none")
+
+    if($("#kcms-data-quoted-corefirerecomend-title").length>0){
+        $("#kcms-data-quoted-corefirerecomend-title").hide();
+        $("#kcms-data-quoted-corefirerecomend").hide();
+        if($(".catalog-list").length > 0) {
+            $("#kcms-data-catalog-title").addClass("active");
+            $("#kcms-data-catalog").show();
+        }
+        if(($("#kcms-data-fileimages-title").length  < 1 ||  $("#kcms-data-fileimages-title").css("display")=="none")  &&
+            $("#kcms-data-catalog-title").length < 1 ||  $("#kcms-data-catalog-title").css("display")=="none"){
+            $(".tab-recommend-navi").hide();
+        }
+    }
+}
+
+
+// 动态加载 JS 文件
+function loadScript(url, callback) {
+    // 如果已经加载过，直接执行回调
+    if (isScriptLoaded(url)) {
+        if (callback) callback();
+        return;
+    }
+
+    // 创建 script 标签
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = url;
+
+    // 加载完成后执行回调函数
+    if (callback) {
+        script.onload = callback;
+    }
+
+    // 将 script 标签添加到页面中
+    document.head.appendChild(script);
+}
+
+// 判断 JS 文件是否已加载
+function isScriptLoaded(src) {
+    return $('script[src="' + src + '"]').length > 0;
+}
+
+
+// 判断 CSS 文件是否已加载
+function isCSSLoaded(url) {
+    return $('link[href="' + url + '"]').length > 0;
+}
+
+// 动态加载 CSS 文件
+function loadCSS(url) {
+    // 如果已经加载过，直接返回
+    if (isCSSLoaded(url)) {
+        return;
+    }
+    // 创建 link 标签
+    var link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.type = 'text/css';
+    link.href = url;
+
+    // 将 link 标签添加到 head 中
+    document.head.appendChild(link);
+}
+
+function userClick(){
+    $(".citation-turnpage").hide();
+    $(".citation-mask-shade").hide();
+    sliderInstance.destroy();
+    sliderInstance = null;
+    //阻止向上触发事件
+    event.stopPropagation();
+    if ($(".ecp_personalLoginBox").is(":hidden")) {
+        $(".ecp_header_personal_loginbg").trigger('click');
+    }
+}
+function verifyClose(){
+    $(".citation-turnpage").hide();
+    $(".citation-mask-shade").hide();
+}
+
+
+function initCNKIAiToolSiler(platform, dbcode, resource, filename, title,searchId){
+    var mimetype = "PDF";
+    var fileType = "[[${metaDataMap.get('FTP')}]]";
+    if(fileType && fileType.indexOf("XML") > -1){
+        mimetype = "XML";
+    }
+    var url = window.location.href;
+    url = encodeURIComponent(url);
+
+    chatAI({
+        container: "#ai_toolbar",
+        platform: platform,
+        product: dbcode,
+        type: resource,
+        fileName: filename,
+        cid: searchId,
+        hasPermission: true,
+        title: title,
+        mimetype: mimetype,
+        returnurl: url,
+        hasClear: false,
+        height: "80vh",
+    });
+}
+
+//AI问题
+function aiQuestion(){
+
+    var title  = $(".wx-tit h1").clone().find('span').remove().end().text().trim();
+    var abstarct = $("#abstract_text").length >0 ? $("#abstract_text").val().trim() : $(".abstract-text").text().trim();
+    if(!abstarct){
+        abstarct = title;
+    }
+    var keywords = $(".keywords").length >0 ? $(".keywords").text().trim():title;
+    var id = $("#export-id").val();
+    var type="PDF";
+    var fileType =$("#filetype").length >0 ? $("#filetype").val():"";
+    if(fileType && fileType.indexOf("XML") > -1){
+        type = "XML";
+    }
+
+    var apiHost =  $("#apiHost").val()
+    if(apiHost.indexOf("/restapi")>0){
+        apiHost = apiHost.replace("/restapi","/uniapps");
+    }else{
+        apiHost = apiHost+"/uniapps";
+    }
+    var url = apiHost + "/aggr/v1/question/single";
+    var data = {
+        title: title,
+        content: abstarct,
+        keywords: keywords,
+        id:id,
+        type:type
+    };
+    var piccachelink = $("#piccachelink").val();
+    if(keywords && abstarct){
+        $.ajax({
+            url: url,
+            type: "POST",
+            contentType: 'application/json',
+            data: JSON.stringify(data),
+            success: function (data) {
+                if(data.code === 0 && data.data && data.data.length > 0){
+                    var ul="<ul class=\"ai-ask-question\">";
+                    var length = data.data.length;
+                    if(length > 4){
+                        length = 4;
+                    }
+                    for (var i = 0; i < length; i++) {
+                        var calssName="";
+                        if(i==3){
+                            calssName="fixed-ai-ask";
+                        }
+                        ul +=  "<li class='"+calssName+"'><div class=\"ai-ask-border\"></div>";
+                        ul += "<div class=\"ai-ask-item\">";
+                        var ti = data.data[i].question;
+                        var url = data.data[i].url;src='"+piccachelink+"images/basic/loading.gif'
+                        ul+="<a target='_blank' href='"+url+"'><div class=\"icon-ai-box\"><img src='"+piccachelink+"images/gb/kcms8/ndetail/icon-ai.png'></div><p class='text'>"+ti+" </p></a></li>";
+                    }
+                    ul+="</ul>";
+                    $(".ai-ask-content").html(ul);
+                }
+            },
+            error: function(xhr, status, error) {
+                $(".ai-ask-content").hide();
+            }
+        });
+    }else{
+        $(".side-content .content").hide();
+    }
+
+}
+
+
+
+//获取点赞状态
+function handelLike(document,type){
+    var apiHost =  $("#apiHost").val()
+    apiHost = handleUserApiUrl(apiHost);
+    var id = $("#export-id").val();
+    var wgpart = getVV();
+    var url = apiHost + "/usercenter-api/v1/like/"+type;
+    var data = {
+        id:id,
+    };
+    $.ajax({
+        url: url,
+        type: "POST",
+        xhrFields: {withCredentials: true},
+        data: JSON.stringify(data),
+        contentType: "application/json",
+        success: function (result) {
+            if(type.toLowerCase()=="check"){
+                if(result.code === 0 && result.data =="1"){
+                    document.addClass("active");
+                }else{
+                    document.removeClass("active");
+                }
+            }
+            /*if(result.code === 0 && result.data =="1" && type.toLowerCase()=="check"){
+                document.addClass("active")
+            }else if(result.code === 0 && result.data =="1" && type.toLowerCase()=="set"){
+                statisticsTotal("like");
+            }else{
+                document.removeClass("active");
+                statisticsTotal("like");
+            }*/
+        }
+    });
+}
+
+
+function getH5Qrcode(){
+    var fieId = $("#export-id").val();
+    var h5Url = "https://m.cnki.net/express/#/literatureDetailZh?fieId="+fieId;
+    var qrcodeUrl = "https://t.cnki.net/webapp/qrcode?source=KCMS&text="+encodeURIComponent(h5Url);
+
+    $(".newqrflag").attr("src", qrcodeUrl);
+}
+
+function statisticsTotal(type){
+    if (window.localStorage) {
+        window.localStorage.removeItem(type+"-num");
+    }
+    var apiHost =  $("#tHost").val()
+    var id = $("#export-id").val();
+    var uniplatform = getKcmsUrlParam("uniplatform");
+    if(!uniplatform || (uniplatform.toLowerCase() != "nzkpt"
+        && uniplatform.toLowerCase() != "chkd")){
+        uniplatform = "NZKPT";
+    }
+    var url = apiHost + "/ket-api/interaction/query?type="+type.toUpperCase()+"&articleId="+id+"&tenantId="+uniplatform;
+    $.ajax({
+        url: url,
+        type: "GET",
+        xhrFields: {withCredentials: false},
+        contentType: "application/json",
+        success: function (result) {
+            if(result.code === 0 && result.data){
+                var data = result.data;
+                if(data.total && parseInt(data.total)>0){
+                    var total = data.total;
+                    if(type.toLowerCase()=="share"){
+                        $(".stats-moudle .share").addClass('show');
+                    }
+                    total = formatNum(parseInt(total));
+                    localStorage.setItem(type+"-num", total);
+                    $("."+type+"-num").text(total);
+                }else{
+                    initLikeNum(type);
+                }
+            }else{
+                initLikeNum(type);
+            }
+        },
+        error: function() {
+            initLikeNum(type);
+        }
+    });
+}
+function initLikeNum(type){
+    if(type.toLowerCase()=="like"){
+        $(".like-num").text("");
+    }
+}
+
+function formatNum(num){
+    if (num > 10000) {
+        var wan = (parseInt(num) / 10000).toFixed(1);
+        // 移除末尾的 ".0"
+        return parseFloat(wan).toString()+"万";
+    }else{
+        return num;
+    }
+
+}

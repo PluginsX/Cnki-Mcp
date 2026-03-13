@@ -1,0 +1,1851 @@
+var Ecp_IsShowCheck = false;
+var Ecp_LoginStuts = "Ecp_LoginStuts";
+var Ecp_notFirstLogin = "Ecp_notFirstLogin";
+var b_AutoLogin;
+var b_newLogin = false;
+var Ecp_ResultR;
+var Ecp_IsLogin = false;
+var Ecp_CookieOtherDomain = "";
+var Ecp_LoginOpen = 0;
+var Ecp_LoginUsers = 0; //0null 1u 2p 3all
+var currentType;
+var aiNotOpenPosition = "";
+var ecp_iever = IEVersion();
+var ecpCheckCode;
+// 个人滑块
+// var Ecp_alysid = "";
+// var Ecp_alysig = "";
+// var Ecp_alytok = "";
+// 机构滑块
+// var Ecp_alysid1 = "";
+// var Ecp_alysig1 = "";
+// var Ecp_alytok1 = "";
+
+function Ecp_ShowMsg(msg, isReg) {
+  $(".ecp_loginErrMsg").text(msg).show();
+}
+
+function Ecp_ReGetImg() {
+  captcha.show();
+}
+
+// ie版本
+function IEVersion() {
+  var userAgent = navigator.userAgent; //取得浏览器的userAgent字符串
+  var isIE =
+    userAgent.indexOf("compatible") > -1 && userAgent.indexOf("MSIE") > -1; //判断是否IE<11浏览器
+  var isEdge = userAgent.indexOf("Edge") > -1 && !isIE; //判断是否IE的Edge浏览器
+  var isIE11 =
+    userAgent.indexOf("Trident") > -1 && userAgent.indexOf("rv:11.0") > -1;
+  if (isIE) {
+    var reIE = new RegExp("MSIE (\\d+\\.\\d+);");
+    reIE.test(userAgent);
+    var fIEVersion = parseFloat(RegExp["$1"]);
+    if (fIEVersion == 10) {
+      return 10;
+    } else if (fIEVersion == 9) {
+      return 9;
+    } else if (fIEVersion == 8) {
+      return 8;
+    } else if (fIEVersion == 7) {
+      return 7;
+    } else {
+      return 6; //IE版本<=7
+    }
+  } else if (isEdge) {
+    return 12; //edge
+  } else if (isIE11) {
+    return 11; //IE11
+  } else {
+    return -1; //不是ie浏览器
+  }
+}
+/* 
+	登录js函数
+*/
+
+function FlushLogin() {
+  $(".ecp_unitName").on("change", function () {
+    getAgreementVersions($(".ecp_unitName").val());
+  });
+  $(".ecp_userName").on("change", function () {
+    getAgreementVersions($(".ecp_userName").val());
+  });
+  var domain1 = document.domain;
+  if (
+    !domain1.toLowerCase().endWith("cnki.net") &&
+    !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(domain1)
+  ) {
+    var intd = domain1.indexOf("cnki.net");
+    if (intd > 0) {
+      Ecp_CookieOtherDomain = domain1.substr(intd);
+    } else {
+      Ecp_CookieOtherDomain = domain1.replace("www.", "");
+    }
+  }
+  Ecp_FlushLogin();
+}
+function removeCookieByError() {
+  cookie(Ecp_LoginStuts, "", {
+    expires: -1,
+    path: "/",
+    domain: Ecp_CookieDomain,
+  });
+  cookie("c_m_LinID", "", {
+    expires: -1,
+    path: "/",
+    domain: Ecp_CookieDomain,
+  });
+  cookie("LID", "", {
+    expires: -1,
+    path: "/",
+    domain: Ecp_CookieDomain,
+  });
+  if (Ecp_CookieOtherDomain.length > 0) {
+    cookie(Ecp_LoginStuts, "", {
+      expires: -1,
+      path: "/",
+      domain: Ecp_CookieOtherDomain,
+    });
+    cookie("c_m_LinID", "", {
+      expires: -1,
+      path: "/",
+      domain: Ecp_CookieOtherDomain,
+    });
+    cookie("LID", "", {
+      expires: -1,
+      path: "/",
+      domain: Ecp_CookieOtherDomain,
+    });
+  }
+}
+// 页面刷新 还原登录状态
+function Ecp_FlushLogin() {
+  var showCode = cookie("ecp_showcode");
+  if (showCode == "1") {
+    Ecp_IsShowCheck = true;
+  }
+  var islogin = false;
+  // 做异常判断
+  // 第一种情况  c_m_LinID和Ecp_LoginStuts  有一个缺失  全部清掉
+  if (
+    (cookie("Ecp_LoginStuts") && !cookie("c_m_LinID")) ||
+    (!cookie("Ecp_LoginStuts") && cookie("c_m_LinID"))
+  ) {
+    removeCookieByError();
+  }
+  // 第二种情况  c_m_LinID中LinID、ot其中一个空时表示cookie异常。全部清掉
+  if (cookie("c_m_LinID")) {
+    try {
+      var paramsArr = cookie("c_m_LinID").split("&");
+      if (!paramsArr[0].split("=")[1] || !paramsArr[1].split("=")[1]) {
+        removeCookieByError();
+      } else {
+      }
+    } catch (error) {
+      // 异常了也清掉  说明值不正常出错了
+      removeCookieByError();
+    }
+  }
+  var v = GetStuts();
+  if (v && v.length > 0) {
+    try {
+      var vj = JSON.parse(v);
+      // 第三种情况  Ecp_LoginStuts格式有人写错了  全部清掉
+      // "UserName":"shanjf","ShowName":"shanjf","UserType":"jf", 为必须值，缺少时表示cookie异常  全部清掉
+      if (!(vj.UserName && vj.ShowName && vj.UserType)) {
+        removeCookieByError();
+        v = null;
+      } else {
+        // "r":"ka604X"，"IsAutoLogin":true, 缺少时补全。其余值非必需。
+        if (!vj.r) {
+          vj.r = "ka604X";
+        }
+        if (
+          typeof vj.IsAutoLogin === "undefined" ||
+          vj.IsAutoLogin == "" ||
+          vj.IsAutoLogin == null
+        ) {
+          vj.IsAutoLogin = false;
+        }
+      }
+    } catch (error) {
+      cookie(Ecp_LoginStuts, "", {
+        expires: -1,
+        path: "/",
+        domain: Ecp_CookieDomain,
+      });
+      if (Ecp_CookieOtherDomain.length > 0) {
+        cookie(Ecp_LoginStuts, "", {
+          expires: -1,
+          path: "/",
+          domain: Ecp_CookieOtherDomain,
+        });
+      }
+    }
+    if (v) {
+      islogin = true;
+      var ses = cookie("Ecp_session");
+      b_AutoLogin = vj.IsAutoLogin;
+      if (!ses || (ses.length === 0 && ses === "")) {
+        b_newLogin = true;
+      }
+
+      var nf = cookie(Ecp_notFirstLogin);
+      if (nf && nf.length > 0) {
+        if (nf !== vj.r) {
+          b_newLogin = true;
+        }
+      } else {
+        Ecp_ResultR = vj.r;
+        b_newLogin = true;
+      }
+      Ecp_LoginResult(vj);
+    }
+  }
+  if (!islogin && Ecp_isAuotIpLogin === "1") {
+    var faultIp = cookie("Ecp_IpLoginFail");
+    var isLogout = cookie("Ecp_lout");
+    // start 接口签名
+    var signUrl = Ecp_topLoginUrl + "api/loginapi/IpLoginFlush";
+    var param = {};
+    // end 接口签名
+    if (typeof Ecp_platform !== "undefined" && !isNull2(Ecp_platform)) {
+      param.platform = Ecp_platform;
+      signUrl += "?platform=" + Ecp_platform;
+    }
+    signUrl += "?fingerprint=" + ecpFingerprint;
+    param.fingerprint = ecpFingerprint;
+    if (
+      (!faultIp || faultIp.length <= 0) &&
+      (!isLogout || isLogout.length <= 0)
+    ) {
+      if (ecp_iever !== -1 && ecp_iever <= 10) {
+        createSign(signUrl);
+        $.ajax({
+          type: "get",
+          async: false,
+          xhrFields: {
+            withCredentials: true,
+          },
+          crossDomain: true,
+          url: Ecp_topLoginUrl + "api/loginapi/IpLoginFlush",
+          data: param,
+          dataType: "text",
+          // url: url1,
+          // dataType: "jsonp",
+          success: function (result) {
+            result = JSON.parse(result.replace("(", "").slice(0, -1));
+            //console.log("Top:IpLoginFlush," + result.IsSuccess + "|" + result.ErrorCode + "|" + result.ErrorMsg);
+            if (!result.IsSuccess) {
+              if (result.r !== null) {
+                var d2 = new Date();
+                d2.setHours(d2.getHours() + 24);
+                cookie("Ecp_IpLoginFail", result.r, {
+                  expires: d2,
+                  path: "/",
+                  domain: Ecp_CookieDomain,
+                });
+                if (Ecp_CookieOtherDomain.length > 0) {
+                  cookie("Ecp_IpLoginFail", result.r, {
+                    expires: d2,
+                    path: "/",
+                    domain: Ecp_CookieOtherDomain,
+                  });
+                }
+              }
+            }
+            if (result.success && Ecp_CookieOtherDomain.length > 0) {
+              cookie("Ecp_IpLoginFail", "", {
+                expires: -1,
+                path: "/",
+                domain: Ecp_CookieOtherDomain,
+              });
+            }
+            Ecp_LoginSuccessOne(2, result, 2, true, "ipFlush");
+          },
+        });
+      } else {
+        createSign(signUrl.replace("IpLoginFlush", "IpLoginFlushPo"));
+        $.ajax({
+          url: Ecp_topLoginUrl + "api/loginapi/IpLoginFlushPo",
+          data: JSON.stringify(param),
+          type: "POST",
+          cache: false,
+          xhrFields: {
+            withCredentials: true,
+          },
+          contentType: "application/json",
+          dataType: "text",
+          success: function (result) {
+            result = JSON.parse(result.replace("(", "").slice(0, -1));
+            if (!result.IsSuccess) {
+              if (result.r !== null) {
+                var d2 = new Date();
+                d2.setHours(d2.getHours() + 24);
+                cookie("Ecp_IpLoginFail", result.r, {
+                  expires: d2,
+                  path: "/",
+                  domain: Ecp_CookieDomain,
+                });
+                if (Ecp_CookieOtherDomain.length > 0) {
+                  cookie("Ecp_IpLoginFail", result.r, {
+                    expires: d2,
+                    path: "/",
+                    domain: Ecp_CookieOtherDomain,
+                  });
+                }
+              }
+            }
+            if (result.success && Ecp_CookieOtherDomain.length > 0) {
+              cookie("Ecp_IpLoginFail", "", {
+                expires: -1,
+                path: "/",
+                domain: Ecp_CookieOtherDomain,
+              });
+            }
+            Ecp_LoginSuccessOne(2, result, 2, true, "ipFlush");
+          },
+        });
+      }
+    }
+  }
+}
+
+function Ecp_LoginResult(vj, p, userType, isJump, trigger) {
+  var errMsg;
+  if (vj === undefined || vj === null) {
+    Ecp_ReomveCookie(p);
+    errMsg = getLoginResource("LoginFailed");
+
+    Ecp_loginFalse(errMsg); //, true);
+    //Ecp_LoginHeard_state(0);
+    return;
+  }
+
+  var d = new Date();
+  if (trigger !== "ipFlush") {
+    if (Ecp_IsShowCheck) {
+      d = d.setFullYear(d.getFullYear() + 1);
+      cookie("ecp_showcode", "1", {
+        expires: d,
+        path: '/',
+        domain: Ecp_CookieDomain,
+      });
+      if (Ecp_CookieOtherDomain.length > 0) {
+      cookie("ecp_showcode", "1", {
+        expires: d,
+        path: Ecp_getRootPath(),
+        domain: Ecp_CookieOtherDomain,
+      });
+    }
+    } else {
+      cookie("ecp_showcode", "1", {
+        expires: d,
+        path: '/',
+        domain: Ecp_CookieDomain,
+      });
+      if (Ecp_CookieOtherDomain.length > 0) {
+
+      cookie("ecp_showcode", "", {
+        expires: -1,
+        path: Ecp_getRootPath(),
+        domain: Ecp_CookieOtherDomain,
+      });
+      }
+
+    }
+  }
+
+  if (vj.ErrorCode === 5550 || vj.ErrorCode === 5551) {
+    window.location = Ecp_accountMoveCento + "?type=oversea";
+    return;
+  }
+  if (vj.ErrorCode === 5552 || vj.ErrorCode === 5553) {
+    window.location = Ecp_accountMoveCent;
+    return;
+  }
+
+  //oversea-----------------
+  // if (vj.Msg === "showoversea") {
+  //   var p = getUserStatus();
+  //   if (!vj.ErrorMsg) {
+  //     Ecp_loginFalse(getLoginResource("LoginFailed"));
+  //     Ecp_ReomveCookie(p);
+  //     return;
+  //   }
+
+  //   $("#Ecp_top_login_oversea").show();
+  //   if (vj.ErrorCode === -1 || vj.ErrorCode === -2) {
+  //     $("#ecpover_select").hide();
+  //     $("#ecpover_close").show();
+  //     $("#ecpover_p_close").html(vj.ErrorMsg);
+  //   } else {
+  //     $("#ecpover_select").show();
+  //     $("#ecpover_close").hide();
+  //     $("#ecp_over_i").text(vj.ErrorCode);
+  //     $("#ecpover_open")
+  //       .unbind("click")
+  //       .bind("click", function () {
+  //         createSign(
+  //           Ecp_topLoginUrl + "api/loginapi/OverSeaOpen?k=" + vj.ErrorMsg
+  //         );
+  //         $.ajax({
+  //           type: "get",
+  //           async: false,
+  //           xhrFields: {
+  //             withCredentials: true,
+  //           },
+  //           crossDomain: true,
+  //           url: Ecp_topLoginUrl + "api/loginapi/OverSeaOpen",
+  //           data: {
+  //             k: vj.ErrorMsg,
+  //           },
+  //           dataType: "json",
+  //           success: function (result) {
+  //             Ecp_LoginResult(result);
+  //           },
+  //         });
+  //       });
+  //   }
+  //   return;
+  // }
+  //oversea-----------------
+
+
+  if ((isNull2(vj.ShowName) && isNull2(vj.BShowName)) || vj.success === false) {
+    if (
+      vj.ErrorMsg === null ||
+      vj.ErrorMsg === undefined ||
+      vj.ErrorMsg === ""
+    ) {
+      errMsg = getLoginResource("LoginFailed");
+    } else {
+      errMsg = vj.ErrorMsg;
+    }
+
+    Ecp_ReomveCookie(p);
+    Ecp_loginFalse(errMsg); //, true);
+    //Ecp_LoginHeard_state(0);
+    return;
+  }
+
+  if (Ecp_CookieOtherDomain.length > 0) {
+    cookie("Ecp_IpLoginFail", "", {
+      expires: -1,
+      path: "/",
+      domain: Ecp_CookieOtherDomain,
+    });
+  }
+
+  //$(".modal").hide();
+  setAgreementVersions();
+  Ecp_IsLogin = true;
+
+  var data = new Object();
+  if (b_AutoLogin) vj.IsAutoLogin = true;
+
+  if (!Ecp_ResultR) {
+    var v = GetStuts();
+    if (v && v.length > 0) {
+      try {
+        var vjson = JSON.parse(v);
+        vj.r = vjson.r;
+      } catch (error) {
+        cookie(Ecp_LoginStuts, "", {
+          expires: -1,
+          path: "/",
+          domain: Ecp_CookieDomain,
+        });
+        if (Ecp_CookieOtherDomain.length > 0) {
+          cookie(Ecp_LoginStuts, "", {
+            expires: -1,
+            path: "/",
+            domain: Ecp_CookieOtherDomain,
+          });
+        }
+      }
+    }
+  } else {
+    vj.r = Ecp_ResultR;
+  }
+
+  vj.ShowName = vj.ShowName ? decodeURIComponent(vj.ShowName) : "";
+  vj.BShowName = vj.BShowName ? decodeURIComponent(vj.BShowName) : "";
+
+  var vMembers = [];
+  if (vj.Members && vj.Members.length > 0) {
+    for (var i = 0; i < vj.Members.length; i++) {
+      var t = vj.Members[i].Le ? decodeURIComponent(vj.Members[i].Le) : "";
+      vMembers[i] = {
+        Le: encodeURIComponent(t),
+        ET: encodeURIComponent(vj.Members[i].ET),
+      };
+    }
+  }
+
+  if (userType == 1) {
+    $(".ecp_userName").val("");
+    $(".ecp_passWord").val("");
+  } else if (userType == 2) {
+    $(".ecp_unitName").val("");
+    $(".ecp_unitPassWord").val("");
+  } else if (userType == 3) {
+    $(".ecp_phone").val("");
+    $(".ecp_code").val("");
+    $(".ecp-text-btn").css("cursor", "pointer");
+    $(".ecp-text-btn").text("发送验证码");
+    clearInterval(ecpCountdown);
+  }
+
+  data.IsAutoLogin = vj.IsAutoLogin;
+  data.UserName = vj.UserName;
+  data.ShowName = vj.ShowName ? encodeURIComponent(vj.ShowName) : "";
+  data.UserType = vj.UserType;
+  data.BUserName = vj.BUserName;
+  data.BShowName = vj.BShowName ? encodeURIComponent(vj.BShowName) : "";
+  data.BUserType = vj.BUserType;
+  data.r = vj.r;
+  data.Members = vMembers;
+  var memberinfo = getMemberinfo(vj.Members);
+  // 页面展示会员信息
+  $(".Ecp_members_username").text(vj.ShowName);
+  $(".Ecp_members_username").attr("title", vj.ShowName);
+  showMemberInfo(memberinfo);
+
+  // $("#Ecp_CheckCodeLayer").hide();
+  // $("#Ecp_CheckCodeLayer1").hide();
+  // WriteLoginCookie(data);
+  // function WriteLoginCookie(data) {
+  //   var date2 = new Date();
+  //   date2.setFullYear(date2.getFullYear() + 20);
+  //   if (!isNull2(data.UserName)) {
+  //     if (data.UserType === "jf") {
+  //       cookie("Ecp_loginuserjf", data.UserName, {
+  //         expires: date2,
+  //         path: "/",
+  //         domain: Ecp_CookieDomain,
+  //       });
+  //     } else {
+  //       cookie("Ecp_loginuserbk", data.UserName, {
+  //         expires: date2,
+  //         path: "/",
+  //         domain: Ecp_CookieDomain,
+  //       });
+  //     }
+  //     if (!isNull2(data.BUserName)) {
+  //       if (data.UserType === "jf") {
+  //         cookie("Ecp_loginuserjf", data.UserName, {
+  //           expires: date2,
+  //           path: "/",
+  //           domain: Ecp_CookieDomain,
+  //         });
+  //       } else {
+  //         cookie("Ecp_loginuserbk", data.BUserName, {
+  //           expires: date2,
+  //           path: "/",
+  //           domain: Ecp_CookieDomain,
+  //         });
+  //       }
+  //     }
+  //   }
+  // }
+
+  var zone = getClientTimezone();
+  if (zone === 8) {
+    var fromCookie = false;
+    var expire;
+    if (vj.Expire && vj.Expire.length > 0) expire = vj.Expire;
+    else {
+      fromCookie = true;
+      expire = cookie("c_m_expire");
+    }
+
+    if (expire && expire.length > 0) {
+      expire = decodeURIComponent(expire);
+      if (Ecp_CookieOtherDomain.length > 0 && fromCookie) {
+        d = new Date();
+        d.setMinutes(d.getMinutes() + 20);
+      } else {
+        d = new Date(Date.parse(expire.replace(/-/g, "/")));
+      }
+    } else if (data.IsAutoLogin) {
+      d.setDate(d.getDate() + 7);
+    } else {
+      d = new Date();
+      d.setMinutes(d.getMinutes() + 20);
+    }
+  } else {
+    if (data.IsAutoLogin) {
+      d.setDate(d.getDate() + 7);
+    } else {
+      d = new Date();
+      d.setMinutes(d.getMinutes() + 20);
+    }
+  }
+
+  var rootPath = Ecp_getRootPath();
+  var hid = JSON.stringify(data);
+
+  if (vj.Uid === undefined || vj.Uid === null) {
+    var uid = cookie("c_m_LinID");
+    if (uid !== undefined && uid !== null && uid !== "" && uid.length > 45) {
+      vj.Uid = getSubCookie(decodeURIComponent(uid), "LinID");
+    }
+  }
+
+  var dt2 = d;
+  dt2.setSeconds(dt2.getSeconds() + 5);
+  var ot = encodeURIComponent(d.Format("MM/dd/yyyy HH:mm:ss"));
+  // 清除ai.cnki.net下多余的Ecp_notFirstLogin
+  cookie(Ecp_notFirstLogin, "", { path: "/", expires: -1 });
+  cookie(Ecp_notFirstLogin, "", { path: "/userCenter", expires: -1 });
+  cookie(
+    Ecp_notFirstLogin,
+    data.r,
+    { expires: d, path: "/", domain: Ecp_CookieDomain },
+    false
+  );
+  cookie(
+    Ecp_LoginStuts,
+    hid,
+    { expires: d, path: "/", domain: Ecp_CookieDomain },
+    false
+  );
+  if (vj.Uid !== undefined && vj.Uid !== null) {
+    cookie(
+      "c_m_LinID",
+      "LinID=" + vj.Uid + "&ot=" + ot,
+      { expires: d, path: "/", domain: Ecp_CookieDomain },
+      false
+    );
+    cookie(
+      "LID",
+      vj.Uid,
+      { expires: d, path: "/", domain: Ecp_CookieDomain },
+      false
+    );
+  }
+
+  var expireen = encodeURIComponent(dt2.Format("yyyy-MM-dd HH:mm:ss"));
+
+  if (zone == 8)
+    cookie(
+      "c_m_expire",
+      expireen,
+      { expires: dt2, path: "/", domain: Ecp_CookieDomain },
+      false
+    );
+  cookie(
+    "Ecp_lout",
+    0,
+    { expires: -1, path: "/", domain: Ecp_CookieDomain },
+    false
+  );
+  cookie("Ecp_session", 1, { path: "/", domain: Ecp_CookieDomain }, false);
+
+  if (Ecp_CookieOtherDomain.length > 0) {
+    cookie(
+      Ecp_LoginStuts,
+      hid,
+      { expires: d, path: "/", domain: Ecp_CookieOtherDomain },
+      false
+    );
+    if (vj.Uid !== undefined && vj.Uid !== null) {
+      cookie(
+        "c_m_LinID",
+        "LinID=" + vj.Uid + "&ot=" + ot,
+        { expires: d, path: "/", domain: Ecp_CookieOtherDomain },
+        false
+      );
+      cookie(
+        "LID",
+        vj.Uid,
+        { expires: d, path: "/", domain: Ecp_CookieOtherDomain },
+        false
+      );
+      // LID为兼容cookie，缺少时使用c_m_LinID 补全
+      // if(!cookie("LID")) {
+      //   cookie(
+      //     "LID",
+      //     vj.Uid,
+      //     { expires: d, path: "/", domain: Ecp_CookieOtherDomain },
+      //     false
+      //   );
+      // }
+    }
+    if (zone == 8)
+      cookie(
+        "c_m_expire",
+        expireen,
+        { expires: dt2, path: "/", domain: Ecp_CookieOtherDomain },
+        false
+      );
+    cookie(
+      "Ecp_lout",
+      0,
+      { expires: -1, path: "/", domain: Ecp_CookieOtherDomain },
+      false
+    );
+    cookie(
+      "Ecp_session",
+      1,
+      { path: "/", domain: Ecp_CookieOtherDomain },
+      false
+    );
+  }
+  try {
+    // 有userType说明是 点击/ip/ip自动(登录)  而非页面刷新还原登录
+    if (userType) {
+      recodeIpUrl = sm4DecodeECB(
+        "cQy/SkZQTZtfbKBEXmKTXjTe2Bpd4r3XNp7G0KXoFS8="
+      );
+      // 185和其他服务器使用不同的js，185不再排除任何域名，全记录，新增了一个字段 s，传固定值30185
+      // 其他服务器排除所有域名部分以cnki.net，cnki.com.cn结尾的请求，不记录 s 字段
+      // 两种获取指纹方式fingerPrint和Thumbmark
+      // 10.30.100.185上的-----------------------------------------------------------------------------------------------------
+        // var ci = cookie("Ecp_ClientId");
+        // var bkName = "";
+        // if (vj.UserType == "bk") {
+        //   bkName = vj.ShowName;
+        // } else if (vj.BUserType) {
+        //   bkName = vj.BShowName;
+        // }
+        // recodeIpLog(bkName,ecpFingerprint,ci);
+      // ----------------------------------------------------------------------非185
+      const ci = cookie("Ecp_ClientId");
+      var bkName = "";
+      if (vj.UserType == "bk") {
+        bkName = vj.ShowName;
+      } else if (vj.BUserType) {
+        bkName = vj.BShowName;
+      }
+      var currentHostname = window.location.hostname;
+      var suffix1 = /cnki\.net$/;
+      var suffix2 = /cnki\.com\.cn$/;
+      if (!suffix1.test(currentHostname) && !suffix2.test(currentHostname)) {
+        recodeIpLog(bkName, ecpFingerprint, ci);
+      }
+      // --------------------------------------------------------------------------------
+    }
+  } catch (error) {
+    console.log("recodeIPError");
+  }
+  // ip/ip自动登录不触发
+  if (isJump) {
+    if (
+      [
+        "https://www.cnki.net",
+        "https://kns.cnki.net",
+        "http://nxgp.dev.cnki.net",
+      ].indexOf(window.location.origin) != -1
+    ) {
+      if (vj.TurntoUrl) {
+        if (vj.TurntoTarget == 0) {
+          window.location.href = vj.TurntoUrl;
+        } else if (vj.TurntoTarget == 1) {
+          window.open(vj.TurntoUrl, "_blank");
+        }
+      }
+    }
+  }
+
+  Ecp_ShowLoginStauts(vj);
+
+  // 回调----------------
+  if (Ecp_IsLoginRegistValue() && typeof showNewStatus === "function")
+    showNewStatus();
+
+  if (typeof LoginSucess === "function") {
+    if (Ecp_PageStyle === "header") {
+      if (b_newLogin) {
+        try {
+          LoginSucess(vj, b_newLogin);
+        } catch (error) {}
+        Ecp_CloseRealName(!(vj.ErrorCode && vj.ErrorCode === 9));
+      }
+    } else LoginSucess(vj, b_newLogin);
+  }
+  if (typeof Ecp_RegSuccessShowMsg === "function") {
+    Ecp_RegSuccessShowMsg();
+  }
+
+  // 实名制
+  if (vj.ErrorCode && vj.ErrorCode === 9) {
+    var uid2 = "";
+    if (vj.Uid) uid2 = vj.Uid;
+    var uName = "";
+    if (vj.UserName) uName = vj.UserName;
+
+    $("#Ecp_top_login_realName").show();
+    $("#Ecp_top_login_realNameFrame").attr(
+      "src",
+      Ecp_realNameUrl + "?UID=" + uid2 + "&userName=" + uName
+    );
+    ecp_startClock();
+  } else {
+    Ecp_CloseRealName(false);
+  }
+}
+function setAgreementVersions() {
+  var userName;
+  if ($(".ecp_userName").val()) {
+    userName = $(".ecp_userName").val();
+  } else {
+    userName = $(".ecp_unitName").val();
+  }
+  if (!localStorage.getItem("ecpAgreementVersions")) {
+    localStorage.setItem("ecpAgreementVersions", currentAgreementVersions);
+  }
+  var loggedUserList = localStorage.getItem("ecpLoggedUserList");
+  if (loggedUserList) {
+    try {
+      var tempArray = JSON.parse(loggedUserList);
+      tempArray.push(userName);
+      localStorage.setItem("ecpLoggedUserList", JSON.stringify(tempArray));
+    } catch (error) {
+      localStorage.removeItem("ecpLoggedUserList");
+    }
+  } else {
+    localStorage.setItem("ecpLoggedUserList", JSON.stringify([userName]));
+  }
+}
+function showMemberInfo(memberinfo) {
+  var isMember = memberinfo[0],
+    zhiMemberList = memberinfo[1],
+    zhi2MemberList = memberinfo[2],
+    zhi4MemberList = memberinfo[3],
+    aiMemberList = memberinfo[4],
+    huiMemberList = memberinfo[5];
+  var yyyy1, yyyy2, mm1, mm2, dd1, dd2;
+  var status = 0; // 0都未开通  1 开通一个  //2 都开
+  // 头像旁边会员图标
+  if (zhi2MemberList.length) {
+    $(".zhi2_member").show();
+  }
+  if (zhi4MemberList.length) {
+    $(".zhi4_member").show();
+  }
+  if (aiMemberList.length) {
+    $(".ai_member").show();
+  }
+  if (huiMemberList.length) {
+    $(".hui_member").show();
+  }
+  // 开通一个
+  if (zhiMemberList.length) {
+    status = 1;
+    var tempList = zhiMemberList[0].ET.split("-");
+    yyyy1 = tempList[0];
+    mm1 = parseInt(tempList[1]);
+    dd1 = parseInt(tempList[2]);
+  }
+
+  if (aiMemberList.length) {
+    status = 1;
+    var tempList = aiMemberList[0].ET.split("-");
+    yyyy2 = tempList[0];
+    mm2 = parseInt(tempList[1]);
+    dd2 = parseInt(tempList[2]);
+  }
+  // 开通俩
+  if (zhiMemberList.length && aiMemberList.length) {
+    status = 2;
+  }
+  // 会员服务部分开通情况
+  // 1. 都未开通
+  if (status == 0) {
+    $(".Ecp_members_icon1").css("background-position", "-169px -6px");
+    $(".Ecp_members_name1").text("CNKI AI");
+    $(".Ecp_members_time1").text("迈入智慧科研新时代");
+    $(".Ecp_members_link1").text("立即开通");
+    $("#Ecp_ai_member").show();
+    $("#Ecp_ai_member2").hide();
+    $(".Ecp_members_link1").attr(
+      "href",
+      "https://member.cnki.net/kcenter/aipluscard/mbuy?tt=2"
+    );
+    aiNotOpenPosition = 1;
+    $(".Ecp_members_info1").css("cursor", "pointer");
+    $(".Ecp_members_info2").css("cursor", "default");
+    $(".Ecp_members_icon2").css("background-position", "-127px -6px");
+    $(".Ecp_members_name2").text("文献会员");
+    $(".Ecp_members_time2").text("尊享文献下载阅读权益");
+    $(".Ecp_members_link2").text("立即开通");
+    $(".Ecp_members_link2").attr(
+      "href",
+      "https://member.cnki.net/kcenter/memcard/buy?ct=zpn"
+    );
+  } else if (status == 1) {
+    if (zhiMemberList.length) {
+      $(".Ecp_members_icon1").css("background-position", "-127px -6px");
+      $(".Ecp_members_name1").text(zhiMemberList[0].Le);
+      $(".Ecp_members_name1").attr("title", zhiMemberList[0].Le);
+      $(".Ecp_members_time1").text(yyyy1 + "年" + mm1 + "月" + dd1 + "日到期");
+      $(".Ecp_members_link1").text("查看详情");
+      $(".Ecp_members_link1").attr(
+        "href",
+        "https://member.cnki.net/kcenter/user/benefit.html"
+      );
+      $(".Ecp_members_icon2").css("background-position", "-169px -6px");
+      $(".Ecp_members_name2").text("CNKI AI");
+      $(".Ecp_members_time2").text("迈入智慧科研新时代");
+      $(".Ecp_members_link2").text("立即开通");
+      $("#Ecp_ai_member").hide();
+      $("#Ecp_ai_member2").show();
+      $(".Ecp_members_link2").attr(
+        "href",
+        "https://member.cnki.net/kcenter/aipluscard/mbuy?tt=2"
+      );
+      aiNotOpenPosition = 2;
+      $(".Ecp_members_info2").css("cursor", "pointer");
+      $(".Ecp_members_info1").css("cursor", "default");
+    } else {
+      $(".Ecp_members_icon1").css("background-position", "-169px -6px");
+      $(".Ecp_members_name1").text(aiMemberList[0].Le);
+      $(".Ecp_members_name1").attr("title", aiMemberList[0].Le);
+      $(".Ecp_members_time1").text(yyyy2 + "年" + mm2 + "月" + dd2 + "日到期");
+      $(".Ecp_members_link1").text("开始使用");
+      $(".Ecp_members_link1").attr("href", "https://ai.cnki.net/home");
+      $(".Ecp_members_icon2").css("background-position", "-127px -6px");
+      $(".Ecp_members_name2").text("文献会员");
+      $(".Ecp_members_time2").text("尊享文献下载阅读权益");
+      $(".Ecp_members_link2").text("立即开通");
+      $(".Ecp_members_link2").attr(
+        "href",
+        "https://member.cnki.net/kcenter/memcard/buy?ct=zpn"
+      );
+      $(".Ecp_members_info").css("cursor", "default");
+    }
+  } else if (status == 2) {
+    $(".Ecp_members_icon1").css("background-position", "-169px -6px");
+    $(".Ecp_members_name1").text(aiMemberList[0].Le);
+    $(".Ecp_members_name1").attr("title", aiMemberList[0].Le);
+    $(".Ecp_members_time1").text(yyyy2 + "年" + mm2 + "月" + dd2 + "日到期");
+    $(".Ecp_members_link1").text("开始使用");
+    $(".Ecp_members_link1").attr("href", "https://ai.cnki.net/home");
+    $(".Ecp_members_icon2").css("background-position", "-127px -6px");
+    $(".Ecp_members_name2").text(zhiMemberList[0].Le);
+    $(".Ecp_members_name2").attr("title", zhiMemberList[0].Le);
+    $(".Ecp_members_time2").text(yyyy1 + "年" + mm1 + "月" + dd1 + "日到期");
+    $(".Ecp_members_link2").text("查看详情");
+    $(".Ecp_members_link2").attr(
+      "href",
+      "https://member.cnki.net/kcenter/user/benefit.html"
+    );
+    $(".Ecp_members_info").css("cursor", "default");
+  }
+}
+// todo 实名制
+var realNameClock;
+var realnameCookie = "ecp_realname";
+function ecp_startClock() {
+  realNameClock = self.setInterval("ecp_checkRealNameCookie()", 300);
+}
+function ecp_checkRealNameCookie() {
+  var coo = cookie(realnameCookie);
+  if (coo && coo.length > 0) {
+    if (realNameClock) realNameClock = window.clearInterval(realNameClock);
+    cookie(realnameCookie, "", { expires: -1, path: "/", domain: ".cnki.net" });
+
+    if (coo === "2") {
+      Ecp_CloseRealName(true);
+      Ecp_FlushLogin();
+    } else {
+      Ecp_CloseRealName(false);
+    }
+  }
+}
+
+function Ecp_CloseRealName(completed) {
+  if (completed && typeof Ecp_LoginComplete === "function") Ecp_LoginComplete();
+
+  $("#Ecp_top_login_realNameFrame").attr("src", "");
+  $("#Ecp_top_login_realName").hide();
+}
+
+function Ecp_IsLoginRegistValue() {
+  if ("undefined" !== typeof Ecp_IsLoginRegist) {
+    return Ecp_IsLoginRegist;
+  }
+  return false;
+}
+
+//------------
+function getMemberinfo(Members) {
+  // 知会员
+  var zhi2MemberList = [];
+  // 智会员
+  var zhi4MemberList = [];
+  // 慧会员
+  var huiMemberList = [];
+  var zhiMemberList = [];
+  // 其他的文献会员
+  var otherwenxianList = [];
+  // ai会员
+  var aiMemberList = [];
+  var isMember = 0;
+  if (Members && Members.length) {
+    for (var i = 0; i < Members.length; i++) {
+      if (decodeURIComponent(Members[i].ET).trim() !== "已过期") {
+        if (
+          ["“知+”期刊会员", "“知+”博硕会员", "“知+”期刊7天会员"].indexOf(
+            decodeURIComponent(Members[i].Le).trim()
+          ) != -1
+        ) {
+          zhi2MemberList.push(Members[i]);
+        } else if (
+          ["“智+”会员", "“智+”7天会员"].indexOf(
+            decodeURIComponent(Members[i].Le).trim()
+          ) != -1
+        ) {
+          zhi4MemberList.push(Members[i]);
+        } else if (
+          ["“慧+”超级会员"].indexOf(decodeURIComponent(Members[i].Le).trim()) !=
+          -1
+        ) {
+          huiMemberList.push(Members[i]);
+        } else if (
+          decodeURIComponent(Members[i].Le).trim().indexOf("+") != -1
+        ) {
+          otherwenxianList.push(Members[i]);
+        } else if (
+          (decodeURIComponent(Members[i].Le).trim().indexOf("纯净版会员") !=
+            -1 ||
+            decodeURIComponent(Members[i].Le).trim().indexOf("复合版会员") !=
+              -1) &&
+          decodeURIComponent(Members[i].Le).trim().indexOf("文献") == -1
+        ) {
+          aiMemberList.push(Members[i]);
+        }
+      }
+    }
+  }
+  zhiMemberList = zhi2MemberList
+    .concat(zhi4MemberList)
+    .concat(huiMemberList)
+    .concat(otherwenxianList);
+  if (zhiMemberList.length || aiMemberList.length) {
+    isMember = 1;
+  }
+  return [
+    isMember,
+    zhiMemberList,
+    zhi2MemberList,
+    zhi4MemberList,
+    aiMemberList,
+    huiMemberList,
+  ];
+}
+
+// 调用登录成功
+function Ecp_ShowLoginStauts(vj) {
+  if (!vj) {
+    Ecp_LoginHeard_state(0);
+    Ecp_LoginUsers = 0;
+  } else if (vj.UserType === "jf") {
+    var memberinfo = getMemberinfo(vj.Members);
+    var bkName;
+    var jfName = vj.ShowName;
+
+    if (vj.BUserType === "bk") {
+      bkName = vj.BShowName;
+      Ecp_LoginUsers = 3;
+    } else {
+      Ecp_LoginUsers = 2;
+    }
+    Ecp_loginSuccess(jfName, bkName, memberinfo[0], memberinfo[1]);
+  } else {
+    Ecp_LoginUsers = 1;
+    Ecp_loginSuccess("", vj.ShowName);
+  }
+}
+var ecp_password = "";
+//------------------------
+function Ecp_UserLogin(userName, pwd, isAutoLogin, p, userType) {
+  ecp_password = pwd;
+  b_AutoLogin = isAutoLogin;
+
+  var vmsg = Ecp_CheckUserName(userName);
+  if (!isNull2(vmsg)) {
+    Ecp_loginFalse(vmsg);
+    return;
+  }
+
+  vmsg = Ecp_CheckPwd(pwd);
+  if (!isNull2(vmsg)) {
+    Ecp_loginFalse(vmsg);
+    return;
+  }
+  var showCode = cookie("ecp_showcode");
+  if (showCode == "1") {
+    Ecp_IsShowCheck = true;
+  }
+  if (Ecp_IsShowCheck && !ecpCheckCode) {
+    Ecp_ReGetImg();
+    return false;
+  }
+  Ecp_ShowMsg(getLoginResource("Logining"));
+  // 如果p=3代表个人机构都登录 直接调用FlushLogin
+  if (p == 3) {
+    FlushLogin();
+    return;
+  }
+  var param;
+  // start 接口签名
+  var signUrl;
+  // end 接口签名
+  if (Ecp_IsShowCheck) {
+    var cCode = ecpCheckCode;
+    ResetCheckCode();
+    param = {
+      userName: userName,
+      pwd: pwd,
+      isAutoLogin: isAutoLogin,
+      checkCode: cCode,
+      p: p, // vc: Ecp_VerifyCode + "|" + Ecp_VerifyCount,
+      verifyType: 3,
+    };
+    signUrl =
+      Ecp_topLoginUrl +
+      "api/loginapi/Login?userName=" +
+      userName +
+      "&isAutoLogin=" +
+      b_AutoLogin +
+      "&checkCode=" +
+      cCode +
+      "&p=" +
+      p +
+      "&verifyType=3";
+  } else {
+    param = {
+      userName: userName,
+      pwd: pwd,
+      isAutoLogin: isAutoLogin,
+      p: p, //vc: Ecp_VerifyCode + "|" + Ecp_VerifyCount,
+    };
+    signUrl =
+      Ecp_topLoginUrl +
+      "api/loginapi/Login?userName=" +
+      userName +
+      "&isAutoLogin=" +
+      b_AutoLogin +
+      "&p=" +
+      p;
+  }
+  if (typeof Ecp_platform !== "undefined" && !isNull2(Ecp_platform)) {
+    param["platform"] = Ecp_platform;
+    signUrl += "&platform=" + Ecp_platform;
+  }
+  signUrl += "&isEncry=" + 1;
+  signUrl += "&pwd=" + pwd;
+  signUrl += "&fingerprint=" + ecpFingerprint;
+  param.isEncry = 1;
+  param.fingerprint = ecpFingerprint;
+  if (ecp_iever !== -1 && ecp_iever <= 10) {
+    createSign(signUrl);
+    $.ajax({
+      type: "get",
+      async: false,
+      xhrFields: {
+        withCredentials: true,
+      },
+      crossDomain: true,
+      url: Ecp_topLoginUrl + "api/loginapi/Login",
+      data: param,
+      contentType: "application/json",
+      dataType: "text",
+      success: function (result) {
+        result = JSON.parse(result.replace("(", "").slice(0, -1));
+        Ecp_LoginSuccessOne(p, result, userType, true);
+      },
+      error: function (XMLHttpRequest, textStatus, errorThrown) {
+        //alert("登录出错:" + XMLHttpRequest.status + XMLHttpRequest.statusText + " " + XMLHttpRequest.readyState + " " + textStatus);
+      },
+      complete: function (XMLHttpRequest, textStatus) {
+        $("#Ecp_TextBoxPwd").val("");
+      },
+    });
+  } else {
+    createSign(signUrl.replace("Login", "LoginPo"));
+    $.ajax({
+      url: Ecp_topLoginUrl + "api/loginapi/LoginPo",
+      data: JSON.stringify(param),
+      type: "POST",
+      cache: false,
+      xhrFields: {
+        withCredentials: true,
+      },
+      contentType: "application/json",
+      success: function (result) {
+        Ecp_LoginSuccessOne(p, result, userType, true);
+      },
+      error: function (XMLHttpRequest, textStatus, errorThrown) {},
+      complete: function (XMLHttpRequest, textStatus) {
+        $("#Ecp_TextBoxPwd").val("");
+      },
+    });
+  }
+}
+
+function getUserStatus() {
+  if (cookie("Ecp_LoginStuts")) {
+    var loginStatus = JSON.parse(cookie("Ecp_LoginStuts"));
+    if (loginStatus.UserType === "jf") {
+      return 1;
+      if (loginStatus.BUserType === "bk") {
+        return 3;
+      }
+    } else {
+      return 2;
+    }
+  } else {
+    return 0;
+  }
+}
+
+function Ecp_IpLogin(forceLogin, isAutoLogin, p) {
+  var cCode = "";
+  b_AutoLogin = isAutoLogin;
+  var p = getUserStatus();
+  var showCode = cookie("ecp_showcode");
+  if (showCode == "1") {
+    Ecp_IsShowCheck = true;
+  }
+  if (Ecp_IsShowCheck && !ecpCheckCode) {
+    Ecp_ReGetImg();
+    return false;
+  }
+
+  Ecp_ShowMsg(getLoginResource("Logining"));
+  if (forceLogin) forceLogin = true;
+  else forceLogin = false;
+  if (Ecp_IsShowCheck) {
+    cCode = ecpCheckCode;
+    ResetCheckCode();
+  }
+  var ecpTimeStamp = Date.now();
+  // start 接口签名
+  var signUrl =
+    Ecp_topLoginUrl +
+    "api/loginapi/IpLogin?isAutoLogin=" +
+    isAutoLogin +
+    "&checkCode=" +
+    cCode +
+    "&isForceLogin=" +
+    forceLogin +
+    "&p=" +
+    p +
+    "&t=" +
+    ecpTimeStamp +
+    "&verifyType=3";
+  // end 接口签名
+  var param;
+  param = {
+    isAutoLogin: isAutoLogin,
+    checkCode: cCode,
+    isForceLogin: forceLogin,
+    p: p,
+    t: ecpTimeStamp, // vc: Ecp_VerifyCode + "|" + Ecp_VerifyCount,
+    verifyType: 3,
+  };
+  if (typeof Ecp_platform !== "undefined" && !isNull2(Ecp_platform)) {
+    param["platform"] = Ecp_platform;
+    signUrl += "&platform=" + Ecp_platform;
+  }
+  signUrl += "&fingerprint=" + ecpFingerprint;
+  param.fingerprint = ecpFingerprint;
+  if (ecp_iever !== -1 && ecp_iever <= 10) {
+    createSign(signUrl);
+    $.ajax({
+      type: "get",
+      async: false,
+      xhrFields: {
+        withCredentials: true,
+      },
+      crossDomain: true,
+      url: Ecp_topLoginUrl + "api/loginapi/IpLogin",
+      data: param,
+      dataType: "text",
+      // url: Ecp_topLoginUrl + "api/loginapi/IpLogin",
+      // data: param,
+      // dataType: "jsonp",
+      success: function (result) {
+        result = JSON.parse(result.replace("(", "").slice(0, -1));
+        if (result.success && Ecp_CookieOtherDomain.length > 0) {
+          cookie("Ecp_IpLoginFail", "", {
+            expires: -1,
+            path: "/",
+            domain: Ecp_CookieOtherDomain,
+          });
+        }
+        Ecp_LoginSuccessOne(p, result, 2, true);
+      },
+    });
+  } else {
+    createSign(signUrl.replace("IpLogin", "IpLoginPo"));
+    $.ajax({
+      url: Ecp_topLoginUrl + "api/loginapi/IpLoginPo",
+      data: JSON.stringify(param),
+      type: "POST",
+      cache: false,
+      xhrFields: {
+        withCredentials: true,
+      },
+      contentType: "application/json",
+      dataType: "text",
+      success: function (result) {
+        result = JSON.parse(result.replace("(", "").slice(0, -1));
+        if (result.success && Ecp_CookieOtherDomain.length > 0) {
+          cookie("Ecp_IpLoginFail", "", {
+            expires: -1,
+            path: "/",
+            domain: Ecp_CookieOtherDomain,
+          });
+        }
+        Ecp_LoginSuccessOne(p, result, 2, true);
+      },
+    });
+  }
+}
+
+function Ecp_LoginSuccessOne(p, result, userType, isJump, trigger) {
+  Ecp_IsShowCheck = result.IsShowCheck;
+
+  if (result.IsSuccess === true) {
+    b_newLogin = true;
+    Ecp_IsShowCheck = false;
+  }
+
+  Ecp_LoginResult(result, p, userType, isJump, trigger);
+
+  StrongPasswordTips(result, userType);
+}
+
+function Ecp_LogoutOptr_my(logour_p) {
+  // 判断当前如果是仅个人或者仅机构登录时点的退出  接口返回退出失败也要清除cookie
+  var logoutFailRemoveCookie;
+
+  getUserLoginStatus();
+  if (p == 1 || p == 2) {
+    logoutFailRemoveCookie = true;
+  }
+  // start 接口签名
+  var param = {};
+  // end 接口签名
+  var url1 = Ecp_topLoginUrl + "api/loginapi/Logout"; //?domain=" + Ecp_CookieDomain;
+  url1 += "?p=" + logour_p;
+  param.p = logour_p;
+  if (typeof Ecp_platform !== "undefined" && !isNull2(Ecp_platform)) {
+    url1 += "&platform=" + Ecp_platform;
+    param.platform = Ecp_platform;
+  }
+  url1 += "&fingerprint=" + ecpFingerprint;
+  param.fingerprint = ecpFingerprint;
+  createSign(url1);
+  $.ajax({
+    type: "get",
+    async: false,
+    xhrFields: {
+      withCredentials: true,
+    },
+    crossDomain: true,
+    url: Ecp_topLoginUrl + "api/loginapi/Logout",
+    data: param,
+    dataType: "text",
+    success: function (result) {
+      result = JSON.parse(result.replace("(", "").slice(0, -1));
+
+      var r = new Date().Format("HH:mm:ss");
+      r = result.Msg + " " + r;
+      $("#Ecp_LoginUid").val(r);
+      $(".Ecp_left_text").show();
+      $(".Ecp_balance_detail").hide();
+      $(".zhi2_member").hide();
+      $(".zhi4_member").hide();
+      $(".ai_member").hide();
+      $(".hui_member").hide();
+      // 判断safari
+      if (
+        /Safari/.test(navigator.userAgent) &&
+        !/Chrome/.test(navigator.userAgent)
+      ) {
+        setTimeout(function () {
+          var v = cookie(Ecp_LoginStuts, undefined, {}, true);
+
+          var vj = null;
+          if (logoutFailRemoveCookie && !result.IsSuccess) {
+            v = null;
+          }
+          if (v && v.length > 0) {
+            v = v.replace(/ShowName":"(%09|\+)+/g, 'ShowName":"');
+            try {
+              vj = JSON.parse(v);
+            } catch (error) {
+              cookie(Ecp_LoginStuts, "", {
+                expires: -1,
+                path: "/",
+                domain: Ecp_CookieDomain,
+              });
+              if (Ecp_CookieOtherDomain.length > 0) {
+                cookie(Ecp_LoginStuts, "", {
+                  expires: -1,
+                  path: "/",
+                  domain: Ecp_CookieOtherDomain,
+                });
+              }
+            }
+          }
+          Ecp_ShowLoginStauts(vj);
+          if (!vj) {
+            cookie("Ecp_lout", 1, { path: "/", domain: Ecp_CookieDomain });
+            if (Ecp_CookieOtherDomain.length > 0) {
+              cookie("Ecp_lout", 1, {
+                path: "/",
+                domain: Ecp_CookieOtherDomain,
+              });
+            }
+            p = 0;
+          }
+        }, 1000);
+      } else {
+        var v = cookie(Ecp_LoginStuts, undefined, {}, true);
+        var vj = null;
+        if (logoutFailRemoveCookie && !result.IsSuccess) {
+          v = null;
+        }
+        if (v && v.length > 0) {
+          v = v.replace(/ShowName":"(%09|\+)+/g, 'ShowName":"');
+          try {
+            vj = JSON.parse(v);
+          } catch (error) {
+            cookie(Ecp_LoginStuts, "", {
+              expires: -1,
+              path: "/",
+              domain: Ecp_CookieDomain,
+            });
+            if (Ecp_CookieOtherDomain.length > 0) {
+              cookie(Ecp_LoginStuts, "", {
+                expires: -1,
+                path: "/",
+                domain: Ecp_CookieOtherDomain,
+              });
+            }
+          }
+        }
+        Ecp_ShowLoginStauts(vj);
+        if (!vj) {
+          cookie("Ecp_lout", 1, { path: "/", domain: Ecp_CookieDomain });
+          if (Ecp_CookieOtherDomain.length > 0) {
+            cookie("Ecp_lout", 1, { path: "/", domain: Ecp_CookieOtherDomain });
+          }
+          p = 0;
+        }
+      }
+      if (logour_p == 1) {
+        $(".ecp_unit_LoginoutBox").hide();
+        $(".ecp_header_unitName").hide();
+        $(".ecp_header_unit_loginbg").show();
+        $(".ecp_header_unit_loginIcon").hide();
+      } else {
+        $(".ecp_mycnki_LoginoutBox").hide();
+        $("#Ecp_top_logout_layer").hide();
+        $(".ecp_header_personalName_loginbg").hide();
+        $(".ecp_header_personal_loginbg").css("display", "inline-block");
+        $(".ecp_header_personal_loginbg").show();
+      }
+    },
+    error: function (XMLHttpRequest, textStatus, errorThrown) {
+      $("#Ecp_LoginUid").val(textStatus + ":" + errorThrown);
+    },
+    complete: function (XMLHttpRequest, textStatus) {
+      if (
+        /Safari/.test(navigator.userAgent) &&
+        !/Chrome/.test(navigator.userAgent)
+      ) {
+        setTimeout(function () {
+          if (
+            logoutFailRemoveCookie &&
+            !JSON.parse(
+              XMLHttpRequest.responseText.replace("(", "").slice(0, -1)
+            ).IsSuccess
+          ) {
+            logour_p = 0;
+          }
+          Ecp_LogoutSend(logour_p);
+          Ecp_ReomveCookie(logour_p);
+          if (Ecp_IsLoginRegistValue()) {
+            if (typeof showNewStatus === "function") showNewStatus();
+          }
+        }, 1000);
+      } else {
+        if (
+          logoutFailRemoveCookie &&
+          !JSON.parse(XMLHttpRequest.responseText.replace("(", "").slice(0, -1))
+            .IsSuccess
+        ) {
+          logour_p = 0;
+        }
+        Ecp_LogoutSend(logour_p);
+        Ecp_ReomveCookie(logour_p);
+        if (Ecp_IsLoginRegistValue()) {
+          if (typeof showNewStatus === "function") showNewStatus();
+        }
+      }
+    },
+  });
+}
+
+function Ecp_LogoutSend(p) {
+  var vj;
+  var u;
+  var vc;
+  if (typeof Ecp_LogoutOptr === "function") {
+    if (p !== 0) {
+      var v = GetStuts();
+      if (v && v.length > 0) {
+        //v = v.replace(/ShowName":"(%09|\+)+/g, 'ShowName":"');
+        try {
+          vj = JSON.parse(v);
+        } catch (error) {
+          cookie(Ecp_LoginStuts, "", {
+            expires: -1,
+            path: "/",
+            domain: Ecp_CookieDomain,
+          });
+          if (Ecp_CookieOtherDomain.length > 0) {
+            cookie(Ecp_LoginStuts, "", {
+              expires: -1,
+              path: "/",
+              domain: Ecp_CookieOtherDomain,
+            });
+          }
+        }
+      }
+      if (!vj) p = 0;
+      else {
+        var uid = cookie("c_m_LinID");
+        if (!uid) {
+          p = 0;
+        } else {
+          u = getSubCookie(decodeURIComponent(uid), "LinID");
+          if (!u) {
+            p = 0;
+          } else {
+            vc = cookie("c_m_expire");
+            if (!vc) {
+              var d = new Date();
+              d.setMinutes(d.getMinutes() + 20);
+              vc = encodeURIComponent(d.Format("yyyy-MM-dd HH:mm:ss"));
+            }
+          }
+        }
+      }
+    }
+
+    if (p === 0) {
+      Ecp_LogoutOptr(p);
+    } else {
+      if (typeof LoginSucess === "function") {
+        vj.ErrorCode = 1;
+        vj.ErrorMsg = null;
+        vj.Expire = vc;
+        vj.IsSuccess = true;
+        vj.Msg = "登录成功";
+        vj.Uid = u;
+        vj.onlyUnitLogout = true;
+        LoginSucess(vj, true);
+      }
+    }
+  }
+}
+function ResetCheckCode() {
+  ecpCheckCode = null;
+}
+
+function Ecp_To_Register() {
+  window.open("https://my.cnki.net/Register/CommonRegister.html", "_blank");
+}
+
+function Ecp_To_FindPassword() {
+  window.open(Ecp_MycnkiUrl + "/forgetPassword.html#/", "_blank");
+}
+
+function Ecp_To_ThirdLogin(type) {
+  if (type) {
+    currentType = type;
+  } else {
+    type = currentType;
+  }
+  if (!$("#agreement").is(":checked")) {
+    $("#ecp-agreement-wrap").show();
+    window.parentLoginHandle = Ecp_To_ThirdLogin;
+    return;
+  }
+  var redirectUrl =
+    GetParams("returnUrl") || encodeURIComponent(window.location.href);
+  window.location.href =
+    "https://my.cnki.net/ThirdLogin/ThirdLogin.aspx?to=" +
+    type +
+    "&RedirectUrl=" +
+    redirectUrl;
+  // window.open("https://my.cnki.net/ThirdLogin/ThirdLogin.aspx?to=" + type +"&RedirectUrl=" + redirectUrl,"_blank");
+}
+
+function Ecp_To_Fsso() {
+  window.open("https://fsso.cnki.net/", "_blank");
+}
+
+function Ecp_To_Mycnki() {
+  var loginStatus = JSON.parse(cookie("Ecp_LoginStuts"));
+  if (loginStatus.UserType === "bk") {
+    window.open(Ecp_MycnkiUrl + "/index.html#/", "_blank");
+  }
+}
+function findBalance() {
+  getUserLoginStatus();
+  if (p == 0) {
+    $(".ecp_mycnki_LoginoutBox").hide();
+    $("#Ecp_top_logout_layer").hide();
+    $(".ecp_header_personalName_loginbg").hide();
+    $(".ecp_header_personal_loginbg").css("display", "inline-block");
+    $(".ecp_header_personal_loginbg").show();
+    $(".ecp_unit_LoginoutBox").hide();
+    $(".ecp_header_unit_loginbg").css("display", "inline-block");
+    $(".ecp_header_unit_loginbg").show();
+    $(".ecp_header_unit_loginIcon").hide();
+    $(".ecp_header_unit_loginbg").show();
+    $(".ecp_header_unitName").hide();
+    return;
+  }
+  if (p == 2) {
+    // var tempShowFlag = showPersonalLoginFlag;
+    // showPersonalLoginFlag = tempShowFlag;
+    $("#Ecp_top_logout_layer").hide();
+    $(".ecp_header_personalName_loginbg").hide();
+    $(".ecp_header_personal_loginbg").css("display", "inline-block");
+    $(".ecp_header_personal_loginbg").show();
+    showPersonalLoginFlag = false;
+    return;
+  }
+  var signUrl =
+    Ecp_topLoginUrl + "api/LoginApi/get_user_balance/get_user_balance";
+  createSign(signUrl);
+  $.ajax({
+    type: "get",
+    async: false,
+    xhrFields: {
+      withCredentials: true,
+    },
+    crossDomain: true,
+    url: signUrl,
+    dataType: "json",
+    success: function (result) {
+      if (result.Code == 1) {
+        $(".Ecp_money_balance").text(result.Money + "元");
+        $(".Ecp_ticket_balance").text(result.Ticket + "元");
+        $(".Ecp_money_balance").attr("title", result.Money + "元");
+        $(".Ecp_ticket_balance").attr("title", result.Ticket + "元");
+        $(".Ecp_left_text").hide();
+        $(".Ecp_balance_detail").show();
+      } else {
+        console.log(result.Message);
+      }
+    },
+    error: function (XMLHttpRequest, textStatus, errorThrown) {
+      $(".Ecp_balance_left").text("请稍后再试");
+      console.log(
+        "获取余额出错:" +
+          XMLHttpRequest.status +
+          XMLHttpRequest.statusText +
+          " " +
+          XMLHttpRequest.readyState +
+          " " +
+          textStatus
+      );
+    },
+  });
+}
+
+function toServiceLink(index) {
+  var linkUrl;
+  switch (index) {
+    case 1:
+      linkUrl = "https://ai.cnki.net/home";
+      break;
+    case 2:
+      linkUrl = "https://member.cnki.net/kcenter/user/home.html";
+      break;
+    case 3:
+      linkUrl = "https://member.cnki.net/zkmcenter/study/bookshelf.html";
+      break;
+    case 4:
+      linkUrl = Ecp_MycnkiUrl + "/myAuthority.html#/secondaryCardAuthority";
+      break;
+    case 5:
+      linkUrl = Ecp_MycnkiUrl + "/myAccount.html#/";
+      break;
+  }
+  window.open(linkUrl, "_blank");
+}
+
+function toRecharge() {
+  window.open("https://zhifu.cnki.net/#/", "_blank");
+}
+
+function toActivityLink() {
+  window.open("https://member.cnki.net/huodong.html", "_blank");
+}
+
+// 当使用ECB模式的时候 函数
+function sm4EncodeECB(msg) {
+  var sm4 = new SM4Util();
+  // 和后端key一致
+  sm4.secretKey = "ecpsm4ecpsm4ecps";
+  return sm4.encryptData_ECB(msg);
+}
+
+function sm4DecodeECB(msg) {
+  var sm4 = new SM4Util();
+  // 和后端key一致
+  sm4.secretKey = "ecpsm4ecpsm4ecps";
+  return sm4.decryptData_ECB(msg);
+}
+
+function ecpAccountLogin() {
+  $(".ecp_loginArea h3").css("visibility","visible");
+  $(".ecp_line1").show();
+  $(".ecp_line2").hide();
+  $(".ecp_loginErrMsg").hide();
+  $(".ecp-phone-tip").hide();
+  $("#ecpAccountLogin").addClass("ecp-menu-active");
+  $("#ecpSmsLogin").removeClass("ecp-menu-active");
+  $(".ecp-error-text").hide();
+  $(".ecp_phoneBox").removeClass("ecp-input-error-tip");
+  $(".ecp_codeBox").removeClass("ecp-input-error-tip");
+  $(".ecp-account-login").show();
+  $(".ecp-sms-login").hide();
+}
+function ecpSmsLogin() {
+  $(".ecp_loginArea h3").css("visibility","hidden");
+  $(".ecp_line1").hide();
+  $(".ecp_line2").show();
+  $(".ecp_loginErrMsg").hide();
+  $(".ecp-phone-tip").show();
+  $(".ecp-error-text").hide();
+  $(".ecp_userNameBox").removeClass("ecp-input-error-tip");
+  $(".ecp_passwordBox").removeClass("ecp-input-error-tip");
+  $("#ecpSmsLogin").addClass("ecp-menu-active");
+  $("#ecpAccountLogin").removeClass("ecp-menu-active");
+  $(".ecp-sms-login").show();
+  $(".ecp-account-login").hide();
+}
+
+function ecpBeforeSendCode() {
+  ecpLoginType = 3;
+  if ($(".ecp-text-btn").css("cursor") == "default") return;
+  var regx = /^[1][3-9][0-9]{9}$/;
+  var ecpPhone = $.trim($(".ecp_phone").val());
+  if (!ecpPhone) {
+    $(".ecp_phoneBox").addClass("ecp-input-error-tip");
+    $(".ecp-phone-error").show();
+    $(".phone-error-text").text("请输入手机号码");
+    return;
+  } else if (!regx.test(ecpPhone)) {
+    $(".ecp_phoneBox").addClass("ecp-input-error-tip");
+    $(".ecp-phone-error").show();
+    $(".phone-error-text").text("请填写正确的手机号码");
+    return;
+  }
+  captcha.show();
+}
+
+function ecpSendCode() {
+  $(".ecp-phone-error").hide();
+  $(".ecp_phoneBox").removeClass("ecp-input-error-tip");
+  var ecpPhone = $.trim($(".ecp_phone").val());
+  var signUrl =
+    Ecp_topLoginUrl1 +
+    "api/Register/Send_verify_code?to=" +
+    ecpPhone +
+    "&isCheck=true";
+  var param = {
+    to: ecpPhone,
+    isCheck: true,
+  };
+
+  if (typeof Ecp_platform !== "undefined" && !isNull2(Ecp_platform)) {
+    param.platform = Ecp_platform;
+    signUrl += "&platform=" + Ecp_platform;
+  }
+  ResetCheckCode();
+  createSign(signUrl);
+  $.ajax({
+    url: Ecp_topLoginUrl1 + "api/Register/Send_verify_code",
+    data: JSON.stringify(param),
+    type: "POST",
+    cache: false,
+    xhrFields: {
+      withCredentials: true,
+    },
+    contentType: "application/json",
+    success: function (result) {
+      if (result.Code == 1) {
+        var count = 60;
+        ecpCountdown = setInterval(function () {
+          if (count === 0) {
+            $(".ecp-text-btn").css("cursor", "pointer");
+            $(".ecp-text-btn").text("重新获取");
+            clearInterval(ecpCountdown);
+          } else {
+            $(".ecp-text-btn").css("cursor", "default");
+            $(".ecp-text-btn").text(count + "s");
+          }
+          count--;
+        }, 1000);
+      } else if (result.Code == -9) {
+        $(".ecp_codeBox").addClass("ecp-input-error-tip");
+        $(".ecp-code-error").show();
+        // $(".code-error-text").text(result.Message);
+        $(".code-error-text").html(
+          result.Message +
+            "<a style='color: #3d6feb;text-decoration: underline;text-underline-offset: 3px;' href='https://my.cnki.net/mycnki/index.html#/?bindPhone=1' target='_balnk'>去认证</a>"
+        );
+      } else {
+        $(".ecp_codeBox").addClass("ecp-input-error-tip");
+        $(".ecp-code-error").show();
+        $(".code-error-text").text(result.Message);
+      }
+    },
+    error: function (XMLHttpRequest, textStatus, errorThrown) {},
+    complete: function (XMLHttpRequest, textStatus) {
+      $("#Ecp_TextBoxPwd").val("");
+    },
+  });
+}
+function ecpShowPwd(event, element1, isUnit) {
+  event.stopPropagation();
+  $(element1).attr("type", "text");
+  if (isUnit) {
+    $("#ecpHideUnitPwd").hide();
+    $("#ecpShowUnitPwd").show();
+  } else {
+    $("#ecpHidePwd").hide();
+    $("#ecpShowPwd").show();
+  }
+}
+function ecpHidePwd(event, element1, isUnit) {
+  event.stopPropagation();
+  $(element1).attr("type", "password");
+  if (isUnit) {
+    $("#ecpHideUnitPwd").show();
+    $("#ecpShowUnitPwd").hide();
+  } else {
+    $("#ecpHidePwd").show();
+    $("#ecpShowPwd").hide();
+  }
+}
+
+function linkToBuyAiMember() {
+  window.open("https://member.cnki.net/aiMember/#/","_blank");
+}

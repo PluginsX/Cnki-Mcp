@@ -1,0 +1,1424 @@
+var request = false;
+try {
+    request = new XMLHttpRequest();
+} catch (trymicrosoft) {
+    try {
+        request = new ActiveXObject("Msxml2.XMLHTTP");
+    } catch (othermicrosoft) {
+        try {
+            request = new ActiveXObject("Microsoft.XMLHTTP");
+        } catch (failed) {
+            request = false;
+        }
+    }
+}
+
+if (!request) {
+    alert("Error initializing XMLHttpRequest!");
+}
+
+//医药主题词
+function RenderAjaxYYThemeWords(params) {
+    var paramsMap = $.parseJSON(params)
+    var v = $("#paramkcmslink").val();
+    var mflag = paramsMap.MFLAG;
+    var enZtc = paramsMap.TOPIC;
+    var suc = paramsMap.SUS;
+
+    var mciHost = $("#mciHost").val();
+    if(mciHost){
+        var url = mciHost+"/subject-headings/based-ids?q={0}";
+    }else{
+        var url = "https://mci.cnki.net/subject-headings/based-ids?q={0}";
+    }
+    //CHKD外文主题词逻辑
+    if(!mflag && enZtc && suc){
+        getWwMciKeyword(suc,enZtc,url);
+    //CHKD非医学文献主题词逻辑
+    }else if(mflag && "A" == mflag.toUpperCase()){
+        var ztcCode = paramsMap.AMZTC;
+        getMciMainKeyword(ztcCode,"","","",url,"fyx");
+    }else{//CHKD医学文献主题词逻辑
+        var zkCode = paramsMap.MZYC;
+        var ckCode = paramsMap.MCYC;
+        var zyxCode = paramsMap.MZYXC;
+        var cyxode = paramsMap.MCYXC;
+        getMciMainKeyword(zkCode,ckCode,zyxCode,cyxode,url,"yx");
+    }
+
+}
+function getWwMciKeyword(suc,enZtc,urlFormat){
+    if(suc && suc.split(";;").length > 0){
+        var mainCodes = suc.split(";;");
+        var strMainCodes =  mainCodes.join(",");
+        enZtc = unescapeHtml(enZtc);
+        var ztcs = enZtc.replace(/;;;;/g,";;").split(";;");
+        var url = urlFormat.format(strMainCodes);
+        $.get(url, function (result) {
+            if (result.data && result.data.length > 0) {
+                var list = result.data;
+                var map=[];
+                for (var i = 0; i < ztcs.length; i++) {
+                    for (var j = 0; j < list.length; j++) {
+                        if(ztcs[i].startsWith(list[j].entitle)){
+                            var mapEncrypt = "sfield=kw&skey="+list[j].title+"&code="+list[j].bid;
+                            var uniplatform = getKcmsUrlParam("uniplatform") ? getKcmsUrlParam("uniplatform") : "CHKD";
+                            var link = "v=" + encryptByDES(mapEncrypt) + "&uniplatform=" + uniplatform+"&entile="+list[j].entitle;
+                            map.push({"TITLE":ztcs[i],"IS_ZY":true,"CODE":list[j].bid,"IS_SY":false,"LINK":link});
+                        }
+                    }
+                }
+                var div = $("#yyThemeWords");
+                var ul = "<ul id='keyword'><li class='top-space'><span class='rowtit'>MESH TERMS：</span><p></p></li></ul>"
+                div.append(ul);
+                var content = "";
+                var appPath = $("#appPath").val();
+                for (var m = 0; m < map.length; m++) {
+                    content += "<a target='_blank' href='../mci/detail?"+map[m].LINK+"'>"+map[m].TITLE +";</a>";
+                }
+                $("#yyThemeWords #keyword p").append(content);
+            }
+        });
+    }
+
+}
+
+// 反转义HTML函数
+function unescapeHtml(text) {
+    return text.replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, function(match) {
+        return {
+            '&amp;': '&',
+            '&lt;': '<',
+            '&gt;': '>',
+            '&quot;': '"',
+            '&#39;': "'"
+        }[match];
+    });
+}
+
+function getMciMainKeyword(zkCode,ckCode,zyxCode,cyxCode,urlFormat,type){
+    if(zkCode && zkCode.split(";;").length > 0){
+        var mainCodes = zkCode.split(";;");
+        var strMainCodes =  mainCodes.join(",");
+        var url = urlFormat.format(strMainCodes);
+        $.get(url, function (result) {
+            if (result.data && result.data.length > 0) {
+                var list = result.data;
+                var map=[];
+                for (var i = 0; i < mainCodes.length; i++) {
+                    for (var j = 0; j < list.length; j++) {
+                        if(list[j].bid == mainCodes[i]){
+                            var mapEncrypt = "sfield=kw&skey="+list[j].title+"&code="+list[j].bid;
+                            var uniplatform = getKcmsUrlParam("uniplatform") ? getKcmsUrlParam("uniplatform") : "CHKD";
+                            var link = "v=" + encryptByDES(mapEncrypt) + "&uniplatform=" + uniplatform+"&entile="+list[j].entitle;
+                            map.push({"TITLE":list[j].title,"IS_ZY":true,"CODE":list[j].bid,"IS_SY":false,"LINK":link});
+                        }
+                    }
+                }
+                var div = $("#yyThemeWords");
+                var ul = "<ul id='keyword'><li class='top-space'><span class='rowtit'>主题词：</span><p></p></li></ul>"
+                div.append(ul);
+                var content = "";
+                var appPath = $("#appPath").val();
+                var flag = "";
+                if(type == "yx"){
+                     flag= "*";
+                }
+                for (var m = 0; m < map.length; m++) {
+                    content += "<a target='_blank' href='../mci/detail?"+map[m].LINK+"'>"+map[m].TITLE + flag +";</a>";
+                }
+                $("#yyThemeWords #keyword p").append(content);
+                getMciMainYxsyKeyword(zyxCode,cyxCode,urlFormat);
+                getMciSecondaryKeyword(ckCode,zyxCode,cyxCode,urlFormat);
+            }else{
+                getMciMainYxsyKeyword(zyxCode,cyxCode,urlFormat);
+                getMciSecondaryKeyword(ckCode,zyxCode,cyxCode,urlFormat);
+            }
+        });
+    }else{
+        getMciSecondaryKeyword(ckCode,zyxCode,cyxCode,urlFormat);
+        getMciMainYxsyKeyword(zyxCode,cyxCode,urlFormat);
+    }
+
+
+}
+function getMciSecondaryKeyword(ckCode,zyxCode,cyxCode,urlFormat,type){
+    if(ckCode && ckCode.split(";;").length > 0){
+        var cyCodes = ckCode.split(";;");
+        var strCyCodes =  cyCodes.join(",");
+        var url = urlFormat.format(strCyCodes);
+        $.get(url, function (result) {
+            if (result.data && result.data.length > 0) {
+                var list = result.data;
+                var map=[];
+                for (var i = 0; i < cyCodes.length; i++) {
+                    for (var j = 0; j < list.length; j++) {
+                        if(list[j].bid == cyCodes[i]){
+                            var mapEncrypt = "sfield=kw&skey="+list[j].title+"&code="+list[j].bid;
+                            var uniplatform = getKcmsUrlParam("uniplatform") ? getKcmsUrlParam("uniplatform") : "CHKD";
+                            var link = "v=" + encryptByDES(mapEncrypt) + "&uniplatform=" + uniplatform+"&entile="+list[j].entitle;
+                            map.push({"TITLE":list[j].title,"IS_ZY":false,"CODE":list[j].bid,"IS_SY":false,"LINK":link});
+                        }
+                    }
+                }
+                if($("#yyThemeWords #keyword").length == 0){
+                    var ul = "<ul id='keyword'><li class='top-space'><span class='rowtit'>主题词：</span><p></p></li></ul>"
+                    $("#yyThemeWords").append(ul);
+                }
+                var content = "";
+                var appPath = $("#appPath").val();
+                for (var m = 0; m < map.length; m++) {
+                    content += "<a target='_blank' href='../mci/detail?"+map[m].LINK+"'>"+map[m].TITLE+";</a>";
+                }
+                $("#yyThemeWords #keyword p").append(content);
+            }
+        });
+    }
+
+}
+function getMciMainYxsyKeyword(zyxCode,cyxCode,urlFormat){
+    if(zyxCode && zyxCode.split(";;").length > 0){
+        var zyxCodes = zyxCode.split(";;");
+        var strZyxCodes =  zyxCodes.join(",");
+        var url = urlFormat.format(strZyxCodes);
+        $.get(url, function (result) {
+            if (result.data && result.data.length > 0) {
+                var list = result.data;
+                var map=[];
+                for (var i = 0; i < zyxCodes.length; i++) {
+                    for (var j = 0; j < list.length; j++) {
+                        if(list[j].bid == zyxCodes[i]){
+                            var mapEncrypt = "sfield=kw&skey="+list[j].title+"&code="+list[j].bid;
+                            var uniplatform = getKcmsUrlParam("uniplatform") ? getKcmsUrlParam("uniplatform") : "CHKD";
+                            var link = "v=" + encryptByDES(mapEncrypt) + "&uniplatform=" + uniplatform+"&entile="+list[j].entitle;
+                            map.push({"TITLE":list[j].title,"IS_ZY":true,"CODE":list[j].bid,"IS_SY":true,"LINK":link});
+                        }
+                    }
+                }
+                var div = $("#yyThemeWords");
+                var ul = "<ul id='terminology'><li class='top-space'><span class='rowtit'>药物名称术语：</span><p></p></li></ul>"
+                div.append(ul);
+                var content = "";
+                var appPath = $("#appPath").val();
+                for (var m = 0; m < map.length; m++) {
+                    content += "<a target='_blank' href='../mci/detail?"+map[m].LINK+"'>"+map[m].TITLE+"*;</a>";
+                }
+                $("#yyThemeWords #terminology p").append(content);
+                getMciSecondaryYxsyKeyword(cyxCode,urlFormat);
+            }else{
+                getMciSecondaryYxsyKeyword(cyxCode,urlFormat);
+            }
+        });
+    }else {
+        getMciSecondaryYxsyKeyword(cyxCode,urlFormat);
+    }
+
+}
+function getMciSecondaryYxsyKeyword(cyxCode,urlFormat){
+    if(cyxCode && cyxCode.split(";;").length > 0){
+        var cyxCodes = cyxCode.split(";;");
+        var strCyxCodes =  cyxCodes.join(",");
+        var url = urlFormat.format(strCyxCodes);
+        $.get(url, function (result) {
+            if (result.data && result.data.length > 0) {
+                var list = result.data;
+                var map=[];
+                for (var i = 0; i < cyxCodes.length; i++) {
+                    for (var j = 0; j < list.length; j++) {
+                        if(list[j].bid == cyxCodes[i]){
+                            var mapEncrypt = "sfield=kw&skey="+list[j].title+"&code="+list[j].bid;
+                            var uniplatform = getKcmsUrlParam("uniplatform") ? getKcmsUrlParam("uniplatform") : "CHKD";
+                            var link = "v=" + encryptByDES(mapEncrypt) + "&uniplatform=" + uniplatform+"&entile="+list[j].entitle;
+                            map.push({"TITLE":list[j].title,"IS_ZY":false,"CODE":list[j].bid,"IS_SY":true,"LINK":link});
+                        }
+                    }
+                }
+                if($("#yyThemeWords #terminology").length == 0){
+                    var ul = "<ul id='terminology'><li class='top-space'><span class='rowtit'>药物名称术语：</span><p></p></li></ul>"
+                    $("#yyThemeWords").append(ul);
+                }
+                var content = "";
+                var appPath = $("#appPath").val();
+                for (var m = 0; m < map.length; m++) {
+                    content += "<a target='_blank' href='../mci/detail?"+map[m].LINK+"'>"+map[m].TITLE+";</a>";
+                }
+                $("#yyThemeWords #terminology p").append(content);
+            }
+        });
+    }
+}
+
+
+function sort(sortSelector, curClass) {
+    //分类模块
+    $(sortSelector).mouseenter(function () {
+        $selectList = $(this).find("ul");
+        $selectList.show();
+        $selectList.find("a").click(function () {
+            $selectList.siblings().find("span").html($(this).html());
+            $(this).parent().addClass(curClass).siblings().removeClass(curClass);
+            $selectList.hide();
+        });
+    }).mouseleave(function () {
+        $selectList.hide();
+    });
+}
+/**
+ * 首发证书编号
+ * @param pfn
+ */
+function getSfZhengShu(pfn) {
+    var v = $("#paramkcmslink").val();
+    var pykm = $("#ly-code").val();
+    if(!pykm){
+        return;
+    }
+    var url = "../data/DataHandler?action=sfzhegnshu&{0}&pfn={1}";
+    url = url.format(v,pfn);
+    $.get(url, function (data) {
+        if (data) {
+            if (data.length < 7)
+                return;
+          /*  var sfhref = "//c61.cnki.net/cjfd/certificate/" + pykm + "/" + data.substring(0, 6) + "/" + data + ".pdf";*/
+            var sfhref = "https://au.cnki.net/author/workbench/myAchievement?platform=capj";
+            var zs = "<a href='" + sfhref + "' target='_blank' class='btn-sf'>" + message.onlinedown + "<i></i></a>";
+            var zsBk = "<span'>" + zs + "</span>";
+
+            if ($(".head-time").length > 0) {
+                $(".head-time").append(zs);
+            }
+            else {
+                $(".top-second").prepend(zsBk);
+            }
+        }
+    });
+}
+
+//原文预检下载
+function RenderAjaxYjDownLoad(q) {
+    removebtnnote();
+    //调用原文预检单篇是否下载接口
+    var url= $("#docpre-url").val();
+    if(!url){
+        url = "https://kns.cnki.net/docpre/api/inner/statusex";
+    }
+    if(url){
+        $.ajax({
+            /*url: "https://docpre.cnki.net/pre/docpre/api/doc/getdocstatusex",
+             url: "http://10.120.67.101:8084/docpre/api/doc/getdocstatusex",*/
+            url: url,
+            data: q,
+            headers: { 'Content-Type': 'application/json'},
+            type: "POST",
+            contentType : "application/json",
+            success: function (result) {
+                if (result.code && result.code == "200") {
+                    if (!result.data.singledownload){
+                        //隐藏单篇下载按钮 --kcms8
+                        $(".btn-html").hide();
+                        $(".btn-dlcaj").hide();
+                        $(".btn-dlpdf").hide();
+                        $(".btn-ywdlpdf").hide();
+                        $(".btn-yb-reader").hide();
+                        //下载区域的AI
+                        $(".btn-cnki-ai").hide();
+                        //右上角的AI
+                        $(".btn-ai-reader").hide();
+                        //隐藏单篇下载按钮 --kcms7
+                        $(".icon-dlcrsp").hide();
+                        $(".icon-dlcaj").hide();
+                        $(".icon-dlpdf").hide();
+                        $(".icon-dlpdf2").hide();
+                        removebtnnote(true);
+                    }
+                    if (result.data.wholedownload) {
+                        $(".btn-dluvt").show();
+                        // --kcms7
+                        $(".icon-dlread").show();
+                    } else {
+                        $(".btn-dluvt").hide();
+                        // --kcms7
+                        $(".icon-dlread").hide();
+                    }
+                }
+            }
+        });
+    }
+
+}
+
+//去除记笔记按钮
+function removebtnnote(force) {
+    if (force == true) {
+        $(".btn-note").hide();
+        return;
+    }
+
+    var temtable = $("#paramdbname").val();
+    if (!temtable) {
+        return;
+    }
+    var productCode = $("#paramdbcode").val();
+    if (!productCode) {
+        return;
+    }
+    temtable = temtable.toUpperCase();
+    productCode = productCode.toUpperCase();
+    var spanElementArray = $('.rowtit').filter(function() {
+        return $(this).text() === '来源数据库：';
+    }).get();
+    var lysjk = $(spanElementArray).next("p").text()
+    if((productCode.indexOf('CJFN') > -1 && lysjk.indexOf("基础教育") < 0)
+    || productCode.indexOf("CCJD") > -1
+    || temtable.indexOf("ZHYX") > -1){
+        $(".btn-note").hide();
+    }
+}
+
+function getLawStats(div) {
+    var v = $("#paramkcmslink").val();
+    var url = "../cooperation/law-status?{0}";
+    url = url.format(v);
+    $.get(url, function (data) {
+        if (undefined != data && data.indexOf('<title>错误页</title>') > 0) {
+            return;
+        }
+        if (!!data && data.indexOf('NODATA') < 0) {
+            // $("#" + div).html(data);
+            $("#divlawstate_photo").attr("src",data);
+        }
+        else {
+            $("#" + div).html("未找到相关数据。");
+        }
+    });
+}
+
+
+function alamancolumntree(fn,vv,cId) {
+    if (!fn && !vv && !cId) {
+        return;
+    }
+    var apiHost =$("#apiHost").val();
+    var url = apiHost+"/literature-api/v1/almanac-column/id/{0}?vv={1}&clientId={2}";
+    /*var url = "https://beta.cnki.net/literature-api/v1/almanac-column/id/{0}?vv={1}&clientId={2}";*/
+    url = url.format(fn,vv,cId);
+    $.get(url, function (data) {
+        if (data && data.data) {
+            paintingTree(data.data, "columntree", fn)
+        }else{
+            $("#columntree").hide()
+        }
+    });
+
+}
+
+function paintingTree(arr, tree, hid) {
+
+    if($(".tab-recommend-navi").length>0){
+        $(".tab-recommend-navi").show();
+        $("#kcms-data-catalog-title").show();
+        $("#kcms-data-catalog-title").addClass("active")
+    }
+    getnewary(arr)
+    function getnewary(arr) {
+        for (var j = 0; j < arr.length; j++) {
+            if (arr[j]["children"]) {
+                arr[j].open = true;
+                getnewary(arr[j]["children"])
+            } else {
+                return
+            }
+        }
+    }
+    var str = "";
+    function createTree(arr, hid) {
+
+        if (arr) {
+            var children = arr;
+            str += "<ul>";
+            for (var j = 0; j < children.length; j++) {
+                str += "<li>"
+
+                if (!children[j]["id"]) {
+                    return;
+                }
+                var temp_id = children[j]["id"];
+                var temp_title = children[j]["title"];
+                var tempurl = children[j]["relations"][0]["url"];
+
+                var tiaomu_xz = `<span class='actived'> <a class='highco' id='${temp_id}' href='${tempurl}'  title='${temp_title}' target='blank' >${temp_title}</a></span>`;
+                var tiaomu = `<span class="actived"> <a  id='${temp_id}' href='${tempurl}'  title='${temp_title}' target='blank' >${temp_title}</a></span>`;
+
+                if (children[j]["children"]) {
+
+                    if (children[j]["open"]) {
+                        if (temp_id.toLowerCase() == hid.toLowerCase()) {
+                            str += "<div class='tree-item' open='true'><span class='close' onclick=openclosetree(this)></span>" + tiaomu_xz+"</div>";
+                        }
+                        else {
+                            str += "<div class='tree-item' open='true'><span class='close' onclick=openclosetree(this)></span>" + tiaomu+"</div>";
+                        }
+                    }
+                    else {
+                        if (temp_id.toLowerCase() == hid.toLowerCase()) {
+                            str += "<div class='tree-item' open='false'><span class='open' onclick=openclosetree(this)></span>" + tiaomu_xz+"</div>";
+                        }
+                        else {
+                            str += "<div class='tree-item' open='false'><span class='open' onclick=openclosetree(this)></span>" + tiaomu+"</div>";
+                        }
+                    }
+                } else {
+                    if (temp_id.toLowerCase() == hid.toLowerCase()) {
+                        str += "<div class='tree-item'><span class='lf'></span>" + tiaomu_xz+"</div>";
+                    } else {
+                        str += "<div  class='tree-item'><span class='lf'></span>" + tiaomu+"</div>";
+                    }
+                }
+                createTree(children[j]["children"], hid)
+                str += "</li>"
+            }
+            str += "</ul>";
+        }
+
+    }
+    createTree(arr, hid);
+    if (str.length > 0 && $("#kcms-data-catalog-title").length==0) {
+        str = "<h5>栏目目录</h5>" + str;
+    }
+    $("#" + tree).html(str);
+    $("[open=true]").each(function () {
+        $(this).next().show();
+    })
+    $("[open=false]").each(function () {
+        $(this).next().hide();
+    })
+}
+function openclosetree(o) {
+    if ($(o).hasClass("open")) {
+        $(o).parent().next().show();
+        $(o).addClass("close").removeClass("open");
+    }
+    else {
+        $(o).parent().next().hide();
+        $(o).addClass("open").removeClass("close");
+    }
+}
+
+//文献是否免费
+function RenderFreeLiterature(fn,dbcode,year,dbname) {
+    var v = $("#paramkcmslink").val();
+   /* var appPath = $("#appPath").val();
+    if(appPath){
+        var url = appPath+"detail/free-article?{0}&year={1}";
+    }else{*/
+        var url = "./abstract/free-article?{0}&year={1}";
+   /* }*/
+
+    url = url.format(v,year);
+
+    var freeArticleData = $("#freeArticleData").val();
+    url = url+"&freeArticleData="+freeArticleData;
+
+    $.get(url, function (data) {
+        if (data && data.length > 0) {
+            if (data[0].token==1) {
+                var freeHtml = "<a style=\"position: relative; margin-left: 6px;padding: 0 4px;vertical-align: middle; font-size: 14px; color: green;border: 1px solid green;border-radius: 3px;cursor: default; display: inline-block;     line-height: 20px;\">免费</a>";
+                $(".wx-tit h1").append(freeHtml);
+                if($("#cajDown").length>0){
+                    $("#cajDown i").after("免费");
+                }
+                if($("#pdfDown").length>0){
+                    $("#pdfDown i").after("免费");
+                }
+            }
+        }
+    });
+
+}
+
+/**
+ * 生成密钥
+ * @param {string} password 加密密钥
+ * @returns {CryptoJS.lib.WordArray} 密钥
+ */
+function generateKey(password) {
+    return CryptoJS.enc.Utf8.parse(password);
+}
+
+
+/**
+ * DES加密字符串
+ * @param {string} data 待加密字符串
+ * @returns {string} 加密后内容（Base64 URL 编码）
+ */
+function encryptByDES(data) {
+    // 偏移变量，固定占8位字节
+    const KEY_IV = CryptoJS.lib.WordArray.create([0x16, 0x34, 0x56, 0x58, 0x88, 0xAB, 0xCD, 0xEF]);
+    // 默认加密解密密钥
+    const PASSWORD = "CNKIKCMS";
+    if (!data) {
+        throw new Error("DES-encrypt：加密参数集不能为空");
+    }
+    // 生成密钥
+    const secretKey = generateKey(PASSWORD);
+
+    // 加密
+    const encrypted = CryptoJS.DES.encrypt(data, secretKey, {
+        iv: KEY_IV,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+    });
+
+    // 获取加密后的 Base64 字符串
+    const base64String = encrypted.toString();
+
+    // 转换为 Base64 URL 编码
+    const base64UrlString = base64String
+        .replace(/\+/g, '-') // 替换 '+' 为 '-'
+        .replace(/\//g, '_') // 替换 '/' 为 '_'
+        .replace(/=+$/, ''); // 删除末尾的 '='
+
+    return base64UrlString;
+}
+
+function byteToString(arr) {
+    if (typeof arr === 'string') {
+        return arr;
+    }
+    var str = '', _arr = arr;
+    for (var i = 0; i < _arr.length; i++) {
+        var one = _arr[i].toString(2),
+            v = one.match(/^1+?(?=0)/);
+        if (v && one.length == 8) {
+            var bytesLength = v[0].length;
+            var store = _arr[i].toString(2).slice(7 - bytesLength);
+            for (var st = 1; st < bytesLength; st++) {
+                store += _arr[st + i].toString(2).slice(2);
+            }
+            str += String.fromCharCode(parseInt(store, 2));
+            i += bytesLength - 1;
+        } else {
+            str += String.fromCharCode(_arr[i]);
+        }
+    }
+    return str;
+}
+
+function linksrc(id,product,oditype){
+    var url = "https://linksrc.cnki.net/cnki-link/link/getNewLink?id={0}&odiType={1}&key={2}";
+    var key = $("#source-key").length >0?$("#source-key").val(): "";
+    url = url.format(id,oditype,key);
+    var html= "";
+    $.get(url, function (data) {
+        if (data && data.data && data.data.linkInfos) {
+            html += "<div class=\"detail_doc-database-wrap__2T6h_\">";
+            html += "<div class=\"detail_doc-database-tab-single__2aTvF\">";
+            html += "<div class=\"detail_active__2YKFD\">全部来源</div>";
+            html += "</div>";
+            var obj = data.data.linkInfos;
+            if(obj && obj.length >0){
+                html += "<div class=\"detail_doc-database-content__3nYOl\">";
+                html += "<div style=\"display: block;\">";
+                for (var i = 0; i < obj.length; i++) {
+                    var name = obj[i].repositoryName ? obj[i].repositoryName : obj[i].host;
+                    var url = obj[i].url;
+                    if(name && url){
+                        var prod = obj[i].product
+                        html += "<p><span class=\"jsx-1187156492\" style=\"width: 258px;margin-right: 0px;\">";
+                        html += "<span class=\"detail_doc-database-link__7ovGD\"/>";
+                        html += "<a target=\"_blank\" title=\""+name+"\" href=\""+url+"\" onclick='forginVlog(\""+prod+"\",\"cooperate\")' style=\"max-width: 200px; margin-right: 3px; vertical-align: middle; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box;\">";
+                        html += "<span>"+name+"</span>";
+                        html += "</a>";
+                        html += "</span>";
+                        html += "</span>";
+                        html += "</p>";
+                    }else{
+                        partner(product,oditype)
+                    }
+                }
+            }
+            if(html){
+                $(".all-source").html(html);
+            }
+        }else {
+            partner(product,oditype)
+        }
+    });
+}
+
+
+function partner(id,type){
+    var url = "https://linksrc.cnki.net/cnki-link/link/getUrlByProducts?products={0}";
+    url = url.format(id);
+    var html= "";
+    $.get(url, function (data) {
+        if (data && data.data) {
+            html += "<div class=\"detail_doc-database-wrap__2T6h_\">";
+            html += "<div class=\"detail_doc-database-tab-single__2aTvF\">";
+            if(type =="book"){
+                name = "Sources";
+            }else{
+                name = "全部来源";
+            }
+            html += "<div class=\"detail_active__2YKFD\">"+name+"</div>";
+            html += "</div>";
+            var obj = data.data;
+            if(obj && obj.length >0){
+                html += "<div class=\"detail_doc-database-content__3nYOl\">";
+                html += "<div style=\"display: block;\">";
+                for (var i = 0; i < obj.length; i++) {
+                    var name = obj[i].dbName;
+                    var url = obj[i].resWebsite;
+                    if(url.split("https:").length > 1){
+                        url = "https:" + url.split("https:")[1];
+                    }
+                    if(name && url){
+                        var prod = obj[i].dbId;
+                        html += "<p><span class=\"jsx-1187156492\" style=\"width: 258px;margin-right: 0px;\">";
+                        html += "<span class=\"detail_doc-database-link__7ovGD\"/>";
+                        html += "<a target=\"_blank\" title=\""+name+"\" href=\""+url+"\" onclick='forginVlog(\""+prod+"\",\"cooperate\")' style=\"max-width: 200px; margin-right: 3px; vertical-align: middle; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box;\">";
+                        html += "<span>"+name+"</span>";
+                        html += "</a>";
+                        html += "</span>";
+                        html += "</span>";
+                        html += "</p>";
+                    }
+                }
+            }
+            if(html){
+                $(".all-source").html(html);
+            }
+        }
+    });
+}
+
+
+function getYxRights(){
+    var url = $("#ecspHost").val();
+    if(!url){
+        url = "https://kns.cnki.net/kns/userapi/authority?code=ECSP";
+    }
+    $.ajax({
+        url: url,
+        type: "GET",
+        dataType: "json",
+        contentType: "application/json",
+        xhrFields: {withCredentials: true},
+        success: function (data) {
+            if (data && data.data && data.data == 1) {
+                $(".btn-yxyd").show();
+            }else{
+                $(".btn-yxyd").hide();
+            }
+        }
+    });
+}
+
+function getMTKeyword(){
+    var keywrods = $("#mt-key").val();
+    if(!keywrods){
+        return;
+    }
+    var pKey = "";
+    /*var keys  = keywrods.split(',')*/
+    var keys = keywrods.split(/[,;]/);
+    var chartIndex = 0;
+    if(keys && keys.length > 0){
+        for (let i = 0; i < keys.length; i++) {
+            if ( i >= 5) {
+                continue;
+            }
+            var name = keys[i].split(':').length > 0 ? keys[i].split(':')[0] : keys[i];
+            pKey += "<p class='key-content-item' onclick=keywordAnalyzing(this,'"+name.trim()+"','"+i+"')>"+name+"</p>"
+        }
+    }
+    $(".mt-keyword").html(pKey);
+    var keyword =  $(".key-content-item:first").text();
+    var obj =  $(".key-content-item:first");
+    keywordAnalyzing(obj,keyword,chartIndex);
+}
+
+function keywordAnalyzing(obj,keyword,chartIndex){
+    $(obj).addClass("active").siblings("p").removeClass("active");
+    $(".mtky-loading").show();
+    var mtkey = keyword.trim();
+
+    var jsonData = {
+        name: keyword,
+        children: []
+    };
+    var index = 0;
+    var chartDom = $("#chart-keyword-analyzing-"+chartIndex);
+    if(chartDom.html() != ''){
+        $(".mtky-loading").hide();
+        chartDom.show().siblings(".analyzing-chart").hide();
+        return;
+    }
+    /*var chartDom = document.getElementById('chart-keyword-analyzing-'+chartIndex);
+    var myChart = echarts.init(chartDom);
+    myChart.showLoading();*/
+    //释义
+    explanation(jsonData,index,mtkey,chartIndex);
+}
+
+//释义
+function explanation(jsonData,index,mtkey,chartIndex) {
+    var kdata = {
+        resource: "CROSSDB",
+        product: "TOTAL",
+        q: {
+            userScope: {
+                title: "",
+                logic: "AND",
+                items: [
+                    {
+                        key: "",
+                        title: "词目",
+                        logic: "AND",
+                        operator: "DEFAULT",
+                        uf: "ET",
+                        uv: mtkey
+                    },
+                    {
+                        key: "",
+                        title: "词目",
+                        logic: "AND",
+                        operator: "DEFAULT",
+                        uf: "LC",
+                        uv: "Y"
+                    }
+                ],
+                childItems: []
+            },
+            groupScope: {
+                title: "",
+                logic: "AND",
+                items: [],
+                childItems: []
+            }
+        },
+        extend: 0,
+        start: 1,
+        size: 5,
+        type: 0,
+        sort: "FFD",
+        sequence: "desc"
+    }
+    var kurl = $("#rbook-api").val() ? $("#rbook-api").val() : "https://t.cnki.net/rbook-api/v1/criteria/query?uniplatform=NRBOOK";
+    $.ajax({
+        url: kurl,
+        type: "POST",
+        dataType: "json",
+        data: JSON.stringify(kdata),
+        contentType: "application/json",
+        success: function (data) {
+            index ++;
+            var a = data.data;
+            var explanationResult = [];
+            if(a.data && a.data.length >0){
+                for (let i = 0; i < a.data.length; i++) {
+                    var res = a.data[i];
+                    var ab = findMtadataValue(res,"AB");
+                    var url = findRelationsValue(res, "readonline");
+
+                    var json ={"name":ab,"link":url};
+                    explanationResult.push(json);
+                }
+                var shiyiChildren = {"name":"释义",children:explanationResult};
+                jsonData.children.push(shiyiChildren);
+                //同关键词文献
+                sameKeywordArticles(jsonData,index,mtkey,chartIndex);
+
+            }else{
+                index++;
+                sameKeywordArticles(jsonData,index,mtkey,chartIndex);
+            }
+
+        }
+    });
+
+}
+//同关键词文献&相关关键词
+function sameKeywordArticles(jsonData,index,mtkey,chartIndex) {
+    /*var componentName = "ALMANAC_KEWRORD_ANALYZING_RELATED_KEYWORDS";
+    var xtnjParams = "?column="+componentName+"&mtky="+mtkey+"&start=1&size=15";
+    var datasetUrl =$("#dataset-url").val();*/
+    var kurl = "./mtky?mtky=" + encodeURIComponent(mtkey) + "&type=keyword";
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            var sameKeywordArticlesResult = [];
+            var relationKeywordResult = [];
+            if (!nxgpdata_stucture_check_datalist(data)) {
+                index ++;
+                //最新研究
+                latestResearch(jsonData,index,mtkey,chartIndex);
+                return;
+            }
+            var tynjResultData = data.data.data ? data.data.data : data.data;
+            for (var i = 0; i < tynjResultData.length; i++) {
+                var title = _findmetadatavalue(tynjResultData[i], "TI");
+                var mtky = _findmetadatavalue(tynjResultData[i], "MTKY");
+                mtky = mtky.replace(/\d+/g, "");
+                var link = _findrelationsvalue(tynjResultData[i],"ABSTRACT");
+                if (!title || i >= 15) {
+                    continue;
+                }
+                var json = {"name":title,"link":link};
+                var json2 = {"name":mtky,"link":link};
+                sameKeywordArticlesResult.push(json);
+                relationKeywordResult.push(json2);
+            }
+            var children = {"name":"同关键词文献",children:sameKeywordArticlesResult};
+            var children2 = {"name":"相关关键词",children:relationKeywordResult};
+            jsonData.children.push(children);
+            jsonData.children.push(children2);
+            //最新研究
+            latestResearch(jsonData,index,mtkey,chartIndex);
+        }
+    });
+
+}
+//最新研究
+function latestResearch(jsonData,index,mtkey,chartIndex) {
+    /*var componentName = "ALMANAC_KEWRORD_ANALYZING_LATEST_RESEARCH";
+    var xtnjParams = "?column="+componentName+"&mtky="+mtkey+"&start=1&size=15";
+    var datasetUrl =$("#dataset-url").val();*/
+    var kurl = "./mtky?mtky=" + encodeURIComponent(mtkey)+ "&type=article";
+    $.ajax({
+        url: kurl,
+        type: "GET",
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            index ++;
+            var latestResearchResult = [];
+            if (!nxgpdata_stucture_check_datalist(data)) {
+                index++;
+                //推荐词条
+                recommendedTerms(jsonData,index,mtkey,chartIndex);
+                return;
+            }
+            var tynjResultData = data.data.data ? data.data.data : data.data;
+            for (var i = 0; i < tynjResultData.length; i++) {
+                var title = _findmetadatavalue(tynjResultData[i], "TI");
+                var link = _findrelationsvalue(tynjResultData[i],"ABSTRACT");
+                if (!title || i >= 15) {
+                    continue;
+                }
+                var json ={"name":title,"link":link};
+                latestResearchResult.push(json);
+            }
+            var children = {"name":"最新研究",children:latestResearchResult};
+            jsonData.children.push(children);
+            //推荐词条
+            recommendedTerms(jsonData,index,mtkey,chartIndex);
+        }
+    });
+
+}
+//推荐词条
+function recommendedTerms(jsonData,index,mtkey,chartIndex)  {
+    var kdata = {
+        resource: "ENTRY",
+        product: "CRFD",
+        q: {
+            userScope: {
+                title: "",
+                logic: "AND",
+                items: [
+                    {
+                        key: "",
+                        title: "关键词",
+                        logic: "AND",
+                        operator: "DEFAULT",
+                        uf: "KY",
+                        uv: mtkey
+                    }
+                ],
+                childItems: []
+            },
+            groupScope: {
+                title: "",
+                logic: "AND",
+                items: [],
+                childItems: []
+            }
+        },
+        extend: 0,
+        start: 1,
+        size: 15,
+        type: 0,
+        sort: "FFD",
+        sequence: "desc"
+    }
+    var kurl = $("#rbook-api").val() ? $("#rbook-api").val() : "https://t.cnki.net/rbook-api/v1/criteria/query?uniplatform=NRBOOK";
+    $.ajax({
+        url: kurl,
+        type: "POST",
+        dataType: "json",
+        data: JSON.stringify(kdata),
+        contentType: "application/json",
+        success: function (data) {
+            var recommendedTermsResult = [];
+            var a = data.data;
+            if(a.data && a.data.length >0){
+                for (let i = 0; i < a.data.length; i++) {
+                    var res = a.data[i];
+                    var ti = findMtadataValue(res,"TI");
+                    var url = findRelationsValue(res, "readonline");
+
+                    var json ={"name":ti,"link":url};
+                    recommendedTermsResult.push(json);
+                }
+                var children = {"name":"推荐词条",children:recommendedTermsResult};
+                jsonData.children.push(children);
+                anaylzingChart(jsonData,chartIndex);
+            }else{
+              /* if(index == 5){
+                   $("#articles-analyzing").hide();
+               }else{*/
+                   anaylzingChart(jsonData,chartIndex);
+               /*}*/
+            }
+
+        }
+    });
+
+}
+
+//树形图
+function anaylzingChart(jsonData,chartIndex){
+
+   /* var analzingChartDiv = "<div id='chart-keyword-analyzing-"+chartIndex+"' class='analyzing-chart' style='height:700px'></div>";
+    $(".mt-keyword").append(analzingChartDiv);*/
+    $("#chart-keyword-analyzing-"+chartIndex).show().siblings(".analyzing-chart").hide();
+    var chartDom = document.getElementById('chart-keyword-analyzing-'+chartIndex);
+    var myChart = echarts.init(chartDom);
+    /*myChart.showLoading();*/
+    /*myChart.hideLoading();*/
+    $(".mtky-loading").hide();
+    var option;
+    const colors = ['#A47EFC', '#7B90FD', '#6580FD', '#7BA1FC', '#7BCEFC'];
+    const lineStyle = {
+        star0: {
+            color: colors[0]
+        },
+        star1: {
+            color: colors[1]
+        },
+        star2: {
+            color: colors[2]
+        },
+        star3: {
+            color: colors[3]
+        },
+        star4: {
+            color: colors[4]
+        }
+    };
+
+    var level1 = jsonData.children;
+    for (var i = 0; i < level1.length; ++i) {
+        var name = level1[i].name;
+        var block = level1[i].children;
+        let style2 = (function (name) {
+            switch (name) {
+                case '释义':
+                    return lineStyle.star0;
+                case '同关键词文献':
+                    return lineStyle.star1;
+                case '最新研究':
+                    return lineStyle.star3;
+                case '相关关键词':
+                    return lineStyle.star2;
+                case '推荐词条':
+                    return lineStyle.star4;
+            }
+        })(level1[i].name);
+        level1[i].lineStyle = style2;
+        for (var j = 0; j < block.length; j++) {
+            block[j].lineStyle = style2;
+        }
+    }
+
+    /*jsonData.children.forEach(function (datum, index) {
+         index % 2 === 1 && (datum.collapsed = true);
+     });*/
+    option = {
+        //鼠标放到节点上展示节点流水信息
+        tooltip: {
+            trigger: 'item',
+            triggerOn: 'mousemove',
+            extraCssText: 'white-space: pre-wrap;max-width:400px',
+            enterable: true,
+            textStyle: {
+                whiteSpace: 'pre-line', // 使用pre-line保留换行符
+                wordBreak: 'break-all'
+            },
+            formatter: function (params) {
+                var name = params.data.name;
+                if(name){
+                    // 获取字符串的最后一个字符
+                    var lastChar = name.charAt(name.length - 1);
+                    // 判断这个字符是否是分号或逗号
+                    if(lastChar === ';' || lastChar === ',' || lastChar === '；' || lastChar === '，'){
+                        name = name.slice(0,-1);
+                    }
+                }
+                return `<div style="white-space: normal;word-break: break-all;">${name}</div>`;
+            },
+        },
+        series: [
+            {
+                type: 'tree',
+                data: [jsonData],
+                top: '1%',
+                left: '150',
+                bottom: '1%',
+                right: '20%',
+                symbolSize: 7,
+                width: 350,
+                height: 1300,
+                label: {
+                    position: 'left',
+                    verticalAlign: 'middle',
+                    align: 'right',
+                    fontSize: 16,
+                    formatter: function (params) {
+                        var name = params.data.name;
+                        var content = name.replace(/<[^>]+>/g, '');
+                        if(content && content.length > 34){
+                            // 圆环最内层属于长度大于4个时截取前4位展示，鼠标浮上去显示完整
+                            return  content.substring(0, 34) + '...';
+                        }else{
+                            return  content;
+                        }
+                    },
+                },
+                leaves: {
+                    label: {
+                        position: 'right',
+                        verticalAlign: 'middle',
+                        align: 'left'
+                    }
+                },
+                /*label: {
+                    show: 'false',
+                    distance: 10
+                },*/
+                itemStyle: {
+                    color: '#c23531'
+                },
+                emphasis: {
+                    focus: 'descendant'
+                },
+                expandAndCollapse: true,
+                animationDuration: 550,
+                animationDurationUpdate: 750
+            }
+        ]
+    };
+
+    myChart.setOption(option);
+    myChart.on('click', function (params) {
+        if(params.event.target.culling === true){
+            return;
+        }else if(params.event.target.culling === false){
+            if(params.data.link){
+                var link = params.data.link;
+                window.open(link, '_blank'); // 在新标签页打开链接
+            }
+
+        }
+    });
+}
+
+
+
+
+
+//单条数据metadata取值,dataarrdata 单条数据  mname:当前字段
+function _findmetadatavalue(dataarrdata, mname) {
+    if (!dataarrdata.metadata || !dataarrdata.metadata.length > 0) {
+        return "";
+    }
+    for (i = 0; i < dataarrdata.metadata.length; i++) {
+        if (!dataarrdata.metadata[i].name) {
+            continue;
+        }
+        if (dataarrdata.metadata[i].name == mname) {
+            return dataarrdata.metadata[i].value;
+        }
+    }
+    return "";
+}
+
+
+//单条数据relations取值,dataarrdata 单条数据  mname:当前字段
+function _findrelationsvalue(dataarrdata, mname) {
+    if (!dataarrdata.relations || !dataarrdata.relations.length > 0) {
+        return "";
+    }
+    for (i = 0; i < dataarrdata.relations.length; i++) {
+        if (!dataarrdata.relations[i].scope) {
+            continue;
+        }
+        if (dataarrdata.relations[i].scope == mname) {
+            return dataarrdata.relations[i].url;
+        }
+    }
+    return "";
+}
+
+
+
+window.addEventListener('message', this.getMessageFun);
+function getMessageFun(msg){
+    if(!!msg.data.iframeBackParam){
+        if(msg.data.iframeBackParam.isFull==='isFull'){
+            isFullShow();
+            $(".fulltext-div").addClass("fulltext-fullshow");
+            $("body").css("overflow","hidden");
+        }else if(msg.data.iframeBackParam.isFull==='isFullNo'){
+            isFullhide()
+            $(".fulltext-div").removeClass("fulltext-fullshow");
+            $("body").css("overflow","auto");
+        }
+    }
+}
+
+
+function isFullShow(){
+    var el = document.documentElement
+    var rfs = el.requestFullScreen || el.webkitRequestFullScreen
+    if (typeof rfs != 'undefined' && rfs) {
+        rfs.call(el)
+    } else if (typeof window.ActiveXObject != 'undefined') {
+        var wscript = new ActiveXObject('WScript.Shell')
+        if (wscript != null) {
+            wscript.SendKeys('{F11}')
+        }
+    } else if (el.msRequestFullscreen) {
+        el.msRequestFullscreen()
+    } else if (el.oRequestFullscreen) {
+        el.oRequestFullscreen()
+    } else if (el.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen()
+    } else if (el.mozRequestFullScreen) {
+        el.mozRequestFullScreen()
+    } else {
+        alert('该浏览器不支持全屏操作，请更换或升级浏览器')       }
+}
+
+function  isFullhide(){
+    var el = document
+    var cfs = el.cancelFullScreen || el.webkitCancelFullScreen || el.exitFullScreen
+    if (typeof cfs != 'undefined' && cfs) {
+        cfs.call(el)
+    } else if (typeof window.ActiveXObject != 'undefined') {
+        var wscript = new ActiveXObject('WScript.Shell')
+        if (wscript != null) {
+            wscript.SendKeys('{F11}')
+        }
+    } else if (el.msExitFullscreen) {
+        el.msExitFullscreen()
+    } else if (el.oRequestFullscreen) {
+        el.oCancelFullScreen()
+    } else if (el.mozCancelFullScreen) {
+        el.mozCancelFullScreen()
+    } else if (el.webkitCancelFullScreen) {
+        el.webkitCancelFullScreen()
+    } else {
+        alert('该浏览器不支持全屏操作，请更换或升级浏览器')      }
+}
+
+
+function authorBrid(){
+    var aucodes =[];
+    if($(".authorcode").length > 0){
+        $(".authorcode").each(function () {
+            var auCode = $(this).val();
+            if(auCode.indexOf(";") > -1){
+                auCode = auCode.split(';')[0];
+            }
+            aucodes.push(auCode);
+        })
+        $.ajax({
+            url: "./abstract/author-brid?aucodes="+aucodes,
+            type: "get",
+            contentType: "application/json",
+            success: function(data) {
+                if (data && data.length > 0) {
+                    for (var i = 0; i < data.length; i++) {
+                        $(".authorcode").each(function () {
+                            var auCode = $(this).val();
+                            if(auCode.indexOf(";") > -1){
+                                auCode = auCode.split(';')[0];
+                            }
+                            if(data[i][auCode]){
+                                var url = "https://cstr.cn/"+data[i][auCode]
+                                $(this).parent("span").find("a").after("<a target='_blank' href='"+url+"'><i class='icon-brid'></i></a>");
+                            }
+                        })
+                    }
+                }
+            },
+            error: function(xhr, status, error) {
+                // 请求失败时的回调函数
+                console.error('请求失败:', error);
+            }
+        });
+    }
+
+}
+
+/**
+ * 获取视频信息
+ */
+function getCorrVideo(resType){
+    var v = $("#paramkcmslink").val();
+    if(!v){
+        return;
+    }
+    var url = "../document/corr-video?{0}";
+    url = url.format(v);
+    $.get(url, function (data) {
+        if (data && data.TI && data.WWW) {
+          $("#corr-video").show();
+          $(".show-video").show();
+          $(".a-video").attr("href",data.WWW);
+          if("journal" == resType){
+              var title = "视频名称："+ data.TI;
+          }else{
+              var title = "报告标题："+ data.TI;
+          }
+            $(".a-video").html("<i class=\"icon-video\"></i> "+title)
+        }
+    });
+}
+
+//学位论文致谢下载按钮
+function handlerZXBtn() {
+    var v = $("#paramkcmslink").val();
+    var url = "../article/abstract/thanks?{0}";
+    url = url.format(v);
+    $.get(url, function (data) {
+        if (data && data.download) {
+            $(".btn-zxcaj").show();
+            $(".btn-zxcaj a#cajZX").attr("href",data.download);
+        }
+    });
+
+}
+
+
+//总库外文doi点击 记录业务日志
+function forginVlog(prod,type){
+    var v = $("#paramkcmslink").val();
+    var ti = $("#param-ti").val();
+    if(!prod){
+        prod = $("#param-prod").val();
+    }
+
+    var lyc = $("#param-lyc").val();
+    var ye = $("#param-ye").val();
+    var qi = $("#param-qi").val();
+    var url = "../article/abstract/forginVlog?{0}&ti={1}&prod={2}&lyc={3}&ye={4}&qi={5}&type={6}";
+    url = url.format(v,ti,prod,lyc,ye,qi,type);
+    $.ajax({
+        url: url,
+        type: "GET",
+        dataType: "json",
+        contentType: "application/json",
+        success: function (data) {
+            if (!data) {
+                console.log("日志记录失败！")
+            }
+        }
+    });
+}
+
+/**
+ * 主编推荐
+ * @param id
+ */
+function getZbtjData(id){
+    if(!id){
+        return;
+    }
+    var apiHost =  $("#apiHost").val()
+    if(apiHost.indexOf("/restapi")>0){
+        apiHost = apiHost.replace("/restapi","/uniapps");
+    }
+    var tag = $("#traceability").length >0 ? $("#traceability").val() : "OTHER";
+    var autolog = 1;
+    //是否为推荐文献
+    var recommended = 0;
+    if(tag && tag.toUpperCase().indexOf("JZTJ")>-1){
+        autolog = 0;
+        //相关基金文献区分不了是否为推荐文献，故排除相关基金文献的tag
+        if(tag.toUpperCase()!="JZTJ_KCMSFUND"){
+            recommended = 1
+        }
+
+    }
+    var url = apiHost + "/journalmarket/v2/push/single?id="+id+"&position="+tag+"&autolgo="+autolog+"&recommended="+recommended;
+    $.ajax({
+        url: url,
+        type: "GET",
+        contentType: 'application/json',
+        timeout: 5000,
+        headers: getHearder("JZTJ"),
+        success: function (data) {
+            if(data.code === 0 && data.data && data.data.pushState ===1){
+                var result = data.data;
+                var person = result.rcmPerson;
+                var personTitle = result.rcmPersonTitle;
+                var comment = result.rcmComment;
+                var content = "";
+                /*content += "<li class=\"btn-editor-content\">";
+                    content +=  "<span class='editor-name'><i></i>主编荐语</span>";*/
+                        content += "<span class=\"cate-box\"></span>";
+                        content +="<div onclick=\"event.stopPropagation()\">";
+                            content += "<div class='editor-name'><i></i><div>主编荐语</div></div>";
+                            content +=  "<div class=\"editor-detail\">";
+                            if(person){
+                                content +=  "<div class='editor-author'>"+person+"</div>";
+                            }
+                            if(personTitle){
+                                content +=  "<div class='editor-title'>（"+personTitle+"）：</div>";
+                            }
+                            if(comment){
+                                content +=  "<div class='editor-comment'>"+comment+"</div>";
+                            }
+
+                            content +="</div>";
+                        content +="</div>";
+               /* content += "</li>"*/
+
+                $(".other-btns .btn-recommend").append(content);
+				$(".other-btns .btn-recommend").removeAttr("title");
+                $(".wx-tit h1").append("<span class=\"editor-span\">主编推荐</span>")
+            }
+        },
+        error: function(xhr, status, error) {
+            if (status === 'timeout') {}
+        }
+    });
+}
+
+
+function gundong(obj) {
+
+    _anchor = $(obj).attr("data-anchor");
+    if (_anchor != undefined && _anchor != "") {
+        var index = $(obj).data("index");
+        $lazyLoadObj.Data.anchor = _anchor
+        $lazyLoadObj.Funcs.funCommonTab(index)
+    }
+}
+

@@ -1,0 +1,106 @@
+﻿/**
+ * 页面加载完 电商回调函数为 LayInitComplete()  需要在客户端实现相关业务逻辑（比如添加到机构管、个人馆链接等操作）
+ * @constructor
+ */
+function LayInitComplete() {
+  if($("#hid_header_version").val()=="old") {
+
+    //添加链接
+
+    $("#Ecp_header_Help").after('<div class="ecp_tn-title" id="searchset" style="display: none;">' +
+        '   <a class="ecp_tn-tab" onclick="searchSet()" href="javascript:void(0)"><i>' + message.searchSet + '</i></a>  </div>');
+
+
+    $("#Ecp_header_Help i").text(message.helpCenter);
+    //添加我的CNKI 链接
+    $("#searchset").after('<a id="link_mycnki" class="ecp_tn-tab" target="_blank" href="https://i.cnki.net/"' +
+        '>我的CNKI<i class="ecp_tn-arrow"></i></a>');
+    //添加会员 链接
+    $("#searchset").after('<a  id="vipTab" class="ecp_tn-tab" target="_blank" href="//mall.cnki.net/user/user.html"><i>会员</i></a>');
+
+
+    //chkd旧版跳转他自己的平台
+    var uniformLocation = UNIPLATFORM;
+    if (uniformLocation == "CHKD") {
+      $("#Ecp_header_Help").before('<a id="oldversion" class="ecp_tn-tab" target="_blank" href="http://chkd.cnki.net/"><i>'
+          + message.oldversion + '</i></a>');
+
+    } else {
+      $("#Ecp_header_Help").before('<a id="oldversion" class="ecp_tn-tab" target="_blank" href="'
+          + message.OldversionPath + '"><i>'
+          + message.oldversion + '</i></a>');
+    }
+
+    //$("#Ecp_header_Register i").text(message.register);
+    $("#Ecp_header_Register").hide();//去掉注册按钮，个人登录下拉已经有注册按钮
+    // $("#searchset").after(mycnkihtml());
+
+
+    $("#Ecp_header_mycnki").remove();
+    $("#Ecp_header_ChargeCenter").remove();
+    $("#Ecp_header_BuyCard").remove();
+    $("#Ecp_header_Mobile").remove();
+    $("#Ecp_header_english").remove();
+    $(".tn-person-r .ecp_tn-title .ecp_tn-tab:contains('我的CNKI')").remove();
+
+    //添加左侧按钮（手机版、ENGLISH、地图、帮助中心）
+    $("div.ecp_top-nav>div.ecp_tn-header>div.ecp_tn-nav").before(
+        '<div class="ecp_tn-left">' +
+        '<div class="ecp_tn-title">' +
+        '<a id="Ecp_header_Mobile" class="ecp_tn-tab" target="_blank" href="//m.cnki.net/mcnkidown/index.html"><i>' + message.mobileApp + '</i></a>' +
+        // '<a id="Ecp_header_english" class="ecp_tn-tab" target="_blank" href="//oversea.cnki.net"> <i>English</i></a>' +
+        '<a id="Ecp_header_Map" class="ecp_tn-tab" target="_blank" href="//www.cnki.net/subpages/webmap.html"><i>网站地图</i></a>' +
+        '<a id="Ecp_header_left_Help" class="ecp_tn-tab" target="_blank" href="//service.cnki.net/helpcenter/"><i>' + message.supportCenter + '</i></a>' +
+        '</div>' +
+        '</div>');
+    //添加中国知网
+    $("#Ecp_header_Mobile").before(
+        "<a id='Ecp_header_cnki' class='ecp_tn-tab' target='_blank' href='https://www.cnki.net/'><i style='padding-left:0'>" + message.CNKI + "</i></a>"
+    );
+    if ($("#isoversea").val() != "1") {
+      if ($("#isperdbHomepage").val() == "1") {
+        var href = "//en.kns8.cnki.net/kns?dbcode=" + GetQueryStringByName("dbcode");
+        $("#oldversion").before('<a id="english" class="ecp_tn-tab" target="_blank" href="' + href + '"><i>ENGLISH</i></a>');
+        $("#english").before('<a id="phoneversion" class="ecp_tn-tab" target="_blank" href="//m.cnki.net/mcnkidown/index.html"><i>' + message.mobileApp + '</i></a>');
+        $("#phoneversion").before('<a id="usernotes" class="new-entrance" href="javascript:void(0)"><i>' + message.publicNote + '</i></a>');
+        $("#oldversion").remove();
+      }
+      $("#Ecp_header_Help").text("使用手册").attr("href", "//piccache.cnki.net/index/helper/manual.html").attr("style", "");
+    } else {
+      if ($("#isperdbHomepage").val() == "1") {
+        $("#oldversion").before('<a id="usernotes" class="new-entrance" href="javascript:void(0)"><i>' + message.publicNote + '</i></a>');
+      }
+    }
+  }
+}
+
+$("body").on("click", "div#btnMyCnki a", function (e) {
+  var loginState = getValueFromCookie("Ecp_LoginStuts"), userid, userType;
+  if (!!loginState) {
+    var jsonState = JSON.parse(loginState);
+    userid = jsonState.UserName;
+    userType = jsonState.UserType;
+  }
+  if (!userid) {//未登录打开登录框
+    var t = $('.ecp_header_personal_loginbg').offset().top;//  获取需要跳转到标签的top值
+    $(window).scrollTop(t);
+    //阻止向上触发事件
+    e.stopPropagation();
+    $(".ecp_header_personal_loginbg").trigger('click');
+    layer.msg(message.SubscribeTips, {
+      icon: 0, time: 3000, // 设置 3 秒后自动关闭
+      offset: [150], //设置位置
+    })
+    return false;
+  } else if (userType != 'jf') {//机构用户不允许订阅
+    layer.msg(message.SubscribeTips, {
+      icon: 0, time: 3000, // 设置 3 秒后自动关闭
+      offset: [150], //设置位置
+    })
+    return false;
+  }
+  return true;
+})
+
+
+

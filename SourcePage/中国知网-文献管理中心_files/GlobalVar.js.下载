@@ -1,0 +1,1399 @@
+﻿
+
+function getSortValue(key) {
+
+    var keyval = [{ key: "pubdate", value: "%e5%8f%91%e8%a1%a8%e6%97%b6%e9%97%b4%2f(%e5%8f%91%e8%a1%a8%e6%97%b6%e9%97%b4%2c%27TIME%27)" },
+    { key: "relevant", value: "%e7%9b%b8%e5%85%b3%e5%ba%a6%2f(ffd%2c%27rank%27)" },
+    { key: "cite", value: "%e8%a2%ab%e5%bc%95%2f(%e8%a2%ab%e5%bc%95%e9%a2%91%e6%ac%a1%2c%27integer%27)" },
+    { key: "download", value: "%e4%b8%8b%e8%bd%bd%2f(%e4%b8%8b%e8%bd%bd%e9%a2%91%e6%ac%a1%2c%27integer%27)" }];
+    for (var i = 0; i < keyval.length; i++) {
+        if (keyval[i].key == key) {
+            return keyval[i].value;
+        }
+    }
+    return "";
+}
+
+function GetQueryStringByName(query, name) {
+    if (!!query == false || !name) {
+        name = query;
+        query = window.location.href;
+    }
+    if ('[object String]' == Object.prototype.toString.call(query) & '[object String]' == Object.prototype.toString.call(name)) {
+        var result = query.match(new RegExp("[\?\&]" + name + "=([^\&]+)", "i"));
+        if (result == null || result.length < 1) {
+            return "";
+        }
+        var r = result[1].replace(/#*$/, "");
+        return decodeURIComponent(r);
+    }
+    return "";
+}
+
+/**
+ * 如果sValue是空，则删除该name属性(新增)
+ * @param query
+ * @param name
+ * @param sValue
+ * @returns {string}
+ * @constructor
+ */
+function SetQueryStringByName(query, name, sValue) {
+    if (!!query == false) {
+        name = query;
+        query = window.location.href;
+    }
+    if (!!query) {
+        var result = query.match(new RegExp("([\?\&]+)" + name + "=[^\&]*", "i"));
+        var sRe = query;
+        if (result != null) {
+            sRe = query.replace(result[0], result[1] + name + "=" + encodeURI(sValue));
+        }
+        else {
+            if (query.indexOf("?") < 0) {
+                sRe = query + "?" + name + "=" + sValue;
+            } else {
+                sRe = query + "&" + name + "=" + sValue;
+            }
+        }
+        result = sRe.match(new RegExp("([\?\&]+)" + name + "=[^\&]*", "i"));
+        if(!sValue){
+            sRe = sRe.replace(result[0], "");
+        }
+        return sRe;
+    }
+    return "";
+}
+function modifyHrefAndSearch() {
+    var href = "";
+    if (GetQueryStringByName(window.location.href, "uniplatform") == "CHKD") {
+        href = "https://t.cnki.net/chkd";
+        var yikuangSearch = 'https://chkdx.cnki.net/kns/chkd/default.aspx';
+        var gaojiSearch = href + '#/advanceSearch?state=false';
+        $("div.logo").find("a").attr("href", yikuangSearch);
+        $("div.logo").find("img").attr({"src":APPPATH+"/images/gb/logoCHKD.gif","width":"177px","height":"42px"});
+        $(".btn-grade-search").attr("href", gaojiSearch);
+        $("#file_read").css("display","none");
+    } else {
+    }
+}
+function SetUrlLanguageAndUniplatform(url){
+    var language=GetQueryStringByName(window.location.href, "language");
+    if(language){
+        url=SetQueryStringByName(url,"language",language);
+    }
+    var uniplatform=GetQueryStringByName(window.location.href, "uniplatform");
+    if(uniplatform){
+        url=SetQueryStringByName(url,"uniplatform",uniplatform);
+    }
+    return url;
+}
+
+//异步获取跨域站点服务内容
+function J(C) {
+    return document.createElement(C)
+}
+//添加监听事件
+function O(G, U, C) {
+    if (ISIE) {
+        if (U == "load") {
+            G.onreadystatechange = function () {
+                if (this.readyState == "loaded") {
+                    C();
+                }
+            }
+        }
+        else
+            G.attachEvent("on" + U, (function (V) { return function () { C.call(V) } })(G))
+
+    }
+    else {
+        G.addEventListener(U, C, false)
+    }
+}
+
+function CoreDomainLoadJson() {
+    this.C;
+    this.J = J;
+    this.O = O;
+    this.Load = function (src, onJsonLoaded, id) {
+        //          if (this.C) {
+        //              document.body.removeChild(this.C);
+        //          }
+        var oldscript = document.getElementById(id);
+        if (oldscript) {
+            document.body.removeChild(oldscript);
+        }
+        this.C = J("SCRIPT");
+        this.C.type = "text/javascript";
+        if (typeof id == "string" && id.length > 0) {
+            this.C.id = id;
+        }
+        else {
+            this.C.id = "callScriptE";
+        }
+        this.C.src = src + "&td=" + (new Date()).getTime();
+        this.C.charset = "utf-8";
+        document.body.appendChild(this.C);
+        O(this.C, "load", onJsonLoaded);
+    }
+}
+
+function addToCookie(v, t) {
+    company = "cnki";
+    cookie = new String(getCookie("RecordID"));
+    if ((cookie.length > 0) && ((cookie.substring(0, cookie.indexOf(':')) == company))) {
+        if (cookie.length - 1 == cookie.indexOf(':')) {
+            setCookie("RecordID", cookie + v, t);
+        }
+        else {
+            setCookie("RecordID", cookie + "," + v, t);
+        }
+    }
+    else {
+        setCookie("RecordID", company + ":" + v, t);
+    }
+}
+
+function setCookie(name, value, t) {
+    if (window.localStorage) {
+        if (value && value != "") {
+            if (t == 2 || t == "2") {
+                sessionStorage.setItem(name, value);
+            }
+            else {
+                localStorage.setItem(name, value);
+            }
+        }
+    }
+    else {
+        document.cookie = name + "=" + escape(value) + ";" + "path=/";
+    }
+}
+
+function getCookie(name, t) {
+    if (window.localStorage) {
+        if (t == "2" || t == 2) {
+            return sessionStorage.getItem(name);
+        } else {
+            return localStorage.getItem(name);
+        }
+    }
+    return getValueFromCookie(name);
+}
+
+function delCookie(name, t) {
+    if (window.localStorage) {
+        if (t == "2" || t == 2) {
+            sessionStorage.removeItem(name);
+        }
+        else {
+            localStorage.removeItem(name);
+        }
+    }
+    var exp = new Date();
+    exp.setTime(exp.getTime() - 1);
+    var cval = getCookie(name);
+    if (cval != null)
+        document.cookie = name + "=" + cval + ";expires=" + exp.toGMTString();
+}
+
+function getValueFromCookie(cookieName) {
+    var name = cookieName + "=";
+    var isfound = false;
+    var start = 0;
+    var end = 0;
+    var CookieString = document.cookie;
+    var str = "";
+    var i = 0;
+    while (i < CookieString.length) {
+        start = i;
+        end = start + name.length;
+        if (CookieString.substring(start, end) == name) {
+            isfound = true;
+            break;
+        }
+        i++;
+    }
+
+    if (isfound == true) {
+        start = end;
+        end = CookieString.indexOf(";", start);
+        if (end < start)
+            end = CookieString.length;
+        str = unescape(CookieString.substring(start, end));
+    }
+
+    if (str.indexOf("cnki:") == 0) {
+        str = str.substring(5, str.length);
+    }
+    return str;
+}
+function getCache(name, t) {
+    if (typeof window.localStorage=="object") {
+        if (t == "2" || t == 2) {
+            return JSON.parse(sessionStorage.getItem(name));
+        } else {
+            return JSON.parse(localStorage.getItem(name));
+        }
+    }
+    return getValueFromCookie(name);
+}
+function setCache(name, value, t) {
+    if (typeof window.localStorage=="object") {
+        if (value && value != "") {
+            if (t == 2 || t == "2") {
+                sessionStorage.setItem(name, JSON.stringify(value));
+            } else {
+                localStorage.setItem(name, JSON.stringify(value));
+            }
+        }
+    } else {
+        document.cookie = name + "=" + escape(JSON.stringify(value)) + ";" + "path=/";
+    }
+}
+// 验证产品代码的合法性，防止url里面有不存在的产品
+function ValidDbcode(dbcode) {
+    if (!dbcode) {
+        return false;
+    }
+    if (!/^[a-z_A-Z]+$/i.test(dbcode)) {
+        return false;
+    }
+    return true;
+}
+
+///获取唯一标识 用来保存历史记录
+function GetCNKIUserKey() {
+    var cnkiUserKey = getValueFromCookie("cnkiUserKey");
+    if (cnkiUserKey)
+        return cnkiUserKey;
+    function SetNewGuid() {
+        var guid = "";
+        for (var i = 1; i <= 32; i++) {
+            var n = Math.floor(Math.random() * 16.0).toString(16);
+            guid += n;
+            if ((i == 8) || (i == 12) || (i == 16) || (i == 20))
+                guid += "-";
+        }
+        return guid;
+    }
+    cnkiUserKey = SetNewGuid();
+    $.ookie("cnkiUserKey", cnkiUserKey, { expires: 3650, path: '/' });
+    return cnkiUserKey;
+}
+
+//通过统一登录cookie取用户名或用户类型
+function GEetUInfoFromECP(o) {
+    var ecpjosn, ecpjosntype;
+    if (!o) return "";
+    ecpjosn = getValueFromCookie("Ecp_LoginStuts");
+    if (!!ecpjosn) {
+        ecpjosn = decodeURIComponent(ecpjosn);
+        ecpjosntype = eval("(" + ecpjosn + ")");
+        switch (o) {
+            case "uname":
+                return ecpjosntype.UserName;
+            case "utype":
+                return ecpjosntype.UserType;
+            case "sname":
+                return decodeURI(decodeURIComponent(ecpjosntype.ShowName));
+            case "BUserType":
+                return ecpjosntype.BUserType;
+            case "buname":
+                return ecpjosntype.BUserName;
+            default:
+                return ""
+        }
+    }
+    return ""
+}
+//判定是否登录
+function islogin() {
+    //var lid = getValueFromCookie("LID");
+    var loginState = getValueFromCookie("Ecp_LoginStuts");
+    var userid;
+    if (!!loginState) {
+        var jsonState = JSON.parse(loginState);
+        userid = jsonState.UserName;
+    } else {
+    }
+
+    // 不判断LID 20190725
+    if (!!userid) {
+        return true
+    }
+
+    return false;
+
+};
+///判断是否个人登录
+function isPersonLogin() {
+    var utype = GEetUInfoFromECP("utype");
+
+    return islogin() && utype.toLowerCase() === "jf";  //&& !BUserType;
+}
+
+//判断是否机构登录
+function isBKLogin() {
+    var utype = GEetUInfoFromECP("utype");
+    return islogin() && utype.toLowerCase() === "bk";
+}
+//判断是否个人和机构同时登录
+function isPersonAndBKLogin() {
+    var utype = GEetUInfoFromECP("utype");
+    var BUserType = GEetUInfoFromECP("BUserType");
+    return islogin() && utype.toLowerCase() === "jf"&&BUserType.toLowerCase() === "bk";
+}
+
+
+function getUsername() {
+    return GEetUInfoFromECP("uname");
+}
+
+/********扩展方法 Begin********/
+//根据CNKI的规则对字符串进行格式化
+//1 仅仅把<html替换成< html, <100, <中国(不做处理)
+String.prototype.cnkiFormat = function () {
+    var temp = this.toString();
+
+    //规则1: 仅仅把<html替换成< html, <100, <中国(不做处理)
+    var patten = /[<][a-zA-Z/]+/ig;
+    if (patten.test(temp)) {
+        temp = temp.replace(/</ig, "< ");
+    }
+
+    //如果有新添加的规则请从temp继续添加
+    //转义 \
+    //var patten = /\\/ig;
+    //if (patten.test(temp)) {
+    //    temp = temp.replace(/\\/ig, "\\\\");
+    //}
+
+    //  //转义 单引号’
+    //var patten = /'/ig;
+    //if (patten.test(temp)) {
+    //    temp = temp.replace(/'/ig, "\\\'");
+    //  }
+
+
+    return $.trim(temp);
+}
+String.prototype.format = function () {
+    var args = arguments;
+    return this.replace(/\{(\d+)\}/g,
+        function (m, i) {
+            return args[i];
+        });
+}
+String.prototype.ltrim = function () {
+    return this.replace(/^\s+/, '');
+};
+String.prototype.rtrim = function (str) {
+    var reg = new RegExp('([' + str + ']*$)', 'gi');
+    return str?this.replace(reg, ''):this.replace(/\s+$/, '');
+};
+String.prototype.trim = function () {
+    return this.ltrim().rtrim();
+};
+String.prototype.startWith = function(str) {
+    var reg = new RegExp("^" + str);
+    return reg.test(this);
+}
+
+String.prototype.endWith = function(str) {
+    var reg = new RegExp(str + "$");
+    return reg.test(this);
+}
+if (!Array.prototype.indexOf) {
+    Array.prototype.indexOf = function (elt /*, from*/) {
+        var len = this.length >>> 0;
+        var from = Number(arguments[1]) || 0;
+        from = (from < 0)
+             ? Math.ceil(from)
+             : Math.floor(from);
+        if (from < 0)
+            from += len;
+        for (; from < len; from++) {
+            if (from in this &&
+                this[from] === elt)
+                return from;
+        }
+        return -1;
+    };
+}
+/********扩展方法 End  ********/
+
+
+
+function checkLength(value) {
+    if (value && value.length > 1000) {
+        layer.alert(message['mostInput'], { btn: message.Confirm, title: message.info });
+    }
+};
+
+
+//获取当前url里面的名称
+var GetPageName = function () {
+    var uri = window.location.href;
+    var reg = new RegExp(APPPATH + "/([^&/\?]*)");
+    var result = uri.match(reg);
+    if (result == null || result.length < 1) {
+        return "DefaultResult";
+    }
+    var controllerName = decodeURIComponent(result[1]);
+    controllerName - !!controllerName ? controllerName : "DefaultResult";
+    return controllerName;
+};
+
+
+
+/********************************************Form相关 Begin**********************************************************/
+/*******************建立控件*******************/
+var createElement = function (eTag, eType, eName, eValue) {
+    var tempE = document.createElement(eTag);
+    tempE.type = eType;
+    tempE.name = eName;
+    tempE.value = eValue;
+    return tempE;
+};
+
+/*******************模拟post提交*******************/
+var postSubmit = function (formID, URL, paramObjs, targetName) {
+
+    $("#" + formID).remove();
+
+    var temp = $("<form>");
+    temp[0].action = URL;
+    temp[0].method = "post";
+    temp[0].target = targetName;
+    temp[0].style.display = "none";
+    temp[0].id = formID;
+
+    if (paramObjs) {
+        for (var i = 0; i < paramObjs.length; i++) {
+            temp[0].appendChild(paramObjs[i]);
+        }
+    }
+
+    document.body.appendChild(temp[0]);
+    temp[0].submit();
+    return temp;
+};
+/********************************************Form相关 End  **********************************************************/
+
+//$.PostWindow:跳转页面post提交 $.BrowserTab:浏览器切换tab选项卡触发的事件第一个切入的时候触发 第二个切出的时候触发
+(function ($) {
+    function handlerstring(tempForm, data) {
+        var arr = data.split('?');
+        for (var i = 0; i < arr.length; i++) {
+            var hideInput = document.createElement("input");
+            hideInput.type = "hidden";
+            hideInput.name = arr[i].substring(0, arr[i].indexOf("="));
+            hideInput.value = arr[i].substring(arr[i].indexOf("=") + 1);
+            tempForm.appendChild(hideInput);
+        }
+    }
+    function handlerobject(tempForm, data) {
+        for (var temp in data) {
+            var hideInput = document.createElement("input");
+            hideInput.type = "hidden";
+            hideInput.name = temp;
+            hideInput.value = data[temp];
+            tempForm.appendChild(hideInput);
+        }
+    }
+    //导出文本跳转页使用。data支持 a=1&b=3 或者{a:1,b:2} target：默认不传，当需要在本页面跳转的时候传_self
+    $.PostWindow = function (url, data, target) {
+        var tempForm = document.createElement("form");
+        tempForm.id = "tempForm1";
+        tempForm.method = "post";
+        tempForm.action = url;
+        tempForm.target = target ? target : "";
+        if (typeof (data) == "object") {
+            handlerobject(tempForm, data);
+        }
+        else if (typeof (data) == "string") {
+            handlerstring(tempForm, data);
+        }
+        if (document.attachEvent) {
+            tempForm.attachEvent("onsubmit", function () { window.open('about:blank') });
+        }
+        else if (document.addEventListener) {
+            tempForm.addEventListener("onsubmit", function () { window.open('about:blank') });
+        }
+        document.body.appendChild(tempForm);
+        tempForm.submit();
+        document.body.removeChild(tempForm);
+    }
+    $.BrowserTab = function (funcactive, funcnoactive) {
+        var hiddenProperty = 'hidden' in document ? 'hidden' :
+            'webkitHidden' in document ? 'webkitHidden' :
+                'mozHidden' in document ? 'mozHidden' :
+                    null;
+        if (hiddenProperty != null) {
+            var visibilityChangeEvent = hiddenProperty.replace(/hidden/i, 'visibilitychange');
+            var onVisibilityChange = function (funcactive, funcnoactive) {
+                if (!document[hiddenProperty]) {
+                    if (typeof funcactive == 'function')
+                        funcactive();
+                } else {
+                    if (typeof funcnoactive == 'function')
+                        funcnoactive();
+                }
+            }
+            document.addEventListener(visibilityChangeEvent, function () { onVisibilityChange(funcactive, funcnoactive); });
+        }
+    }
+    $.getUniplatform=function (){
+        var uniplatform = GetQueryStringByName("uniplatform");
+        if (!uniplatform) {
+            uniplatform = $("#uniplatform").val();
+        }
+        if (!uniplatform) {
+            uniplatform = "NZKPT";
+        }
+        return uniplatform.toUpperCase();
+    }
+    $.getLanguage = function () {
+        var language = GetQueryStringByName("language");
+        if (!language) {
+            language = $("#language").val();
+        }
+        if (!language) {
+            language =LANGUAGE;
+        }
+        return language?language.toUpperCase():"CHS";
+    }
+    $.getUniplatformAndLanguageUrl = function (url) {
+        var language = GetQueryStringByName(window.location.href, "language");
+        if (!language) {
+            language = $("#language").val() ? $("#language").val() : "CHS";
+        }
+        var uniplatform = GetQueryStringByName(window.location.href, "uniplatform");
+        if (!uniplatform) {
+            uniplatform = $("#uniplatform").val() ? $("#uniplatform").val() : "NZKPT";
+        }
+        var version = GetQueryStringByName(window.location.href, "version");
+        if (!version) {
+            version = $("#versionid").val() ? $("#versionid").val() : "";
+        }
+        var subject = GetQueryStringByName(window.location.href, "subject");
+        if (!subject) {
+            subject = $("#subject").val() ? $("#subject").val() : "";
+        }
+        url = SetQueryStringByName(url, "language", language);
+        url = SetQueryStringByName(url, "uniplatform", uniplatform);
+        url = version ? SetQueryStringByName(url, "version", version) : url;
+        url = subject ? SetQueryStringByName(url, "subject", subject) : url;
+        return url;
+    }
+    $.getSubject=function (){
+        var subject = GetQueryStringByName("subject");
+        if (!subject) {
+            subject = $("#subject").val();
+        }
+        return subject?subject:"";
+    }
+    $.clientIdInit=function (){
+        var LocalStorageKey="fingerprintId";
+        var clientID = $.cookie("Ecp_ClientId");
+        if (clientID === undefined || clientID === "" || clientID == null || clientID === 'null') {
+            getFingerprint();
+        }else{
+            //如果当天已发送过浏览器指纹id，则退出
+            if(getLocalStorageWithExpire(LocalStorageKey)){
+                return;
+            }
+            getFingerprint();
+        }
+
+        function getFingerprint() {
+            //等待 FingerprintJS 初始化  指纹1
+            var dynamicPath = "https://login.cnki.net/tlogin/scripts/pf.js";
+            var fpPromise = import(dynamicPath).then((FingerprintJS) =>
+                FingerprintJS.load()
+            );
+            // 获取指纹1
+            fpPromise
+                .then(fp=>fp.get())
+                .then(result=>{
+                    getClientId(result.visitorId);
+                    saveFingerLog(result.visitorId)
+                });
+            function getClientId(fingerprintId) {
+                //暂时借用此变量
+                var recSysAPIUrl = $("#RecSysAPI").val();
+                if (!!recSysAPIUrl == false)
+                    recSysAPIUrl = "https://recsys.cnki.net/RCDService";
+                else {
+                    recSysAPIUrl = recSysAPIUrl.replace("/api/RecSysOpenApi/", "");
+                }
+                //预防配置错误为Beta版测试地址
+                recSysAPIUrl = recSysAPIUrl.replace("RCDServiceBeta", "RCDService");
+                var getUrl = recSysAPIUrl + "/api/UtilityOpenApi/GenerateClientID?fingerprint=" + fingerprintId + "&platform=" + $.getUniplatform();
+                $.ajax({
+                    type: "GET",
+                    url: getUrl,
+                    success: function (result) {
+                        if (result.Success) {
+                            $.cookie('Ecp_ClientId', result.Data, {expires: 400, path: '/', domain: '.cnki.net'})
+                        } else {
+                            console.log(result.Message)
+                        }
+                    },
+                    error: function (xmlHttpRequest, textStatus, errorThrown) {
+
+                    }
+                });
+
+            }
+            //发送日志
+            function saveFingerLog(fingerprintId) {
+                if(getLocalStorageWithExpire(LocalStorageKey)){
+                    return;
+                }
+                var param= {
+                    "broRes": window.screen.width+"*"+window.screen.height
+                }
+                var paramHead= {
+                    "visitorId": fingerprintId
+                }
+                var url=$("#applogid").val()+"/browser";
+                if(url){
+                    $.ajax({
+                        url: url,
+                        type: "POST",
+                        contentType: "application/json",
+                        headers: paramHead,
+                        data: JSON.stringify(param),
+                        success: function (result) {
+                            setLocalStorageCurrentDay(LocalStorageKey,fingerprintId);
+                            console.log(result);
+                        },
+                        error: function (e) {
+                            console.log(e);
+                        }
+                    });
+                }
+
+            }
+        }
+
+        //存储localstorage到当天24点
+        function setLocalStorageCurrentDay(key, value) {
+            // 获取当前日期
+            var now = new Date();
+            // 创建一个新的日期对象，设置为今天的日期，时间部分设置为23:59:59
+            var endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            // 计算今天结束与当前时间的毫秒差
+            var millisecondsUntilEndOfDay = endOfDay.getTime() - now.getTime();
+            setLocalStorageWithExpire(key,value,millisecondsUntilEndOfDay);
+        }
+        function setLocalStorageWithExpire(key, value, ttl) {
+            const now = new Date().getTime();
+
+            // 创建一个对象来保存值和过期时间
+            const item = {
+                value: value,
+                expiry: now + ttl,
+            };
+            localStorage.setItem(key, JSON.stringify(item));
+        }
+        function getLocalStorageWithExpire(key) {
+            const itemStr = localStorage.getItem(key);
+
+            // 如果没有该项或者已经过期，返回null
+            if (!itemStr) {
+                return null;
+            }
+            const item = JSON.parse(itemStr);
+            const now = new Date().getTime();
+
+            // 检查是否过期
+            if (now > item.expiry) {
+                localStorage.removeItem(key);
+                return null;
+            }
+            return item.value;
+        }
+        return clientID;
+    }
+})(jQuery)
+
+var sessionCookieUnit = {
+    addToCookie: function (name, value) {
+        name=sessionCookieUnit.handlerName(name);
+        var cookietext = encodeURIComponent(name) + "=" + encodeURIComponent(value) + ";path=/";
+        document.cookie = cookietext;
+    },
+    //exipre：毫秒
+    addToCookieTimes: function (name, value, exipre) {
+        name=sessionCookieUnit.handlerName(name);
+        var exp = new Date();
+        exp.setTime(exp.getTime() + exipre * 1);
+
+        var cookietext = encodeURIComponent(name) + "=" + encodeURIComponent(value) + ";path=/";
+        cookietext = cookietext + ";expires=" + exp.toGMTString();
+        document.cookie = cookietext;
+    },
+    getCookie: function (name) {
+        name=sessionCookieUnit.handlerName(name);
+        var cookiename = encodeURIComponent(name) + "=",
+            cookiestar = document.cookie.indexOf(cookiename),
+            cookievalue = null;
+        if (cookiestar > -1) {
+            var cookiend = document.cookie.indexOf(";", cookiestar);
+            if (cookiend == -1) {
+                cookiend = document.cookie.length;
+            }
+            cookievalue = decodeURIComponent(document.cookie.substring(cookiestar + cookiename.length, cookiend));
+        }
+        return cookievalue;
+    },
+    //检索设置需要区分不同平台，默认走NZKPT，其它的需要加平台名称，避免互相影响
+    handlerName:function (name){
+        var range=["showlists","dSearchFolds","dsorders","dmaxgroups","searchTimeFlags","personsets","knsadv-searchtype"];
+        if(range.indexOf(name)==-1){
+            return name;
+        }
+        var uniplatform = $.getUniplatform();
+        if (!uniplatform) {
+            return name;
+        }
+        if("NZKPT"==uniplatform.toUpperCase()){
+            return name;
+        }
+        return uniplatform+name;
+    },
+    unset: function (name) {
+        this.addToCookie(name, "");
+    },
+};
+
+jQuery.cookie = function (name, value, options) {
+    if (typeof value != 'undefined') { // name and value given, set cookie
+        options = options || {};
+        if (value === null) {
+            value = '';
+            options.expires = -1;
+        }
+        var expires = '';
+        if (options.expires && (typeof options.expires == 'number' || options.expires.toUTCString)) {
+            var date;
+            if (typeof options.expires == 'number') {
+                date = new Date();
+                date.setTime(date.getTime() + (options.expires * 24 * 60 * 60 * 1000));
+            } else {
+                date = options.expires;
+            }
+            expires = '; expires=' + date.toUTCString(); // use expires attribute, max-age is not supported by IE
+        }
+        // CAUTION: Needed to parenthesize options.path and options.domain
+        // in the following expressions, otherwise they evaluate to undefined
+        // in the packed version for some reason...
+        var path = options.path ? '; path=' + (options.path) : '';
+        var domain = options.domain ? '; domain=' + (options.domain) : '';
+        var secure = options.secure ? '; secure' : '';
+        document.cookie = [name, '=', encodeURIComponent(value), expires, path, domain, secure].join('');
+    } else { // only name given, get cookie
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+};
+
+function saveAppLog(service,platform,resource,productCode,language,object,objectAttr,expandsMap,hitRecords) {
+    var param= {
+        "bizName": "检索中台",
+        "appName":"文献管理子系统",
+        "appVersion": "鲁班接入版",
+        "service": service,
+        "platform": platform?platform:$("#uniplatform").val(),
+        "resourceType": resource,
+        "resource": productCode,
+        "language":language,
+        "object": object,
+        "objectAttr": objectAttr,
+        "expandsMap":expandsMap,
+        "hitRecords": hitRecords,
+        "status": 0
+    }
+    var url=$("#applogid").val();
+    if(url){
+        $.ajax({
+            url: url,
+            type: "POST",
+            contentType: "application/json",
+            dataType: 'json',
+            data: JSON.stringify(param),
+            success: function (result) {
+            },
+            error: function (e) {
+                console.log(e);
+            }
+        });
+    }
+
+}
+
+function crosAjaxRequest(url, method, para, callback) {
+    var request = false;
+    try {
+        request = new XMLHttpRequest();
+    } catch (trymicrosoft) {
+        try {
+            request = new ActiveXObject("Msxml2.XMLHTTP");
+        } catch (othermicrosoft) {
+            try {
+                request = new ActiveXObject("Microsoft.XMLHTTP");
+            } catch (failed) {
+                request = false;
+            }
+        }
+    }
+
+    if (!request) {
+        alert("Error initializing XMLHttpRequest!");
+    }
+
+    request.open("GET", url, true);
+    request.onreadystatechange = readystatechange;
+    request.send(null);
+
+    function readystatechange() {
+
+        if (request.readyState == 4) {
+            if (request.status == 200) {
+                var response = request.responseText;
+                callback(responseHtml);
+            }
+        }
+
+    }
+
+};
+
+
+function crossDomain() {
+    //异步获取跨域站点服务内容
+    function J(C) {
+        return document.createElement(C)
+    }
+    //添加监听事件
+    function O(G, U, C) {
+        if (ISIE) {
+            if (U == "load") {
+                G.onreadystatechange = function () {
+                    if (this.readyState == "loaded") {
+                        C(this.responseText);
+                    }
+                }
+            }
+            else
+                G.attachEvent("on" + U, (function (V) { return function () { C.call(V) } })(G))
+
+        }
+        else {
+            G.addEventListener(U, C, false)
+        }
+    }
+    //CoreDomainLoadJson
+    return function (src, onJsonLoaded, id) {
+        //          if (this.C) {
+        //              document.body.removeChild(this.C);
+        //          }
+        var oldscript = document.getElementById(id);
+        if (oldscript) {
+            document.body.removeChild(oldscript);
+        }
+        this.C = J("SCRIPT");
+        this.C.type = "text/javascript";
+        if (typeof id == "string" && id.length > 0) {
+            this.C.id = id;
+        }
+        else {
+            this.C.id = "callScriptE";
+        }
+        this.C.src = src + "&td=" + (new Date()).getTime();
+        this.C.charset = "utf-8";
+        document.body.appendChild(this.C);
+        O(this.C, "load", onJsonLoaded);
+    }
+
+}
+
+(function ($) {
+    var fliter = function () { };
+
+    //验证用户输入是否存在不允许字符
+    fliter.doValidate = function (value) {
+        var vkeyWords = /[<>\\\;]/im;
+
+        if (vkeyWords.test(value)) {
+            layer.alert(message['inputParmsError'], { btn: message.Confirm, title: message.info });
+            return false;
+        }
+
+        return true;
+    };
+
+    //验证value是否有危险字符.有则返回true
+    fliter.hasDangerousChar = function (value) {
+        var vkeyWords = /[<>\\]/im;
+
+        if (vkeyWords.test(value)) {
+            return true;
+        }
+        return false;
+    };
+
+    //清除用户输入的不允许字符
+    fliter.clearillegalChar = function (value) {
+        if (value) {
+            value = value.replace(/^\s+|[~!@$%^]+|\s+$/g, "");
+        }
+        if (value.length > 1000) {
+            value = value.substring(0, 1000);
+        }
+        return value;
+    };
+
+    fliter.isCompositeExp = function (value) {
+        var quoteStr = /^['\"][^'\"]+['\"]$/;
+
+        // 操作符左右有值并且值不是操作符
+        if (!quoteStr.test(value) && /[^\+\*\-\s]+\s+[\+\*\-]\s+[^\+\*\-\s]+/.test(value)) {
+
+
+            var len = value.split("'").length - 1;
+            var len2 = value.split("\"").length - 1;
+
+            //  // 判断引号是否是成对的,判断括号是否是成对的
+            if (len % 2 == 0 && len2 % 2 == 0 && fliter.isBrackBalance(value)) {
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        return false;
+    };
+
+    // 判断括号是否是成对的
+    fliter.isBrackBalance = function (value) {
+        if (!value) {
+            return true;
+        }
+
+        if (value.indexOf("(") < 0 && value.indexOf(")") < 0) {
+            return true;
+        }
+
+        // 去除引号里面的括号
+        value = /['\"][^'\"]+['\"]/.replace(value, "*");
+        var num = 0;
+        for (var i = 0; i < value.length; i++) {
+            if (value[i] == "(") {
+                num++;
+            }
+            if (value[i] == ")") {
+                num--;
+            }
+        }
+        if (num == 0) {
+            return true;
+        }
+
+        return false;
+    }
+
+
+    //验证用户输入的DOI
+    fliter.ValidDOI = function (inputval, isprecise) {
+
+        if (!inputval) {
+            return false;
+        }
+        if (/^[\'\"]?10\./.test(inputval)) {
+
+            //精确检索需要有斜线
+            if (isprecise) {
+                return /\//.test(inputval);
+            }
+
+            // 如果是复合检索，需要每个值都校验下
+            //if (fliter.isCompositeExp(inputval)) {
+
+            //}
+
+            return true;
+        }
+        return false;
+    };
+
+    fliter.ValidExpertSearch = function (inputval) {
+        var reg = /[=%]/ig
+        if (!reg.test(inputval)) {
+            return false;
+        }
+
+        // or and 两边不能是引号+空格，例如：AI='ad' or 'def'
+        var linkchar = /\'\s(or|and)\s\'/i;
+        if (linkchar.test(inputval)) {
+            return false;
+        }
+
+        return true;
+    };
+
+    fliter.starYear = function (value) {
+        value = value.replace(/[^\d]/g, '')
+        if (value.length == 4) {
+            if (value < 1979 && value != 1915 && value != 1949) {
+                return "1949";
+            }
+            var cyear = new Date().getFullYear()
+
+            if (value > cyear) {
+                value = cyear
+            }
+        }
+        return value;
+    };
+
+    fliter.endYear = function (value) {
+        value = value.replace(/[^\d]/g, '')
+        if (value.length == 4) {
+            if (value < 1979 && value != 1915 && value != 1949) {
+                return "1949";
+            }
+            var cyear = new Date().getFullYear()
+
+            if (value > cyear) {
+                value = cyear
+            }
+        }
+        return value;
+    }
+
+
+    window.fliter = fliter
+})(jQuery);
+
+
+//ai综述按钮点击
+function aiExportClickEvnt() {
+    $(document).on('click', '#layer-wxzs .icon-close', function () {
+        $('#modalBoxAiExport1').hide();
+        $('#modalBoxAiExport2').hide();
+        $('#modalBoxAiExport3').hide();
+        $('#modalBoxAiExport4').hide();
+        $('#modalBoxAiExport5').hide();
+    })
+    $("body").on("click", ".export-sidebar-a a#aiExport,#file_ai", function (event) {
+
+        if (!islogin()) {
+            // if ($("#hidLoginUrl").val() && $("#hidLoginUrl").val().indexOf("cnki.net") > -1) {
+            //     window.open($("#hidLoginUrl").val(), "_blank");
+            // }
+                //阻止向上触发事件
+                event.stopPropagation();
+                if ($(".ecp_personalLoginBox").is(":hidden")) {
+                    $(".ecp_header_personal_loginbg").trigger('click');
+                }
+                layer.msg(message.logintoSee, {
+                    icon: 0, time: 3000, // 设置 3 秒后自动关闭
+                    offset: [150], //设置位置
+                })
+                return;
+        }
+        var bkLogin = isBKLogin();
+        var personLogin = isPersonLogin();
+        var personAndBkLogin = isPersonAndBKLogin();
+        //只登录机构的
+        if (bkLogin && !personLogin) {
+            $('#modalBoxAiExport1').show();
+            return;
+        }
+        //登录机构及个人的
+        if (personAndBkLogin) {
+            var KEY_AI_EXPORT = GEetUInfoFromECP("uname") + "|" + GEetUInfoFromECP("buname");
+            var alertCount = getCache(KEY_AI_EXPORT);
+            alertCount = alertCount ? alertCount : 0;
+            if (alertCount >= 3) {
+                $('#modalBoxAiExport2 .btn-wrap').click();
+            } else {
+                setCache(KEY_AI_EXPORT, alertCount + 1);
+                $('#modalBoxAiExport2').show();
+            }
+            return;
+        }
+        //只登陆个人的，不再弹窗  产品需求 20250613
+        //只登陆个人的
+        if (!bkLogin && personLogin) {
+            $('#modalBoxAiExport3 .btn-wrap').click();
+            // $('#modalBoxAiExport3').show();
+            // return false;
+        }
+    })
+
+    function aiExport() {
+        var filenameObj = $.filenameAIGet()?JSON.parse($.filenameAIGet()):{};
+        //当前需要跳转AI文献综述的所有文献
+        var filenames =window.location.pathname.indexOf("export") > -1? $.filenameGet().split(","):$.filenameSelectGet().split(",");
+        for (var i = 0; i < filenames.length; i++) {
+            //文件名为空，则退出
+            if(!filenames[i]){
+                alert("暂无数据!");
+                return;
+            }
+            if(!filenameObj[filenames[i]]){
+                filenameObj[filenames[i]] = {"resource": "", "title": ""};
+            }
+        }
+        for(var item in filenameObj){
+            if(filenames.indexOf(item) === -1){
+                delete filenameObj[item];
+            }
+        }
+        //符合条件的已选文献 存储列表
+        var filenameObjIn = {};
+        //不符合条件的已选文献 存储列表
+        var filenameObjExclude = {};
+        //符合条件的已选文献资源类型
+        var filenameIn = ["JOURNAL", "DISSERTATION", "CONFERENCE", "NEWSPAPER"];
+        var filenameInName = ["期刊", "博硕士", "会议", "报纸"];
+        //不符合条件的已选文献资源类型
+        var filenameExclude = ["PATENT", "ALMANAC", "STANDARD", "BOOK", "ACHIEVEMENTS","VIDEO","LAW_STATUTE"];
+        var filenameExcludeName = ["专利", "年鉴", "标准", "图书", "成果", "视频","法律法规"];
+        //符合条件的已选文献数
+        var filenameCount = 0;
+        var filenameMaxCount = 50;
+        //不再校验最低所选文献数量，所以设置为0 产品需求变更20250613
+        var filenameMinCount = 0;
+        //是否有resource为空或者title为空的数据 true：有   false:没有
+        var ifNoResource = false;
+        for (var filenameItem in filenameObj) {
+            if (!filenameObj[filenameItem]["resource"]||!filenameObj[filenameItem]["title"]) {
+                ifNoResource = true;
+                break;
+            }
+        }
+        if(ifNoResource){
+            var filename = window.location.pathname.indexOf("export") > -1?$.filenameGet():$.filenameSelectGet();
+            var searchinfo = $.searchinfoGet();
+            var mapIndex = $.indexGet();
+            var param = {
+                filenames: filename, searchinfo: searchinfo, PageIndex: 1, PageSize: 500,
+                language: GetQueryStringByName(window.location.href, "language"),
+                uniplatform: GetQueryStringByName(window.location.href, "uniplatform"),
+                subject : $.getSubject(),
+                mapIndex:mapIndex
+            };
+            ajaxSubmit.Submit(APPPATH + "/manage/resource", param, function (data) {
+                var obj="";
+                try{
+                    obj=JSON.parse(data) ;
+                }catch(err){
+                    obj=data;
+                }
+                if (obj && obj[filenameItem]) {
+                    filenameObj = obj;
+                    $.filenameAISave(JSON.stringify(filenameObj));
+                    handlerData();
+                }
+            });
+        }else{
+            handlerData();
+        }
+
+
+        function handlerData() {
+            var j=0;
+            for (var filenameItem in filenameObj) {
+                if (filenameIn.indexOf(filenameObj[filenameItem]["resource"]) > -1 && filenameExclude.indexOf(filenameObj[filenameItem]["resource"]) == -1) {
+                    if (filenameObj[filenameItem]["resource"] == "DISSERTATION") {
+                        filenameCount = filenameCount + 2;
+                    } else {
+                        filenameCount++;
+                    }
+                    filenameObjIn[filenameItem] = filenameObj[filenameItem];
+                } else {
+                    filenameObjExclude[filenameItem] = filenameObj[filenameItem];
+                }
+                j++;
+                // htmlSelectFile = htmlSelectFile +
+                //     "<tr>" +
+                //     "<td>"+j+"</td>"+
+                //     "<td>" + filenameObj[filenameItem]["title"] + "</td>"+
+                //     "<td>" + filenameObj[filenameItem]["source"] + "</td>"+
+                //     "<td>" + filenameObj[filenameItem]["cited"] + "</td>"+
+                //     "<td>" + filenameObj[filenameItem]["download"] + "</td>"+
+                //     "<td>" + filenameObj[filenameItem]["date"] + "</td>"+
+                //     "<td><a>删除</a></td>"+
+                //     "</tr>";
+            }
+            // $('#modalBoxAiExport5 #layer-prompt table tbody').empty();
+            // $('#modalBoxAiExport5 #layer-prompt table tbody').append(htmlSelectFile);
+            if (filenameObjExclude && Object.keys(filenameObjExclude).length > 0) {
+                var i = 0, name = "", html = "", arrExist = [];
+                for (var filenameObjExcludeItem in filenameObjExclude) {
+                    //首页ai文献综述只要已勾选的
+                    if(window.location.pathname.indexOf("index") > -1){
+                        var selectFilename=$.filenameSelectGet();
+                        if(selectFilename&&selectFilename.indexOf(filenameObjExcludeItem)==-1){
+                            continue;
+                        }
+                    }
+                    i++;
+                    var nameTemp = filenameExcludeName[filenameExclude.indexOf(filenameObjExclude[filenameObjExcludeItem]["resource"])];
+
+                    if (arrExist.indexOf(filenameObjExclude[filenameObjExcludeItem]["resource"])>-1) {
+                        html = html + "<p class=\"filter-item\">[" + nameTemp + "] " + filenameObjExclude[filenameObjExcludeItem]["title"] + "</p>";
+                        continue;
+                    }
+                    arrExist.push(filenameObjExclude[filenameObjExcludeItem]["resource"]);
+                    name = name + nameTemp + "、";
+                    // name="专利、年鉴、标准、图书、成果、";
+                    html = html + "<p class=\"filter-item\">[" + nameTemp + "] " + filenameObjExclude[filenameObjExcludeItem]["title"] + "</p>";
+                }
+
+                $('#modalBoxAiExport4 #layer-select').text("您选择的" + i + "篇文献为" + name.substring(0, name.length - 1) + "，");
+                $('#modalBoxAiExport4 #layer-prompt').html(html);
+
+                $('#modalBoxAiExport4').show();
+                if ($("#modalBoxAiExport4 .prompt-wrap p").height() > 30) {
+                    $("#modalBoxAiExport4 .prompt-wrap").addClass("left");
+                } else {
+                    $("#modalBoxAiExport4 .prompt-wrap").removeClass("left");
+                }
+            } else {
+                generateAiExport();
+            }
+            //提示4：继续生成文献综述
+            $(document).off("click", "#modalBoxAiExport4 .btn-wrap").on('click', '#modalBoxAiExport4 .btn-wrap', function (e) {
+                $('#modalBoxAiExport4').hide();
+                generateAiExport();
+            })
+
+
+            function generateAiExport() {
+                if (filenameCount < filenameMinCount || filenameCount > filenameMaxCount) {
+                    if (filenameCount > filenameMaxCount) {
+                        $('#modalBoxAiExport5 #layer-allselect').text("生成综述最多支持50篇文献(博硕士论文1篇按2篇计)，您已选" + filenameCount + "篇，请删减，删减后点击”AI文献综述“按钮继续生成综述。");
+                    } else if (filenameCount < filenameMinCount) {
+                        $('#modalBoxAiExport5 #layer-allselect').text("生成综述最少需要10篇文献(博硕士论文1篇按2篇计)，您已选" + filenameCount + "篇，请添加，删减后点击”AI文献综述“按钮继续生成综述。");
+                    }
+                    $('#modalBoxAiExport5').show();
+                    return false;
+                }
+                var aiExportUrl = $("#hidAiExportUrl").val();
+                if (!aiExportUrl || aiExportUrl.indexOf("cnki.net") === -1) {
+                    return false;
+                }
+                var arrFilename = [];
+                for (var filenameItem in filenameObjIn) {
+                    //首页ai文献综述只要已勾选的
+                    if(window.location.pathname.indexOf("index") > -1){
+                        var selectFilename=$.filenameSelectGet();
+                        if(selectFilename&&selectFilename.indexOf(filenameItem)>-1){
+                            arrFilename.push(filenameItem);
+                        }
+                    }else{
+                        arrFilename.push(filenameItem);
+                    }
+                }
+                var searhinfos = $.searchinfoGet(),title="";
+                var searhinfo=searhinfos.indexOf(",")>-1?"":searhinfos;
+                if(searhinfo){
+                    var arrSearchinfo=searhinfo.split("!");
+                    var condition= arrSearchinfo[2]&&arrSearchinfo[2].startWith(">")?arrSearchinfo[2].substring(1):arrSearchinfo[2];
+                    var regex = /^（主题：([^）]+)）/i;
+                    var matches = condition.match(regex);
+                    if(matches&&matches.length===2){
+                        title=matches[1];
+                    }else{
+                        title=condition&&condition.indexOf("：")>-1?condition.substring(condition.indexOf("：")+1):"";
+                    }
+                }
+                var params = {
+                    "multiEncrypt": arrFilename, "title": title
+                };
+                $.PostWindow(aiExportUrl, params, "_blank");
+            }
+        }
+    }
+
+    //提示1：需要登录个人账号
+    $(document).off("click", "#modalBoxAiExport1 .btn-wrap").on('click', '#modalBoxAiExport1 .btn-wrap', function (e) {
+        $('#modalBoxAiExport1').hide();
+        var t = $('.ecp_header_personal_loginbg').offset().top;//  获取需要跳转到标签的top值
+        $(window).scrollTop(t);
+        //阻止向上触发事件
+        e.stopPropagation();
+        if ($(".ecp_personalLoginBox").is(":hidden")) {
+            $(".ecp_header_personal_loginbg").trigger('click');
+        }
+    })
+    //提示2,3：开始生成文献综述
+    $(document).off("click", "#modalBoxAiExport2 .btn-wrap,#modalBoxAiExport3 .btn-wrap").on('click', '#modalBoxAiExport2 .btn-wrap,#modalBoxAiExport3 .btn-wrap', function (e) {
+        $('#modalBoxAiExport2').hide();
+        $('#modalBoxAiExport3').hide();
+        aiExport();
+    })
+    //提示5：跳转链接
+    $(document).off("click", "#modalBoxAiExport5 .btn-wrap").on('click', '#modalBoxAiExport5 .btn-wrap', function (e) {
+        var href=APPPATH+"/index.html?";
+        if (GetQueryStringByName(window.location.href, "uniplatform")||GetQueryStringByName(window.location.href, "language")) {
+            href=SetQueryStringByName(href,"language",GetQueryStringByName(href,"language")) ;
+            href=SetQueryStringByName(href,"uniplatform",GetQueryStringByName(href,"uniplatform")) ;
+        }
+        href= SetQueryStringByName(href,"aifilter","1") ;
+        if(window.location.pathname.indexOf("export") > -1){
+            window.location.href = href;
+        }else{
+            $('#modalBoxAiExport5').hide();
+            // if (!confirm('是否自动删减文献到50篇？')||GetQueryStringByName(window.location.href, "aifilter")!=1)
+            //     return false;
+            // var filename = $.filenameGet();
+            // var filenameAI=$.filenameAIGet();
+            // var filenameSelect=$.filenameSelectGet();
+            // var objIndex={};
+            // if(!filename||!filenameAI){
+            //     alert("删除失败！");
+            //     return ;
+            // }
+            // var arrFilename=filename.split(","),objFilenameAI=JSON.parse(filenameAI),index=0;
+            // for(var i=arrFilename.length-1;i>=0;i--){
+            //     if(objFilenameAI[arrFilename[i]]=="DISSERTATION"){
+            //         index=index+2;
+            //     }else {
+            //         index++;
+            //     }
+            //     if(index>50){
+            //         if(filenameSelect){
+            //             filenameSelect=(filenameSelect+",").replace(arrFilename[i]+",","");
+            //             filenameSelect=filenameSelect.substring(0,filenameSelect.length-1);
+            //         }
+            //         arrFilename.splice(i,1);
+            //         delete objFilenameAI[arrFilename[i]];
+            //     }
+            // }
+            // $.filenameSave(arrFilename.join(","));
+            // $.filenameSelectSave(filenameSelect);
+            // href=SetQueryStringByName(href,"aifilter","") ;
+            // window.location.href = href;
+        }
+    })
+}

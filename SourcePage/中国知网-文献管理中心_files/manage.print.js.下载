@@ -1,0 +1,368 @@
+﻿//初始化manage/export页面，需要考虑是从哪个页面跳转的，以及文献导出格式选择第几个
+var EXPORT_OBJ = "";//存储点击哪个格式的obj对象
+var ISLOADLAZY = false;//是否已经触发了懒加载
+function init(obj) {
+    var param = GenerateParam(obj);
+
+    var displaymode = GetQueryStringByName(window.location.href, "displaymode") || $("#hidDisplayMode").val();
+    if (displaymode) {
+        param["DisplayMode"] = displaymode;
+        $(".formatlist li").removeClass("current");
+        $(".formatlist a[displaymode='" + displaymode + "']").parent().addClass("current");
+        $(".export-main h2 span").text($(".formatlist a[displaymode='" + displaymode + "']").text());
+        if (displaymode == "elearning") {
+            $("<a class='elearing' href='http://x.cnki.net/search/home/?value=2' target='_blank'><i class='icon-download'></i>" + message.downloadsoft + "</a><label style='font-size:14px;color:#4589e7;padding-left:5px;'>" + message.downloadexplain + "</label>").appendTo(".export-main h2");
+        }
+        showChaXin(displaymode);
+    }
+    //必须放在current的样式已经修改为当前的样式之后
+    EXPORT_OBJ = obj?obj:$("ul.formatlist li.current a");
+    ajaxSubmit.Submit(APPPATH + "/api/ShowExport", param, function (data) {
+        var obj="";
+        try{
+            obj=JSON.parse(data) ;
+        }catch(err){
+            obj=data;
+        }
+        if(obj&&obj.code&&obj.code!=0){
+            $("div#result").html(obj["message"]);
+            return;
+        }
+        $("div#result").html(data);
+
+
+        hideluban(param["DisplayMode"],true);
+    }, "div#result")
+}
+
+//左侧的文献导出格式点击
+function showexport(obj) {
+    EXPORT_OBJ = obj;
+    ISLOADLAZY = false;
+    if (!$(obj).parent().hasClass("order-btns") && $(obj).attr("data-show") != "-1") {
+        $(".export-main h2 span").text($(obj).text());
+        if ($(obj).attr("displaymode") == "elearning") {
+            if ($(".export-main h2").find("a.elearing").length == 0)
+                $("<a class='elearing' href='http://x.cnki.net/search/home/?value=2' target='_blank'><i class='icon-download'></i>" + message.downloadsoft + "</a><label style='font-size:14px;color:#4589e7;padding-left:5px;'>" + message.downloadexplain + "</label>").appendTo(".export-main h2");
+        }
+        else {
+            $(".export-main h2 a.elearing,label").remove();
+        }
+    }
+    var param = GenerateParam(obj);
+    hidetitle(param["DisplayMode"]);
+    ajaxSubmit.Submit(APPPATH + "/api/ShowExport", param, function (data) {
+        var obj="";
+        try{
+            obj=JSON.parse(data) ;
+        }catch(err){
+            obj=data;
+        }
+        if(obj&&obj.code&&obj.code!=1){
+            $("div#result").html(obj["message"]);
+            return;
+        }
+        $("div#result").html(data);
+        hideluban(param["DisplayMode"],true);
+
+    }, "div#result")
+}
+
+
+function lozyLoad() {
+    var ul = $("#result ul.literature-list");
+    var obj = EXPORT_OBJ;
+    var scrollTop = document.body.scrollTop || document.documentElement.scrollTop;// 页面被卷去的高度
+    var winHeight = window.innerHeight;// 浏览器可视区的高度
+    if (ul.height() < scrollTop + winHeight && !ISLOADLAZY) {
+        if (!$(obj).parent().hasClass("order-btns") && $(obj).attr("data-show") != "-1") {
+            $(".export-main h2 span").text($(obj).text());
+            if ($(obj).attr("displaymode")&&$(obj).attr("displaymode").toLowerCase() == "elearning") {
+                if ($(".export-main h2").find("a.elearing").length == 0)
+                    $("<a class='elearing' href='http://x.cnki.net/search/home/?value=2' target='_blank'><i class='icon-download'></i>" + message.downloadsoft + "</a><label style='font-size:14px;color:#4589e7;padding-left:5px;'>" + message.downloadexplain + "</label>").appendTo(".export-main h2");
+            }
+            else {
+                $(".export-main h2 a.elearing,.export-main h2 label").remove();
+            }
+        }
+        var param = GenerateParam(obj);
+        hidetitle(param["DisplayMode"]);
+        param["PageIndex"] = Math.ceil($("div#result>ul>li").not(".dontLazyload").length / param["PageSize"]) + 1;
+        var filename = param["FileName"];
+        if (filename && filename.split(",").length > $("div#result>ul>li").length && $("div#result>ul>li").length > 0) {
+            ISLOADLAZY = true;
+            ajaxSubmit.Submit(APPPATH + "/api/ShowExport", param, function (data) {
+                hideluban(param["DisplayMode"],false);
+                if(!$(data).find("li").text()){
+                    ISLOADLAZY = true;
+                    return;
+                }
+                if(param["DisplayMode"].toUpperCase()=="NODEFIRST"&&param["PageIndex"]>1){
+                    $("div#result>ul li:last").remove();
+                    $("div#result>ul ").append($(data).find("li").not(":first").remove());
+                    $("div#result>ul.literature-list li:eq(0)").html($("div#result>ul.literature-list li:eq(0)").html().replace(/\&gt;(\d+)\&lt;/g, '&gt;'+($("div#result>ul.literature-list li").length-2)+'&lt;'));
+                }else{
+                    if(param["DisplayMode"].toUpperCase()=="SELFDEFINE"||param["DisplayMode"].toUpperCase()=="NEWDEFINE"){
+                        $(data).find("ul li:first").remove();
+                    }
+                    $("div#result>ul ").append($(data).find("li"));
+                }
+                var i=1;
+                $("div#result ul li span.index").each(function (index,element) {
+                    $(element).text("["+i+"]");i++;
+                })
+                ISLOADLAZY = false;
+            }, "div#result")
+        }
+    }
+}
+
+// 滚动执行
+window.addEventListener("scroll", function () {
+    lozyLoad();
+});
+
+
+function hidetitle(displaymode) {
+    var arr = new Array("elearning", "NoteExpress", "BibTex");
+    if ($.inArray(displaymode, arr) > -1) {
+        $("#litotxt a").attr("title", '');
+    }
+    else
+        $("#litotxt a").attr('title', $("#litotxt a").attr("data-title"));
+}
+//ifadd 是否添加自定义的按钮
+function hideluban(displaymode,ifadd) {
+    var mode=$("#hidMode").val();
+    if((displaymode.toLowerCase()=="selfdefine"||displaymode.toLowerCase()=="newdefine")&&ifadd){
+        $("div#result .row-btns").append("<ul class=\"row-format-btns\" style=\"float:right\">\n" +
+            "                    <li class=\"blue\" onclick=\"showexport($(this).find('a'))\"><a href=\"javascript:void(0)\" title=\""+message.Preview+"\" data-show=\"-1\"><i class=\"icon icon-preview\"></i>"+message.Preview+"</a></li>\n" +
+            "                   </ul>");
+    }
+//导出格式含有1,2,3等的导出内容左对齐
+    var arr2 = new Array("GBTREFER","REFER", "MLA", "APA", "NEW", "newdefine");
+    if ($.inArray(displaymode, arr2) > -1) {
+        $("#result>ul").addClass("leftalign");
+    }else {
+        $("#result>ul").removeClass("leftalign");
+    }
+    showChaXin(displaymode);
+
+    if(!mode){
+        $("#bulkDownload").hide();
+        $("#litotxt").hide();
+        $("#litoexcel").hide();
+        $("#litoword").hide();
+        $("#CopyToClipboard").hide();
+        $("#liPrint").hide();
+        return;
+    }
+    //BATCH_DOWNLOAD,EXPORT,CLIPYBOARD,PRINT
+    if(mode.indexOf("BATCH_DOWNLOAD")==-1){
+        $("#bulkDownload").hide();
+    }else {
+        $("#bulkDownload").show();
+    }
+    if(mode.indexOf("EXPORT")==-1){
+        $("#litotxt").hide();
+        $("#litoexcel").hide();
+        $("#litoword").hide();
+    }else {
+        $("#litotxt").show();
+        $("#litoexcel").show();
+        $("#litoword").show();
+    }
+    if(mode.indexOf("CLIPYBOARD")==-1){
+        $("#CopyToClipboard").hide();
+    }else {
+        $("#CopyToClipboard").show();
+    }
+    if(mode.indexOf("PRINT")==-1){
+        $("#liPrint").hide();
+    }else {
+        $("#liPrint").show();
+    }
+    hideexcel(displaymode);
+    function hideexcel(displaymode) {
+        var arr = new Array("newdefine", "selfDefine");
+        var mode=$("#hidMode").val();
+        if ($.inArray(displaymode, arr) > -1&&mode.indexOf("EXPORT")>-1) {
+            $("#litoexcel").css("display", 'inline-block');
+        }
+        else{
+            $("#litoexcel").css("display", 'none');
+        }
+        var arr2 = new Array("elearning", "Refworks", "EndNote", "NoteExpress", "NodeFirst", "BibTex");
+        if ($.inArray(displaymode, arr2) > -1) {
+            $("#litoword").css("display", 'none');
+        }
+    }
+}
+
+/**
+ * 科技查新的显示与隐藏，样式
+ * @param displaymode
+ */
+function showChaXin(displaymode){
+    if(displaymode=="NEW"||displaymode=="newdefine"){
+        $("li#file_chaXin").css("display","");
+    }else{
+        $("li#file_chaXin").css("display","none");
+    }
+    if(displaymode=="newdefine"){
+        $(".row-format-btns li").css({"padding-left":"8px","padding-right":"5px"});
+    }else if(displaymode=="NEW"){
+        $(".row-format-btns li").css({"padding-left":"7px","padding-right":"14px"});
+    }else {
+        $(".row-format-btns li").css({"padding-left":"9px","padding-right":"16px"});
+    }
+}
+
+function filetotext(type) {
+    var param = GenerateParam();
+    param["Type"] = type;
+    if (param["DisplayMode"] == 'elearning') {
+        $.PostWindow(APPPATH + "/FileToText.es6", param);
+    }else if (param["DisplayMode"] == 'EndNote') {
+        $.PostWindow(APPPATH + "/FileToText.enw", param);
+    }
+    else
+        $.PostWindow(APPPATH + "/FileToText", param);
+}
+
+function GenerateParam(obj) {
+    var select = GetQueryStringByName(window.location.href, "select");
+    if (select == 0) {
+        $.filenameInit();
+    }
+    else if (select == 1) {
+        $.filenameSelectInit();
+    }
+    var objOrder = '';//点击的排序对象
+    var objSelect = '', selectField = '';//点击的预览对象,以及选择的值
+    if (!obj) {
+        obj = $(".formatlist li.current a");
+    }
+    if ($(obj).parent().attr("class") == "order-btns") {
+        objOrder = obj;
+        obj = $(".formatlist li.current a");
+        var tempOrderType = !$(objOrder).attr("OrderType") || $(objOrder).attr("OrderType") == "asc" ? "desc" : "asc";
+        $(objOrder).attr("OrderType", tempOrderType).addClass("cur").children().attr("class", "icon icon-" + tempOrderType + "end");
+        $(objOrder).siblings().attr("OrderType", "").removeClass("cur").children().attr("class", "icon icon-descend");
+
+    }
+    //TODO 和中心网站不一样的地方
+    else if ($(obj).text() == message.Preview) {
+        objSelect = obj;
+        obj = $(".formatlist li.current a");
+    }
+    $("div.check-labels input:checkbox").each(function (i) {
+        if ($(this).prop("checked"))
+            selectField = selectField.concat($(this).attr("field"), ",");
+    })
+    $(".formatlist li").removeClass("current");
+    $(obj).parent().addClass("current");
+    var filename = select == 1?$.filenameSelectGet():$.filenameGet();
+    var displaymode = $(obj).attr("displaymode");
+    var orderparam = $(".order-btns a.cur").attr("OrderParam");
+    var ordertype = $(".order-btns a.cur").attr("OrderType");
+    var param = {
+        FileName: filename, DisplayMode: displaymode, OrderParam: orderparam,
+        OrderType: ordertype, SelectField: selectField, PageIndex: 1, PageSize: 20,
+        language: GetQueryStringByName(window.location.href, "language"),
+        uniplatform: GetQueryStringByName(window.location.href, "uniplatform"),
+        subject : $.getSubject(),
+    };
+    var dbname = GetQueryStringByName(window.location.href, "dbname");
+    var filename2 = GetQueryStringByName(window.location.href, "filename");
+    if (filename2) {
+        param["FileName"] = filename2;
+    }
+    if (dbname) {
+        param["DBName"] = dbname;
+    }
+    return param;
+}
+
+//自定义导出的全选和取消 sign true：全选  false：取消全选
+function checkAllFields(sign) {
+    if (sign) {
+        $("div.check-labels input:checkbox").each(function (i) {
+            $(this).prop("checked", true);
+        })
+    }
+    else {
+        $("div.check-labels label[class!='disableclick']").each(function (i) {
+            $(this).find("input").prop("checked", false);
+        })
+    }
+}
+
+function my_CopyText(client) {
+    var showMode = $(".formatlist li.current a").attr("displaymode");
+    var sText = "";
+    if (showMode.toUpperCase() == "MLA" || showMode.toUpperCase() == "APA") {
+        $("div#result ul.literature-list li").each(function (i) {
+            sText += $(this).text().replace(/\r/g, "").replace(/\n/g, "").replace(/      /g,"").replace(/  /g,"") + "\r\n";
+        });
+    }
+    else if (showMode.toUpperCase() == "NOTEEXPRESS") {
+        $("div#result ul.literature-list li").each(function (i) {
+            sText += $(this).html().replace(/\s+\{/g, "{").replace("&nbsp;","").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\r/g, "").replace(/\n/g, "").replace(/<BR>/g, "\r\n").replace(/<br>/g, "\r\n") + "\r\n";
+        });
+    }
+    else if (showMode.toUpperCase() == "NODEFIRST") {
+        $("div#result ul.literature-list li").each(function (i) {
+            sText += $(this).html().replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\r/g, "").replace(/\n/g, "").replace(/<BR>/g, "\r\n").replace(/<br>/g, "\r\n") + "\r\n";
+        });
+    }
+    else {
+        $("div#result ul.literature-list>li").each(function (i) {
+            sText += $(this).html().replace(/\r/g, "").replace(/\n/g, "").replace(/<BR>/g, "\r\n").replace(/<br>/g, "\r\n").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/      {/g,"{").replace(/      /g,"") + "\r\n";
+            if(showMode.toUpperCase() == "GBTREFER"){
+                sText=sText.replace(/  /g,"");
+            }else if(showMode.toUpperCase() == "REFER"||showMode.toUpperCase() == "NEW"||showMode.toUpperCase() == "NEWDEFINE"){
+                sText=sText.replace(/    /g,"");
+            }else if(showMode.toUpperCase() == "SELFDEFINE"){
+                sText=sText.replace(/   /g,"");
+            }
+            var regA = /<\/?.+?\/?>/g;
+            sText = sText.replace(regA, "");
+        });
+    }
+    return sText;
+}
+
+function bulkDownload() {
+    var param = GenerateParam();
+    $.PostWindow(SetUrlLanguageAndUniplatform(APPPATH + "/manage/batch"), param,"_blank");
+}
+
+function my_complete(client) {
+    alert(message.已成功复制到剪贴板);
+}
+
+function printer() {
+    var margintop = $(".export-main").css("margin-top");
+    $(".export-main").css("margin-top", "0");
+    $("div.check-labels,div.footer,div.search-box,div.export-sidebar-a,#headerBox,#ModuleHeader,h2,.export-row").css("display", "none");
+    window.print();
+    $(".export-main").css("margin-top", margintop);
+    $("div.check-labels,div.footer,div.search-box,div.export-sidebar-a,#ModuleHeader,h2,.export-row").css("display", "block");
+    $("#headerBox").css("display", "inline-block");
+    //saveAppLog(service,platform,resource,productCode,language,object,objectAttr,expandsMap,hitRecords)
+    var select = GetQueryStringByName(window.location.href, "select");
+    var filename = select == 1?$.filenameSelectGet():$.filenameGet();
+    var hitRecords=filename?filename.split(",").length:0;
+    var orderparam = $(".order-btns a.cur").text();
+    var ordertype = $(".order-btns a.cur").attr("OrderType");
+    var displaymode = $(".formatlist li.current a").attr("displaymode");
+    var expandsMap= {};
+    expandsMap["dataFormat"]=displaymode;
+    expandsMap["sortTitle"]=orderparam;
+    expandsMap["sortType"]=ordertype.toUpperCase();
+    saveAppLog("文献管理","","","",
+        GetQueryStringByName(window.location.href, "language"),filename,
+        "打印文献题录",expandsMap,hitRecords);
+}
+

@@ -1,0 +1,1503 @@
+html,
+body {
+  height: 100%;
+}
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+hr,
+div,
+blockquote,
+dl,
+dt,
+dd,
+ul,
+ol,
+li,
+pre,
+fieldset,
+lengend,
+button,
+input,
+textarea,
+th,
+td,
+button {
+  margin: 0;
+  padding: 0;
+}
+ul,
+ol {
+  list-style: none;
+}
+.ecp_header_container {
+  background-color: #f7f7f7;
+  height: 62px;
+  font-size: 16px;
+  display: flex;
+}
+.ecp_header_left {
+  height: 100%;
+  line-height: 62px;
+  margin-right: 145px;
+}
+.ecp_header_right {
+  height: 100%;
+}
+.ecp_header_cnki_bg {
+  width: 115px;
+  height: 38px;
+  vertical-align: middle;
+}
+.ecp_header_parting_line {
+  display: inline-block;
+  margin: 0 20px;
+  width: 1px;
+  height: 25px;
+  background-color: #c9ddff;
+  vertical-align: middle;
+}
+.ecp_header_floating_window {
+  display: inline-block;
+  font-size: 0;
+  vertical-align: middle;
+}
+.ecp_header_floating_window span {
+  font-size: 16px;
+  font-weight: bold;
+  color: #000000;
+  vertical-align: middle;
+}
+.ecp_header_floating_window img {
+  width: 9px;
+  height: 6px;
+  vertical-align: middle;
+  margin-left: 11px;
+  position: relative;
+  top: 1px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+.ecp_header_navigation {
+  font-size: 0;
+  display: inline-block;
+  vertical-align: middle;
+}
+.ecp_header_navigation_item {
+  background: #004fd9;
+  width: 149px;
+  text-align: center;
+  display: inline-block;
+  font-size: 16px;
+  line-height: 62px;
+}
+.ecp_header_navigation_item span {
+  color: #ffffff;
+}
+.ecp_header_navigation_item img {
+  width: 13px;
+  height: 8px;
+  margin-left: 16px;
+  cursor: pointer;
+}
+.ecp_header_login_area {
+  display: inline-block;
+  margin-left: 66px;
+  font-size: 0;
+  height: 62px;
+  vertical-align: middle;
+  position: relative;
+}
+.ecp_header_login_area span {
+  font-size: 12px;
+  color: #5a5a5a;
+  margin-right: 16px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.ecp-menu span {
+  font-size: 16px;
+}
+.ecp_header_login_status {
+  height: 62px;
+  display: inline-block;
+  line-height: 58px;
+  vertical-align: middle;
+  font-size: 16px;
+}
+.ecp_header_login_status img,
+.ecp_header_unit_loginIcon {
+  margin-left: 5px;
+  vertical-align: middle;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  background-color: rgba(100, 68, 68, 0);
+  background-size: 100%;
+  background-repeat: no-repeat;
+}
+.ecp_header_unit_loginIcon {
+  position: relative;
+  display: inline-block;
+}
+.ecp_unit_loginCss {
+  background-image: url("../images/ecp_header_unit_login.png?v=20241016");
+  width: 32px !important;
+  height: 30px !important;
+}
+.ecp_unit_mouseover {
+  background-image: url("../images/ecp_header_unit_nouseover.png?v=20241016");
+}
+.ecp_unit_loginIcon_tip {
+  width: 101px;
+  height: 17px;
+  background: #253c64;
+  font-size: 12px;
+  color: #ffffff;
+  position: absolute;
+  z-index: 100000000;
+  line-height: 17px;
+  text-align: center;
+  top: 34px;
+  left: 30px;
+  visibility: hidden;
+}
+.ecp_personal_mouseover {
+  background-image: unset !important;
+  background-color: #004fd9 !important;
+  color: #fff !important;
+  border-radius: 5px;
+}
+.ecp_header_personal_loginbg,
+.ecp_header_unit_loginbg {
+  width: 70px;
+  height: 30px;
+  margin-left: 9px;
+  font-size: 12px;
+  color: #004fd9;
+  text-align: center;
+  line-height: 30px;
+  cursor: pointer;
+  display: inline-block;
+  vertical-align: middle;
+  background: url("../images/ecp_header_personal_loginbg.png?v=20241016")
+    no-repeat;
+  background-size: contain;
+}
+.ecp_header_personalName_loginbg {
+  height: 32px;
+  margin-left: 5px;
+  font-size: 12px;
+  color: #004fd9;
+  text-align: center;
+  line-height: 30px;
+  cursor: pointer;
+  display: inline-block;
+  vertical-align: middle;
+  display: inline-block;
+}
+.ecp_header_personalName_icon {
+  width: 32px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0);
+  background: url("../images/ecp_header_personal_login.png?v=20241016")
+    no-repeat;
+  display: inline-block;
+  vertical-align: middle;
+  background-size: contain;
+}
+.ecp_header_personalName,
+.ecp_header_unitName {
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #004fd9;
+  position: relative;
+  margin-top: 2px;
+  display: inline-block;
+  vertical-align: middle;
+  width: 80px;
+  text-align: left;
+  max-width: 80px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ecp_header_unitName {
+  width: unset;
+  max-width: 57px;
+  left: 4px;
+  cursor: pointer;
+  display: none;
+}
+.ecp_mycnki_LoginoutBox {
+  width: 104px;
+  height: 115px;
+  background: #ffffff;
+  box-shadow: 0px 2px 10px 0px #e6ebef;
+  border-radius: 6px;
+  position: absolute;
+  right: 48px;
+}
+.ecp_mycnki_LoginoutBox span {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 11px solid #ffffff;
+  position: absolute;
+  top: -10px;
+  left: 46px;
+}
+.ecp_mycnki_LoginoutBox li {
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #004fd9;
+  height: 37px;
+  text-align: center;
+  cursor: pointer;
+  line-height: 36px;
+}
+.ecp_mycnki_link {
+  padding-top: 5px;
+}
+.ecp_equity_link {
+  padding-top: 0px;
+}
+.ecp_mycnki_link:hover {
+  background: #ecf4ff;
+}
+.ecp_mycnki_logout:hover {
+  background: #ecf4ff;
+}
+.ecp_unit_LoginoutBox {
+  width: 160px;
+  height: 107px;
+  background: #ffffff;
+  box-shadow: 0px 2px 10px 0px #e6ebef;
+  border-radius: 6px;
+  position: absolute;
+  left: -57px;
+}
+.ecp_unit_LoginoutBox span {
+  display: block;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 11px solid #ffffff;
+  position: absolute;
+  top: -10px;
+  left: 72px;
+}
+.ecp_unit_LoginoutBox li {
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  height: 34px;
+  line-height: 32px;
+  color: #004fd9;
+}
+.ecp_unitNameText {
+  padding-top: 6px;
+  padding-left: 16px;
+  color: #5a5a5a !important;
+}
+.ecp_unitAccountName {
+  font-size: 14px !important;
+  padding-left: 17px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ecp_unit_userlogout {
+  background: #ecf4ff;
+  text-align: center;
+  cursor: pointer;
+}
+.ecp_personalLoginBox {
+  width: 300px;
+  box-shadow: 0px 2px 8px 0px rgba(0, 79, 217, 0.17);
+  border-radius: 10px;
+  position: absolute;
+  right: 0;
+  background-color: #fff;
+  display: none;
+}
+.ecp_personalLoginBox p {
+  font-size: 18px;
+  font-family: Microsoft YaHei;
+  font-weight: 600;
+  color: #ffffff;
+  position: absolute;
+  left: 20px;
+  margin: 0;
+  top: 7px;
+}
+
+.ecp_personalLoginBox .ecp-login-register {
+  position: absolute;
+  right: 17px;
+  top: 6px;
+}
+.ecp_personalLoginBox .ecp-login-register span {
+  font-size: 16px;
+  margin: 0;
+  color: #ffffff;
+  vertical-align: middle;
+}
+.ecp_personalLoginBox .ecp-login-register img {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  margin: 0;
+  margin-left: 5px;
+}
+.ecp_personalLoginBox input:-webkit-autofill {
+  box-shadow: 0 0 0px 1000px #f5f9ff inset !important;
+}
+.ecp_unit_LoginBox input:-webkit-autofill {
+  box-shadow: 0 0 0px 1000px #f5f9ff inset !important;
+}
+.ecp_personalLoginBox img {
+  margin-top: -9px;
+}
+.ecp_personalLoginBox .ecp_sprite_img {
+  margin-top: -9px;
+}
+.ecp_personalLoginCenter {
+  background-color: #fff;
+  padding-bottom: 30px;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+.ecp-menu {
+  position: relative;
+  height: 32px;
+  line-height: 32px;
+  margin-top: 12px;
+}
+.ecp-menu h4:hover {
+  color: #004fd9;
+}
+.ecp-menu span {
+  /* position: absolute; */
+  margin-left: 19px;
+  margin-right: 0;
+  color: #666;
+  font-family: Source Han Sans, Source Han Sans;
+}
+.ecp-menu .ecp_line1 {
+  width: 64px;
+  height: 2px;
+  position: absolute;
+  left: 19px;
+  top: 42px;
+}
+.ecp-menu .ecp_line2 {
+  width: 64px;
+  height: 2px;
+  position: absolute;
+  left: 102px;
+  top: 42px;
+  display: none;
+}
+.ecp-menu-active {
+  color: #333 !important;
+  font-weight: 600;
+}
+.ecp-sms-login {
+  display: none;
+}
+.ecp_personalLoginCenter h4 {
+  /* height: 32px; */
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #5a5a5a;
+  margin-right: 23px;
+  display: inline-block;
+  float: right;
+  /* line-height: 36px; */
+  cursor: pointer;
+  text-align: right;
+}
+.ecp_loginErrMsg {
+  color: red;
+  font-size: 12px;
+  margin-left: 20px;
+  width: 258px;
+  margin-top: 11px;
+}
+.ecp_loginAccountBox {
+  width: 260px;
+  margin-left: 19px;
+  margin-top: 10px;
+}
+.ecp_loginAccountBox img {
+  margin: 12px;
+}
+.ecp_loginAccountBox .ecp_sprite_img {
+  margin: 12px;
+}
+.ecp_loginAccountBox span {
+  display: block;
+  width: 1px;
+  height: 23px;
+  background: #c2d5f0;
+  margin-top: 8px;
+}
+.ecp_loginAccountBox input {
+  width: 200px;
+  font-size: 14px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #000000;
+  border: none;
+  outline: none;
+  background-color: #f5f9ff;
+}
+.ecp_userNameBox,
+.ecp_phoneBox {
+  width: 260px;
+  height: 40px;
+  background: #f5f9ff;
+  border-radius: 5px;
+  display: flex;
+}
+.ecp_passwordBox,
+.ecp_codeBox {
+  width: 260px;
+  height: 40px;
+  background: #f5f9ff;
+  border-radius: 5px;
+  margin-top: 18px;
+  display: flex;
+  position: relative;
+}
+.ecp_userNameBox {
+  margin-top: 14px;
+}
+.ecp_unit_passwordBox {
+  position: relative;
+}
+.ecp_passwordBox img,
+.ecp_unit_passwordBox img {
+  width: 16px;
+  height: 16px;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0 !important;
+  cursor: pointer;
+}
+.ecp_loginArea {
+  height: 47px;
+  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+.ecp_autoLogin {
+  width: 13px !important;
+  height: 13px;
+  background: #ffffff;
+  border: 1px solid #d8e4f5;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ecp_loginArea h1 {
+  width: 49px;
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #5a5a5a;
+  margin-right: 135px;
+  cursor: pointer;
+}
+.ecp_loginArea h1 label {
+  cursor: pointer;
+}
+.ecp_loginArea h3 {
+  width: 49px;
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #5a5a5a;
+  cursor: pointer;
+}
+.ecp_loginArea h3:hover {
+  color: #004fd9;
+}
+.ECP_UnitLOgin,
+.ECP_UserLOgin {
+  width: 258px;
+  height: 40px;
+  background: #004fd9;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+.ecp_loginWayTitle {
+  width: 258px;
+  display: flex;
+  padding-top: 15px;
+}
+.ecp_loginWayTitle h3 {
+  width: 151px;
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #5a5a5a;
+}
+.ecp_loginWayTitle span {
+  display: block;
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(270deg, #bebebe 0%, #ffffff 100%);
+}
+.ecp_loginWayTitle .rightLine {
+  width: 33px;
+  background: linear-gradient(90deg, #bebebe 0%, #ffffff 100%) !important;
+}
+.ecp_otherLoginWay {
+  display: flex;
+  justify-content: space-between;
+  width: 258px;
+  margin-top: 2px;
+}
+.ecp_otherLoginWay li {
+  cursor: pointer;
+}
+.ecp_otherLoginWay li img {
+  width: 41px;
+  height: 41px;
+}
+.ecp_otherLoginWay .ecp_sprite_img {
+  width: 41px;
+  height: 41px;
+}
+.ecp_otherLoginWay li h5 {
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #5a5a5a;
+  text-align: center;
+}
+.ecp_unit_LoginBox {
+  width: 300px;
+  min-height: 317px;
+  box-shadow: 0px 2px 8px 0px rgba(0, 79, 217, 0.17);
+  border-radius: 10px;
+  position: absolute;
+  right: 84px;
+  background-color: #fff;
+  display: none;
+}
+.ecp_unit_LoginBox p {
+  font-size: 18px;
+  font-family: Microsoft YaHei;
+  font-weight: 600;
+  color: #ffffff;
+  position: absolute;
+  left: 20px;
+  top: 7px;
+  margin: 0;
+}
+.ecp_unit_LoginBox img {
+  margin-top: -9px;
+}
+.ecp_unit_LoginBox .ecp_sprite_img {
+  margin-top: -9px;
+}
+.ecp_unitLoginCenter {
+  background-color: #fff;
+  margin-top: 7px;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+}
+.ecp_unit_IP_loginCenter {
+  margin-top: 4px;
+  margin-left: 19px;
+  padding-bottom: 20px;
+  width: 260px;
+}
+.ecp_unit_IP_loginCenter img {
+  margin: 12px;
+}
+.ecp_unit_IP_loginCenter .ecp_sprite_img {
+  margin: 12px;
+}
+.ecp_unit_IP_loginCenter span {
+  display: block;
+  width: 1px;
+  height: 23px;
+  background: #c2d5f0;
+  margin-top: 8px;
+}
+.ecp_unit_IP_loginCenter input {
+  width: 200px;
+  font-size: 14px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #000000;
+  border: none;
+  outline: none;
+  background-color: #f5f9ff;
+}
+.ecp_unit_userNameBox {
+  width: 260px;
+  height: 40px;
+  background: #f5f9ff;
+  border-radius: 5px;
+  display: flex;
+}
+.ecp_unit_passwordBox {
+  width: 260px;
+  height: 40px;
+  background: #f5f9ff;
+  border-radius: 5px;
+  margin-top: 12px;
+  display: flex;
+}
+.ecp_unit_loginArea {
+  height: 47px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+}
+.ecp_unit_autoLogin {
+  width: 13px !important;
+  height: 13px;
+  background: #ffffff;
+  border: 1px solid #d8e4f5;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.ecp_unit_loginArea h1 {
+  width: 49px;
+  font-size: 12px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #5a5a5a;
+  margin-left: 5px;
+  cursor: pointer;
+  line-height: 5px;
+}
+.ecp_unitLoginBtn {
+  width: 258px;
+  height: 40px;
+  background: #004fd9;
+  border-radius: 5px;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+}
+.ecp_unit_otherLoginWay {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+.ecp_dialog_bg {
+  width: 300px;
+  height: 54px;
+}
+.ecp_schoolVisit {
+  width: 121px;
+  height: 40px;
+  border-radius: 5px;
+  background: #ecf4ff;
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: Microsoft YaHei;
+  font-weight: bold;
+  color: #004fd9;
+  cursor: pointer;
+  border: none;
+}
+.ecp_IPLogin {
+  width: 123px;
+  height: 40px;
+  border-radius: 5px;
+  border: 1px solid #bfdaff;
+  font-size: 14px;
+  font-family: Microsoft YaHei;
+  font-weight: 400;
+  color: #004fd9;
+  background-color: #ffffff;
+  cursor: pointer;
+}
+#Ecp_top_logout_layer {
+  position: absolute;
+  right: -14px;
+  border: none;
+  -webkit-border-radius: 0 0 10px 10px;
+  -moz-border-radius: 0 0 10px 10px;
+  border-radius: 0 0 10px 10px;
+}
+#Ecp_top_logout_layer .user-header {
+  height: 60px;
+}
+#slideVerify {
+  width: 260px !important;
+  height: 40px !important;
+  margin-top: 12px;
+}
+#nc_1_wrapper {
+  width: 260px !important;
+  height: 40px !important;
+}
+#nc_1_n1z {
+  margin: 0;
+}
+.nc-lang-cnt {
+  margin: 0 !important;
+}
+.nc-container .nc_scale span {
+  height: 38px !important;
+  line-height: 38px !important;
+}
+.nc_scale {
+  height: 40px !important;
+}
+.nc-container .nc_scale span {
+  width: 42px;
+}
+.nc-container .nc_scale .scale_text2 {
+  padding-left: 30px !important;
+}
+#slideVerify1 {
+  width: 260px !important;
+  height: 40px !important;
+  margin-top: 12px;
+}
+#nc_2_wrapper {
+  width: 260px !important;
+  height: 40px !important;
+}
+#nc_2_n1z {
+  margin: 0;
+}
+.nc-lang-cnt {
+  margin: 0 !important;
+}
+.nc-container .nc_scale span {
+  height: 38px !important;
+  line-height: 38px !important;
+}
+.nc_scale {
+  height: 40px !important;
+}
+.nc-container .nc_scale span {
+  width: 42px;
+}
+.nc-container .nc_scale .scale_text2 {
+  padding-left: 30px !important;
+}
+.ecp_checkedutoLogin {
+  width: 12px !important;
+  height: 12px;
+}
+.ecp_agreement {
+  margin-bottom: 18px;
+  white-space: nowrap;
+}
+.ecp-input-error-tip {
+  border: 1px solid #fa5151;
+}
+#agreement,
+#agreementUnit,
+#agreementSms {
+  margin-right: 8px;
+}
+.ecp_agreement input {
+  width: 12px;
+  height: 12px;
+  vertical-align: middle;
+  cursor: pointer;
+  border-radius: 0% !important;
+  vertical-align: middle;
+}
+.ecp-phone-tip {
+  display: none;
+  font-size: 12px;
+  margin-left: 20px;
+  color: #666;
+  margin-top: 13px;
+}
+.ecp_agreement span {
+  font-size: 12px;
+  color: #5a5a5a;
+  display: inline-block;
+  vertical-align: middle;
+  width: auto;
+  background: none;
+  height: 100%;
+  margin-right: 0;
+  margin-top: 0;
+}
+.ecp_agreement span.color-blue {
+  color: #3d6feb;
+  cursor: pointer;
+  vertical-align: unset;
+}
+.ecp_personal_bg {
+  width: 300px;
+  height: 54px;
+  background: url("../images/personal_sprite.png") no-repeat;
+  background-position: 0 0;
+  background-size: cover;
+}
+.ecp_user_icon {
+  width: 13px;
+  height: 16px;
+  background: url("../images/account.png") no-repeat;
+  background-size: contain;
+  border: none;
+}
+.ecp_pwd_icon {
+  width: 13px;
+  height: 16px;
+  background: url("../images/password.png") no-repeat;
+  background-size: contain;
+}
+.ecp_phone_icon {
+  width: 13px;
+  height: 16px;
+  background: url("../images/phone.png") no-repeat;
+  background-size: contain;
+}
+.ecp_code_icon {
+  width: 13px;
+  height: 16px;
+  background: url("../images/code.png") no-repeat;
+  background-size: contain;
+}
+.ecp_qq_icon {
+  background: url("../images/personal_sprite.png") no-repeat;
+  background-position: -38px -304px;
+}
+.ecp_wx_icon {
+  background: url("../images/personal_sprite.png") no-repeat;
+  background-position: -162px -305px;
+}
+.ecp_wb_icon {
+  background: url("../images/personal_sprite.png") no-repeat;
+  background-position: -286px -305px;
+}
+.ecp_unit_bg {
+  width: 300px;
+  height: 54px;
+  background: url("../images/unit_sprite.png") no-repeat;
+  background-size: cover !important;
+  background-position: 0 0;
+}
+.update-password-wrap {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+}
+.update-password-wrap div {
+  box-sizing: border-box;
+}
+.update-password-wrap P {
+  box-sizing: border-box;
+}
+.update-password-shadow {
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  opacity: 0.4;
+}
+.update-password-continer {
+  width: 380px;
+  background-color: #fff;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 400;
+  border-radius: 10px;
+  margin-left: -190px;
+  margin-top: -96px;
+}
+.update-password-header {
+  height: 36px;
+  background: #377ef9;
+  padding: 11px 14px 11px 24px;
+  border-radius: 10px 10px 0px 0px;
+}
+.update-password-header span {
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  position: relative;
+  bottom: 4px;
+}
+.update-password-header img {
+  width: 12px;
+  height: 12px;
+  float: right;
+  cursor: pointer;
+}
+.update-password-body {
+  padding: 36px 36px 32px 36px;
+}
+.update-password-body p {
+  font-size: 12px;
+  color: #333333;
+  line-height: 18px;
+  margin: 0;
+}
+.update-password-btnGroup {
+  margin-top: 48px;
+}
+.update-password-btn {
+  width: 142px;
+  height: 28px;
+  display: inline-block;
+  border-radius: 3px;
+  padding: 8px 0px;
+  font-size: 12px;
+  line-height: 12px;
+  box-sizing: border-box;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+}
+.update-password-confirm {
+  background: #377ef9;
+  color: #ffffff;
+  margin-left: 10px;
+}
+.update-password-cancel {
+  border: 1px solid #377ef9;
+  color: #377ef9;
+  padding: 7px 20px;
+}
+#Ecp_top_logout_layer .Ecp_members_wrap {
+  box-sizing: border-box;
+  width: 420px;
+  position: relative;
+  background: #f7f7f7;
+  box-shadow: 0px 4px 20px 0px rgba(0, 0, 0, 0.3);
+  border-radius: 10px 10px 10px 10px;
+  padding: 20px 18px;
+  font-family: Source Han Sans, Source Han Sans;
+}
+.Ecp_members_wrap::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 9px solid white;
+  position: absolute;
+  right: 107px;
+  top: -9px;
+}
+.Ecp_members_userinfo img {
+  margin-right: 4px;
+  width: 20px;
+  height: 20px;
+}
+.Ecp_members_userinfo .Ecp_members_avatar {
+  width: 50px;
+  height: 50px;
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -399px -2px;
+  display: inline-block;
+  vertical-align: middle;
+}
+.Ecp_members_username {
+  display: inline-block;
+  margin: 0 8px 0 9px;
+  height: 24px;
+  font-family: Source Han Sans, Source Han Sans;
+  font-weight: 600;
+  font-size: 16px;
+  color: #030303;
+  line-height: 24px;
+  text-align: left;
+  font-style: normal;
+  text-transform: none;
+  max-width: 150px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.Ecp_members_userinfo p,
+.Ecp_members_userinfo img {
+  vertical-align: middle;
+}
+.Ecp_members_operate {
+  margin-top: 15px;
+}
+#Ecp_top_logout_layer .Ecp_service_item {
+  box-sizing: border-box;
+  display: inline-block;
+  width: 187px;
+  height: 89px;
+  background: #ffffff;
+  border-radius: 8px 8px 8px 8px;
+  border: 1px solid #e8e8e8;
+  padding: 14px 0 8px 10px;
+}
+.Ecp_service_item img {
+  width: 34px;
+  height: 34px;
+  vertical-align: middle;
+}
+.Ecp_service_text {
+  width: 58px;
+  height: 15px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #030303;
+  line-height: 15px;
+  text-align: left;
+  font-style: normal;
+  text-transform: none;
+  margin-top: 15px;
+  margin-bottom: 8px;
+}
+.Ecp_service_item1 {
+  float: left;
+  position: relative;
+}
+#Ecp_ai_member,#Ecp_ai_member2 {
+  width: 99px;
+  height: 23px;
+  position: absolute;
+  right: 0;
+  top: -12px;
+  cursor: pointer;
+  display: none;
+}
+.Ecp_service_item2 {
+  float: right;
+  position: relative;
+}
+.Ecp_service_item p {
+  text-align: left;
+  font-style: normal;
+  text-transform: none;
+  margin: 0;
+}
+.Ecp_members_name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #000000;
+  line-height: 14px;
+}
+.Ecp_members_name1,
+.Ecp_members_name2 {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Ecp_members_time {
+  font-weight: 400;
+  font-size: 12px;
+  color: #666666;
+  line-height: 12px;
+  margin-top: 7px !important;
+}
+.Ecp_content_right {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+#Ecp_top_logout_layer .Ecp_members_link {
+  width: 70px;
+  height: 20px;
+  border-radius: 5px 5px 5px 5px;
+  border: 1px solid #3662ec;
+  margin-top: 10px;
+  margin-left: 52px;
+  line-height: 20px;
+}
+.Ecp_members_service {
+  overflow: hidden;
+}
+.Ecp_members_link a {
+  font-weight: 400;
+  font-size: 12px;
+  color: #3662ec;
+  line-height: 20px;
+  text-decoration: none;
+  text-align: center;
+  display: block;
+}
+#Ecp_top_logout_layer .Ecp_account_balance {
+  box-sizing: border-box;
+  width: 100%;
+  height: 52px;
+  margin-top: 10px;
+  padding: 0 9px 0 13px;
+  background: #ffffff;
+  border-radius: 8px 8px 8px 8px;
+  border: 1px solid #e8e8e8;
+  overflow: hidden;
+  line-height: 48px;
+}
+#Ecp_top_logout_layer .Ecp_balance_left {
+  float: left;
+  font-size: 14px;
+  height: 100%;
+}
+#Ecp_top_logout_layer .Ecp_balance_left .Ecp_find_link {
+  width: 13px;
+  height: 13px;
+  display: inline-block;
+  vertical-align: middle;
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -384px -19px;
+}
+.Ecp_account_balance span {
+  margin-right: 0;
+  font-size: 14px;
+}
+.Ecp_balance_right {
+  float: right;
+  height: 100%;
+}
+.Ecp_account_balance img {
+  width: 13px;
+  height: 13px;
+  vertical-align: middle;
+  transform: translateY(1px);
+}
+.Ecp_balance_right span {
+  vertical-align: middle;
+}
+.Ecp_balance_right .Ecp_recharge_link {
+  width: 13px;
+  height: 13px;
+  display: inline-block;
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -7px -23px;
+}
+.Ecp_balance_left .Ecp_balance_detail span {
+  cursor: default;
+}
+.Ecp_left_text span:first-child {
+  cursor: default;
+  color: #030303;
+}
+.Ecp_balance_detail {
+  display: none;
+}
+.Ecp_balance_detail span {
+  font-weight: 400;
+  font-size: 14px;
+  color: #030303;
+  line-height: 20px;
+}
+.Ecp_balance_right > span {
+  display: inline-block;
+  transform: translateY(1px);
+}
+#Ecp_top_logout_layer .Ecp_service_wrap {
+  box-sizing: border-box;
+  width: 100%;
+  height: 68px;
+  background: #ffffff;
+  border-radius: 8px 8px 8px 8px;
+  border: 1px solid #e8e8e8;
+  padding: 11px 13px;
+}
+.Ecp_my_service > p {
+  font-weight: 600;
+  font-size: 14px;
+  color: #030303;
+  line-height: 20px;
+  margin-top: 12px;
+  margin-bottom: 8px;
+}
+.Ecp_myservice_item {
+  width: 54px;
+  text-align: center;
+  display: inline-block;
+  margin-left: 21px;
+  cursor: pointer;
+}
+.Ecp_myservice_item div {
+  width: 23px;
+  height: 23px;
+  vertical-align: middle;
+  display: inline-block;
+}
+.Ecp_service_ai {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -212px -14px;
+}
+.Ecp_service_home {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -244px -14px;
+}
+.Ecp_service_footmark {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -274px -14px;
+}
+.Ecp_service_order {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -303px -14px;
+}
+.Ecp_service_mycnki {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -333px -14px;
+}
+.Ecp_myservice_item p {
+  font-weight: 400;
+  font-size: 13px;
+  color: #030303;
+  margin: 0;
+  margin-top: 7px;
+  display: inline-block;
+}
+.Ecp_service_wrap .Ecp_myservice_item:first-child {
+  margin-left: 0;
+}
+.Ecp_members_logout {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  cursor: pointer;
+}
+.Ecp_members_logout div {
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  display: inline-block;
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -362px -18px;
+}
+.Ecp_members_logout span {
+  font-weight: 400;
+  font-size: 14px;
+  color: #888888;
+  margin-right: 0;
+  margin-left: 3px;
+}
+.zhi2_member,
+.zhi4_member,
+.ai_member,
+.hui_member {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+}
+.zhi2_member {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -73px -19px;
+  vertical-align: middle;
+}
+.zhi4_member {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -21px -19px;
+  vertical-align: middle;
+}
+.ai_member {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -99px -19px;
+  vertical-align: middle;
+}
+.hui_member {
+  background: url("../images/user_card_sprite.png") no-repeat;
+  background-position: -49px -19px;
+  vertical-align: middle;
+}
+.member_icon {
+  margin-right: 4px;
+}
+.Ecp_money_balance,
+.Ecp_ticket_balance {
+  display: inline-block;
+  max-width: 80px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.Ecp_account_balance .Ecp_balance_detail {
+  cursor: default;
+}
+.ecp_loginAccountBox input.ecp_checkedutoLogin:focus-visible {
+  outline: 1px solid #000 !important;
+}
+#agreement:focus-visible {
+  outline: 1px solid #000 !important;
+}
+.ECP_UnitLOgin:focus-visible,
+.ecp_schoolVisit:focus-visible,
+.ecp_IPLogin:focus-visible,
+.ECP_UserLOgin:focus-visible {
+  outline: 2px solid #000;
+}
+.ecp_unit_autoLogin:focus-visible,
+#agreementUnit:focus-visible {
+  outline: 1px solid #000 !important;
+}
+.Ecp_members_icon1,
+.Ecp_members_icon2 {
+  width: 34px;
+  height: 34px;
+  vertical-align: middle;
+  display: inline-block;
+  background: url("../images/user_card_sprite.png") no-repeat;
+}
+.Ecp_info_left,
+.Ecp_info_right {
+  display: inline-block;
+  vertical-align: middle;
+}
+.Ecp_btn_link_wrap {
+  display: block;
+  margin-top: 4px;
+  margin-left: 9px;
+}
+.Ecp_btn_link {
+  display: inline-block;
+  padding: 0 4px;
+  text-align: center;
+  height: 20px;
+  line-height: 20px;
+  background: #ffffff;
+  border-radius: 3px 3px 3px 3px;
+  border: 1px solid #acbfff;
+  margin-right: 7px !important;
+}
+.ecp-error-text {
+  display: none;
+  /* height: 12px; */
+  margin-top: 6px;
+}
+.ecp-error-text img {
+  width: 12px;
+  height: 12px;
+  margin: 0 4px 0 0;
+  vertical-align: top;
+}
+.ecp-error-text p {
+  display: inline-block;
+  position: unset;
+  font-weight: 500;
+  font-size: 12px;
+  color: #fa5151;
+  vertical-align: top;
+  word-wrap: break-word;
+  width: calc(100% - 18px);
+  transform: translateY(-3px);
+}
+.ecp_personalLoginBox .ecp-text-btn {
+  font-size: 12px;
+  font-weight: 400;
+  color: #004fd9;
+  position: absolute;
+  right: 10px;
+  left: unset;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 60px;
+  height: 17px;
+  cursor: pointer;
+  text-align: right;
+  height: 40px;
+  line-height: 40px;
+}
+
+#ecpShowPwd,
+#ecpShowUnitPwd {
+  display: none;
+}
+#Ecp_top_logout_layer .buy_member {
+  width: 384px;
+  height: 70px;
+  padding: 15px 13px;
+  border-radius: 4px;
+  margin-top: 15px;
+  color: #652807;
+  font-size: 14px;
+  font-family: Source Han Sans, Source Han Sans;
+  position: relative;
+  box-sizing: border-box;
+}
+
+#Ecp_top_logout_layer .buy_member .red {
+  color: #ff0000;
+}
+
+#Ecp_top_logout_layer .buy_member span {
+  line-height: 20px;
+  vertical-align: unset;
+  margin-right: 0;
+  font-size: 14px;
+  color: #652807;
+  cursor: default;
+}
+
+#Ecp_top_logout_layer .buy_member .btn-link {
+  width: 80px;
+  height: 20px;
+  background: #ffffff;
+  border-radius: 30px;
+  position: absolute;
+  bottom: 10px;
+  right: 15px;
+  font-size: 12px;
+  color: #3662ec;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
+}
+
+#Ecp_top_logout_layer .buy_member .yellow-bg {
+  background: linear-gradient(180deg, #ffc300 0%, #ff8f1f 100%);
+  color: #ffffff;
+}
+
+#Ecp_top_logout_layer .buy_member .white-bg {
+  background: #ffffff;
+  color: #666666;
+}
+
+#Ecp_top_logout_layer .gradient {
+  background: linear-gradient( 153deg, #FFFCE3 0%, #FFD683 100%);
+}
+
+#Ecp_top_logout_layer .gray {
+  background: #ddd;
+}
+#Ecp_top_logout_layer .gray span {
+  color: #333;
+}
+.buy_member,.Ecp_members_operate {
+  display: none;
+}

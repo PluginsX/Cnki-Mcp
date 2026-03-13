@@ -1,0 +1,4265 @@
+// ========配置地址===========
+const ENV_CONFIGS = {
+  dev: {
+    // 开发环境
+    baseUrl: "http://nxgp.dev.cnki.net",
+    baselubanUrl: "http://nxgp.dev.cnki.net",
+    wsUrl: "ws://10.31.72.54:10095/",
+    uploadUrl: "http://nxgp.dev.cnki.net",
+    recsysapi: "http://recsys.dev.cnki.net/RCDService/api",
+    certificateUrl: "http://au.dev.cnki.net/author/hotListCertificate",
+  },
+  beta: {
+    // 测试环境
+    baseUrl: "https://beta.cnki.net",
+    baselubanUrl: "https://beta.cnki.net",
+    wsUrl: "wss://agi.cnki.net:8014",
+    uploadUrl: "https://beta.cnki.net",
+    recsysapi: "https://recsys.cnki.net/RCDService/api",
+    certificateUrl: "https://au.cnki.net/author/hotListCertificate",
+  },
+  prod: {
+    // 生产环境
+    baseUrl: "https://kns.cnki.net",
+    baselubanUrl: "https://kns.cnki.net/openapi",
+    wsUrl: "wss://agi.cnki.net:8014",
+    uploadUrl: "https://aipower.cnki.net",
+    recsysapi: "https://recsys.cnki.net/RCDService/api",
+    certificateUrl: "https://au.cnki.net/author/hotListCertificate",
+  },
+};
+const CURRENT_ENV = "prod"; // dev/beta/prod
+const URL_CONFIG = ENV_CONFIGS[CURRENT_ENV];
+
+// ========自然科学前沿、思想理论研究、人文社科探索===========
+
+// 全局变量：存储三个模块的第一条PT时间戳
+const modulePTTimes = {
+  zrkx: null, // 自然科学前沿
+  sxll: null, // 思想理论研究
+  rwsk: null, // 人文社科探索
+};
+// 全局变量：记录各模块已曝光的页码
+const exposedPages = {
+  renderNewItem: new Set(), // 主编推荐-最新
+  renderHotItem: new Set(), // 主编推荐-热门
+  renderSpecialTopicItem: new Set(), // 主编推荐-专题
+};
+// 全局变量：用于缓存 clientId 获取的 Promise
+let clientIdPromise = null;
+// 全局变量：存储最终格式化后的最近时间（用于展示）
+let latestPTFormatted = "";
+// 网络首发时间处理
+var indexPage = indexPage || {};
+indexPage.dateDif = function (enddate) {
+  var date = new Date().getTime() - enddate;
+  var days = date / 1000 / 60 / 60 / 24;
+  var daysRound = Math.floor(days);
+
+  var hours = date / 1000 / 60 / 60 - 24 * daysRound;
+  var hoursRound = Math.floor(hours);
+
+  var minutes = date / 1000 / 60 - 24 * 60 * daysRound - 60 * hoursRound;
+  var minutesRound = Math.floor(minutes);
+
+  // var seconds =
+  //   date / 1000 -
+  //   24 * 60 * 60 * daysRound -
+  //   60 * 60 * hoursRound -
+  //   60 * minutesRound;
+  // var secondsRound = Math.floor(seconds);
+  var message = {
+    dayago: "日前",
+    hoursago: "小时前",
+    minutesago: "分钟前",
+  };
+  if (daysRound >= 1) {
+    return "1" + message.dayago;
+  } else if (hoursRound >= 1) {
+    return hoursRound + message.hoursago;
+  } else {
+    return minutesRound + message.minutesago;
+  }
+};
+
+let trackData = []; // 知网推荐-追踪关注数据存储
+let bookData = []; // 知网推荐-图书推荐数据存储
+const fallbackTrackData = fallbackBookData.fallbackTrackData || [];
+const fallbackNewData = fallbackBookData.fallbackNewData || []; //主编推荐最新兜底数据
+const fallbackHotData = fallbackBookData.fallbackHotData || []; //主编推荐最热兜底数据
+const ciyunData = ciyunStateData; // 词云静态数据
+
+// 公共处理数据的方法原dataPublicDeal.js
+const isArray = (data) => {
+  if (!Array.isArray) {
+    Array.isArray = function (data) {
+      return Object.prototype.toString.call(data) === "[object Array]";
+    };
+  } else {
+    return Array.isArray(data);
+  }
+};
+
+// 作者 机构 基金    数据处理
+const dealCommonData = function (data) {
+  if (!data) {
+    return;
+  }
+  let arr = [];
+  data.forEach((item) => {
+    let obj = {};
+    Object.keys(item).forEach((k) => {
+      obj[k] = item[k];
+    });
+    if (!!item.relations && item.relations.length > 0) {
+      item.relations.forEach((_item) => {
+        obj[_item.scope + "Url"] = _item.url;
+      });
+    }
+    if (!!item.metrics && item.metrics.length > 0) {
+      item.metrics.forEach((ele) => {
+        obj[ele.name] = ele.value;
+      });
+    }
+    if (obj.PUC) {
+      obj.MERICTW = obj.PUC;
+    }
+    arr.push(obj);
+  });
+  return arr;
+};
+
+const getDataPublicDeal = function (
+  metadata,
+  relations,
+  source,
+  authors,
+  affiliations,
+  keywords,
+  funds,
+  metrics,
+  related,
+  issues,
+  publishing,
+  repository,
+) {
+  let obj = {};
+  // 统计数据  作者知网节中处理 metrics issues 也一样
+  if (!!metadata && metadata.length > 0) {
+    metadata.forEach((ele) => {
+      obj[ele.name] = ele.value;
+    });
+  }
+  // 所有url
+  if (!!relations && relations.length > 0) {
+    relations.forEach((ele) => {
+      obj[ele.scope + "Url"] = ele.url;
+    });
+  }
+  //统计数据  作者知网节中处理 metrics issues
+  if (!!metrics && metrics.length > 0) {
+    metrics.forEach((ele) => {
+      obj[ele.name] = ele.value;
+    });
+  }
+  //出版物年期
+  if (!!issues && issues.length > 0) {
+    issues.forEach((ele) => {
+      obj[ele.name] = ele.value;
+    });
+  }
+  //处理出版物的信息  source在攻读期成果返回的数据是数组  在其他地方返回的是对象 2022.4.12
+  if (!!source && (Object.keys(source).length > 0 || source.length > 0)) {
+    let newSource = isArray(source) ? source[0] : source; // 依赖 isArray
+    obj.SOURCE = newSource;
+    if (!!newSource.relations && newSource.relations.length > 0) {
+      newSource.relations.forEach((ele) => {
+        obj.SOURCE[ele.scope + "Url"] = ele.url;
+      });
+    }
+  }
+  // 作者
+  if (!!authors && authors.length > 0) {
+    obj.AUTHORS = dealCommonData(authors); // 依赖 dealCommonData
+    // 为作者添加控制展开收起的属性
+    obj.IsShowMore = false;
+  }
+  // 机构
+  if (!!affiliations && affiliations.length > 0) {
+    obj.AFFILATIONS = dealCommonData(affiliations); // 依赖 dealCommonData
+  }
+  // 关键词
+  if (!!keywords && keywords.length > 0) {
+    obj.KEYWORDS = [];
+    keywords.forEach((e) => {
+      let keyArr = [];
+      let keyObj = {};
+      keyObj.type = e.type;
+      e.items.forEach((item) => {
+        let objKW = {};
+        objKW.title = item.item;
+        if (!!item.relations && item.relations.length > 0) {
+          item.relations.forEach((_item) => {
+            if (_item.scope === "ABSTRACT") {
+              objKW.url = _item.url;
+            }
+          });
+        }
+        keyArr.push(objKW);
+      });
+      keyObj.items = keyArr;
+      obj.KEYWORDS.push(keyObj);
+    });
+  }
+  // 基金
+  if (!!funds && funds.length > 0) {
+    obj.FUNDS = dealCommonData(funds); // 依赖 dealCommonData
+  }
+  // 图片来源
+  if (!!related && related.relations.length > 0) {
+    obj.relatedAbstract = related.relations[0].url;
+  }
+  //
+  if (!!publishing && publishing.length > 0) {
+    obj.PUBLISHING = publishing;
+  }
+  //处理 repository 的信息  目前看返回的是对象，不知是否会返回数组？两种情况都兼容处理下
+  if (
+    !!repository &&
+    (Object.keys(repository).length > 0 || repository.length > 0)
+  ) {
+    let newRepository = isArray(repository) ? repository[0] : repository; // 依赖 isArray
+    obj.REPOSITORY = newRepository;
+  }
+  return obj;
+};
+// end
+
+function createListModule(config) {
+  // 每个模块的私有变量（独立隔离，互不干扰）
+  let fullData = []; // 该模块的21条完整数据
+  let currentPage = 1; // 该模块的当前页码（1-7）
+  const pageSize = 3; // 固定每页3条
+  const maxPage = 7; // 固定7页（21/3）
+  const autoChangeInterval = 5000; // 自动切换间隔（5秒）
+  let autoChangeTimer = null; // 每个模块独立的定时器（关键：避免冲突）
+  let isChangeAble = true; // 是否可点击「换一换」，初始可点击
+  const clickThrottleTime = 3000; // 节流时间：3秒（3000毫秒）
+
+  // 解析PT字段的工具函数
+  function parsePT(ptStr) {
+    if (!ptStr) return Date.parse(new Date()); // 无PT时返回当前UTC时间戳
+    try {
+      const utcDate = new Date(ptStr.replace(/-/g, "/"));
+      const utcTimestamp = utcDate.getTime();
+      return utcTimestamp;
+    } catch (e) {
+      return Date.parse(new Date());
+    }
+  }
+
+  // 检查所有模块PT是否收集完成，完成后比较选出最近的
+  function checkAndComparePT() {
+    const allCollected = Object.values(modulePTTimes).every(
+      (val) => val !== null,
+    );
+    if (!allCollected) {
+      //  console.log("未收集完所有PT，等待中...");
+      return;
+    }
+
+    // 筛选有效时间戳，找出最大的（离现在最近）
+    const validPTs = Object.values(modulePTTimes).filter((val) => val !== null);
+    const latestPT =
+      validPTs.length > 0 ? Math.max(...validPTs) : Date.parse(new Date());
+
+    // 格式化时间
+    latestPTFormatted = indexPage.dateDif(latestPT);
+    $("#latest-time").text(latestPTFormatted);
+
+    // 调试日志
+    console.log("三个模块PT时间戳：", modulePTTimes);
+    console.log("最近的PT时间戳：", latestPT);
+    console.log("格式化后展示：", latestPTFormatted);
+  }
+
+  // 1. 请求模块专属接口数据
+  function fetchData() {
+    $.ajax({
+      url: config.apiUrl, // 不同模块的接口URL
+      type: "GET",
+      dataType: "json",
+      timeout: 10000,
+      xhrFields: { withCredentials: false },
+      crossDomain: true,
+      beforeSend: () => console.log(`[${config.listId}] 数据请求中...`),
+      success: (data) => {
+        if (data.code === 0 && data?.data?.data.length > 0) {
+          // 复用公共数据处理函数
+          fullData = data.data.data.map((item) =>
+            getDataPublicDeal(
+              item.metadata,
+              item.relations,
+              item.source,
+              item.authors,
+              item.affiliations,
+              item.keywords,
+              item.funds,
+              item.metrics,
+              item.related,
+              item.issues,
+              null,
+              item.repository,
+            ),
+          );
+          console.log("fullData", fullData, config.listId);
+        } else {
+          if (config.listId === "#zrkx-list") {
+            fullData = zrkxlist;
+          } else if (config.listId === "#sxll-list") {
+            fullData = sxlllist;
+          } else if (config.listId === "#rwsk-list") {
+            fullData = rwsklist;
+          }
+        }
+        currentPage = 1;
+        // 解析第一条数据的PT字段
+        const firstItem = fullData[0]; // 取接口返回的第一条原始数据
+        if (firstItem?.PT) {
+          // 假设PT字段在metadata里，根据实际结构调整
+          // 1. 解析PT为时间戳
+          const ptTimestamp = parsePT(firstItem.PT);
+          // 2. 根据模块标识存储到全局
+          if (config.listId === "#zrkx-list") {
+            modulePTTimes.zrkx = ptTimestamp;
+          } else if (config.listId === "#sxll-list") {
+            modulePTTimes.sxll = ptTimestamp;
+          } else if (config.listId === "#rwsk-list") {
+            modulePTTimes.rwsk = ptTimestamp;
+          }
+          // 3. 检查是否所有模块PT都收集完成，完成则比较
+          checkAndComparePT();
+        }
+        renderList(); // 数据成功后渲染
+        startAutoChange(); // 数据加载完成后，启动自动切换（关键）
+      },
+      error: (jqXHR, textStatus) => {
+        // const errMsg =
+        //   textStatus === "timeout"
+        //     ? "请求超时"
+        //     : `请求失败（状态码：${jqXHR.status}）`;
+        // if (config.listId === "#zrkx-list") {
+        //   modulePTTimes.zrkx = Date.parse(new Date());
+        // } else if (config.listId === "#sxll-list") {
+        //   modulePTTimes.sxll = Date.parse(new Date());
+        // } else if (config.listId === "#rwsk-list") {
+        //   modulePTTimes.rwsk = Date.parse(new Date());
+        // }
+        // checkAndComparePT();
+        if (config.listId === "#zrkx-list") {
+          fullData = zrkxlist;
+        } else if (config.listId === "#sxll-list") {
+          fullData = sxlllist;
+        } else if (config.listId === "#rwsk-list") {
+          fullData = rwsklist;
+        }
+        currentPage = 1;
+        // 解析第一条数据的PT字段
+        const firstItem = fullData[0]; // 取接口返回的第一条原始数据
+        if (firstItem?.PT) {
+          // 假设PT字段在metadata里，根据实际结构调整
+          // 1. 解析PT为时间戳
+          const ptTimestamp = parsePT(firstItem.PT);
+          // 2. 根据模块标识存储到全局
+          if (config.listId === "#zrkx-list") {
+            modulePTTimes.zrkx = ptTimestamp;
+          } else if (config.listId === "#sxll-list") {
+            modulePTTimes.sxll = ptTimestamp;
+          } else if (config.listId === "#rwsk-list") {
+            modulePTTimes.rwsk = ptTimestamp;
+          }
+          // 3. 检查是否所有模块PT都收集完成，完成则比较
+          checkAndComparePT();
+        }
+        renderList(); // 数据成功后渲染
+        startAutoChange(); // 数据加载完成后，启动自动切换（关键）
+      },
+    });
+  }
+
+  // 2. 渲染当前模块的列表（序号、数据正确关联）
+  function renderList() {
+    const $list = $(config.listId); // 匹配当前模块的列表ID
+    $list.empty();
+
+    // 计算当前页数据范围
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const showData = fullData.slice(startIndex, endIndex);
+
+    // 渲染3条数据（序号自动计算，换一换后更新）
+    showData.forEach((item, index) => {
+      // 🌟 处理作者数据：兼容数组为空/无title的情况，避免报错
+      const firstAuthor = item.AUTHORS?.[0] || {}; // 取第一个作者对象，无则置空对象
+      const authorTitle = firstAuthor.title || "未知作者"; // 取第一个作者的title，无则显示"未知作者"
+      const authorUrl = firstAuthor.ABSTRACTUrl || "javascript:;"; // 作者跳转链接，无则禁用跳转
+
+      const authors = item.AUTHORS || [];
+      const authorTitles = authors
+        .map((author) => author.title || "")
+        .filter((title) => title);
+      let authorStr = "未知作者";
+      if (authorTitles.length > 0) {
+        authorStr =
+          authorTitles.length > 3
+            ? `${authorTitles.slice(0, 3).join(",")},等`
+            : authorTitles.join(",");
+      }
+      //  拼接title格式：作者.标题[J/OL].来源.（兼容空值）
+      const ti = item.TI || "";
+      const ly = item.LY || "";
+      const fullTitle = `${authorStr}.${ti}[J/OL].${ly}.`
+        .replace(/\.\[J\/OL\]\.\./g, "[J/OL].") // 处理来源为空的多余点
+        .replace(/\.\[J\/OL\]\./g, "[J/OL].")
+        .replace(/未知作者\./g, authorStr === "未知作者" ? "" : "未知作者."); // 处理无作者情况
+
+      const $li = $(`
+        <li class="item">
+          <a href="javascript:;" target="_blank"> <!-- 外层a标签取消跳转 -->
+            <span class="no">${
+              startIndex + index + 1
+            }</span> <!-- 序号：1-3/4-6/...循环 -->
+            <p class="i-content">
+              <span class="author"><a href="${authorUrl}" target="_blank">${authorTitle}</a></span>：
+              <span class="ti"><a href="${
+                item.ABSTRACTUrl
+              }" target="_blank" title="${fullTitle}">${item.TI}</a></span>
+            </p>
+          </a>
+        </li>
+      `);
+      $list.append($li);
+    });
+  }
+
+  // 3. 切换到下一页（手动点击和自动切换共用）
+  function goToNextPage() {
+    if (fullData.length === 0) return;
+    currentPage = currentPage >= maxPage ? 1 : currentPage + 1;
+    renderList();
+    resetAutoChangeTimer(); // 切换后重置定时器（关键：手动/自动切换都触发）
+  }
+
+  // 4. 启动自动切换
+  function startAutoChange() {
+    // 先清除已有定时器（避免重复创建）
+    clearAutoChangeTimer();
+    // 10秒后自动切换下一页
+    autoChangeTimer = setInterval(() => {
+      goToNextPage();
+    }, autoChangeInterval);
+  }
+
+  // 5. 清除自动切换定时器
+  function clearAutoChangeTimer() {
+    if (autoChangeTimer) {
+      clearInterval(autoChangeTimer);
+      autoChangeTimer = null;
+    }
+  }
+
+  // 6. 重置自动切换定时器（手动点击后重新计时10秒）
+  function resetAutoChangeTimer() {
+    startAutoChange(); // 清除旧定时器 + 启动新定时器 = 重新计时
+  }
+
+  // 7. 绑定当前模块的"换一换"事件（避免冲突）
+  function bindChangeEvent() {
+    // 只绑定当前模块容器内的"换一换"按钮
+    $(config.containerSelector)
+      .find(".title-right")
+      .on("click", function () {
+        if (!isChangeAble) {
+          console.log(`换一换3秒冷却中，请勿频繁点击`);
+          return;
+        }
+        // 点击后立即锁定
+        isChangeAble = false;
+        fetchData(); // 调接口
+        setTimeout(() => {
+          isChangeAble = true;
+        }, clickThrottleTime);
+      });
+  }
+
+  // 模块初始化入口
+  return {
+    init: () => {
+      fetchData();
+      bindChangeEvent();
+    },
+    // 可选：暴露销毁方法（页面卸载时调用，避免内存泄漏）
+    destroy: () => {
+      clearAutoChangeTimer();
+      $(config.containerSelector).find(".title-right").off("click");
+    },
+  };
+}
+
+// ==============初始化模块========================
+$(function () {
+  console.log("监听页面加载完成，开始初始化模块...");
+  // 模块1：自然科学前沿（id="zrkx-list"）
+  const zrkxModule = createListModule({
+    apiUrl:
+      URL_CONFIG.baselubanUrl +
+      "/luban/v1/tags/super/data?func=CNKI_INDEX&tag=zxfw_zrkxqy&prod=NZKPT", // 自然科学前沿的接口URL
+    listId: "#zrkx-list", // 对应模块的列表ID
+    containerSelector: ".left", // 模块外层容器（精准定位，避免事件冲突）
+  });
+  // zrkxModule.init();
+
+  // 模块2：思想理论研究（id="sxll-list"）
+  const sxllModule = createListModule({
+    apiUrl:
+      URL_CONFIG.baselubanUrl +
+      "/luban/v1/tags/super/data?func=CNKI_INDEX&tag=zxfw_sxllyj&prod=NZKPT", // 思想理论研究的接口URL
+    listId: "#sxll-list", // 对应模块的列表ID
+    containerSelector: ".center", // 模块外层容器（与第一个模块区分）
+  });
+  // sxllModule.init();
+  // 模块3：人文社科探索（id="rwsk-list"）
+  const rwskModule = createListModule({
+    apiUrl:
+      URL_CONFIG.baselubanUrl +
+      "/luban/v1/tags/super/data?func=CNKI_INDEX&tag=zxfw_rwskts&prod=NZKPT", // 人文社科探索的接口URL
+    listId: "#rwsk-list", // 对应模块的列表ID
+    containerSelector: ".right", // 模块外层容器（与第一个模块区分）
+  });
+  // rwskModule.init();
+  function recommendation() {
+    // 【最新】主编推荐
+    requestApi(
+      URL_CONFIG.baseUrl +
+        "/openapi/usercenter-api/v1/recommend/home/editornew/articles?size=30&platform=NZKPT&trace=JZTJ_HOMENEW",
+      {
+        containerId: "#new-list",
+        renderItem: renderNewItem,
+        fallbackData: fallbackNewData,
+        onSuccess: (data) => console.log("最新模块渲染完成", data.length, "项"),
+        personContainerId: "#editor-new",
+        needClientId: true,
+      },
+    );
+
+    // 【热门】主编推荐
+    requestApi(
+      URL_CONFIG.baseUrl +
+        "/openapi/usercenter-api/v1/recommend/home/editorhot/articles?size=30&platform=NZKPT&trace=JZTJ_HOMEHOT",
+      {
+        containerId: "#hot-list",
+        renderItem: renderHotItem,
+        fallbackData: fallbackHotData,
+        onSuccess: (data) => console.log("热门模块渲染完成", data.length, "项"),
+        personContainerId: "#editor-hot",
+        needClientId: true,
+      },
+    );
+
+    // 【专题】
+    requestApi(
+      URL_CONFIG.baseUrl +
+        "/uniapps/journalmarket/v2/editor/hometopics?size=15&trace=JZTJ_HOMESPECIAL&platform=NZKPT",
+      {
+        containerId: "#special-topics",
+        renderItem: renderSpecialTopicItem,
+        isUseNormalizeArticle: false,
+        onSuccess: (data) => console.log("专题模块渲染完成", data.length, "项"),
+        personContainerId: "#editor-theme",
+        needClientId: true,
+      },
+    );
+  }
+
+  // 滚动到位置加载
+  var lazyLoadArr = [
+    {
+      id: "firstPublish",
+      isRequest: false,
+      fun: "firstPublishFun",
+    },
+    { id: "Recommendation", isRequest: false, fun: "recommendationFun" },
+  ];
+  var lazyLoadArr1 = [];
+  function scrollHandler() {
+    if (lazyLoadArr1.length == lazyLoadArr.length) {
+      window.removeEventListener("scroll", this.scrollHandler);
+      window.removeEventListener("resize", this.scrollHandler);
+    }
+    for (var i = 0; i < lazyLoadArr.length; i++) {
+      if (!lazyLoadArr[i].isRequest && $("#" + lazyLoadArr[i].id).length > 0) {
+        var el = $("#" + lazyLoadArr[i].id)[0];
+        var topRect = el.getBoundingClientRect();
+        var h =
+          document.documentElement.clientHeight || document.body.clientHeight;
+        if (topRect.top < h) {
+          funCommon(i, lazyLoadArr);
+          lazyLoadArr1.push(lazyLoadArr[i]);
+        }
+      }
+    }
+  }
+  // 滚动触发
+  scrollHandler();
+  window.addEventListener("scroll", throttleDebounce(scrollHandler, 300, 300));
+  window.addEventListener("resize", throttleDebounce(scrollHandler, 300, 300));
+  function funCommon(i, arr) {
+    arr[i].isRequest = true;
+    // loadCondition(i);
+    var dtd = $.Deferred(); // 新建一个Deferred对象
+    var task = function () {
+      // 执行的方法
+      /*eval(func);*/
+      eval(arr[i].fun + "(dtd)");
+    };
+    task();
+    return dtd;
+  }
+
+  function firstPublishFun(dtd) {
+    zrkxModule.init();
+    sxllModule.init();
+    rwskModule.init();
+    dtd.resolve();
+  }
+  function recommendationFun(dtd) {
+    recommendation();
+    dtd.resolve();
+  }
+});
+
+// 节流
+function throttleDebounce(fn, delay, mustRunDelay) {
+  var timer = null;
+  var t_start;
+  return function () {
+    var context = this;
+    var args = arguments;
+    var t_curr = +new Date();
+
+    clearTimeout(timer);
+    if (!t_start) {
+      t_start = t_curr;
+    }
+    if (mustRunDelay != 0 && t_curr - t_start >= mustRunDelay) {
+      fn.apply(context, args);
+      t_start = t_curr;
+    } else {
+      timer = setTimeout(function () {
+        fn.apply(context, args);
+      }, delay);
+    }
+  };
+}
+// 知网推荐三个板块切换逻辑
+$(document).ready(function () {
+  // 只有个人用户登录才展示追踪关注模块
+  if (window.commonInstance.checkUploadLogin()) {
+    $("#tracking").show();
+  } else {
+    $("#tracking").hide();
+  }
+  const $tabButtons = $(".tab-btn");
+  const $tabPanels = $(".tab-panel");
+
+  $tabButtons.on("click", function () {
+    const tabId = $(this).data("tab");
+    console.log(`切换到标签: ${tabId}`, tabId);
+    // 移除所有按钮的active类，添加当前按钮的active类
+    $tabButtons.removeClass("active");
+    $(this).addClass("active");
+
+    // 隐藏所有面板，显示目标面板
+    $tabPanels.removeClass("active");
+    $(`#${tabId}-panel`).addClass("active");
+
+    // 添加接口请求 判断是否有数据，无数据再进行接口请求
+    if (tabId === "tracking" && trackData.length == 0) {
+      // 【追踪关注】
+      requestApi(
+        URL_CONFIG.baseUrl +
+          "/openapi/usercenter-api/v1/recommend/product/articles?start=1&size=5&productid=CJFQ;CJTL",
+        {
+          containerId: "#track-list",
+          renderItem: renderTrackItem,
+          fallbackData: fallbackTrackData,
+          onSuccess: (data) => {
+            trackData = data;
+            console.log("追踪关注模块渲染完成", data, data.length, "项");
+          },
+          onError: (jqXHR, textStatus, errorThrown) => {
+            console.log("追踪关注模块渲染错误", jqXHR, textStatus, errorThrown);
+          },
+        },
+      );
+    } else if (tabId === "book" && bookData.length == 0) {
+      dealBookCarousel();
+      dealPaperBook();
+    }
+  });
+
+  // 添加鼠标悬停效果（可选）
+  $tabButtons
+    .on("mouseenter", function () {
+      if (!$(this).hasClass("active")) {
+        $(this).css("background-color", "#f1f5f9");
+      }
+    })
+    .on("mouseleave", function () {
+      if (!$(this).hasClass("active")) {
+        $(this).css("background-color", "");
+      }
+    });
+});
+
+// 荐语弹框
+$(document).ready(function () {
+  // 使用事件委托处理动态元素
+  $(document)
+    .on("mouseenter", ".article-btn", function () {
+      const $btn = $(this);
+      const targetId = $btn.data("target");
+      const $popup = $("#" + targetId);
+
+      if (!$popup.length) return; // 安全检查：确保弹框存在
+
+      const btnOffset = $btn.offset();
+      const scrollTop = $(window).scrollTop(); // 考虑滚动
+
+      $popup.css({
+        display: "block",
+        left: btnOffset.left - $popup.outerWidth() / 2,
+        top: btnOffset.top + $btn.outerHeight() + 8 - scrollTop, // 修正滚动偏移
+        position: "fixed", // 使用 fixed 更稳定（避免父容器 overflow:hidden 截断）
+      });
+
+      $popup
+        .off("mouseenter mouseleave")
+        .on("mouseenter", function () {
+          // 鼠标进入弹框，不清除
+        })
+        .on("mouseleave", function () {
+          $(this).hide();
+        });
+    })
+    .on("mouseleave", ".article-btn", function () {
+      const $btn = $(this);
+      const targetId = $btn.data("target");
+      const $popup = $("#" + targetId);
+
+      if (!$popup.length || $popup.is(":hover")) return;
+
+      // 延迟隐藏，给用户时间移到弹框上
+      setTimeout(() => {
+        if (!$popup.is(":hover") && !$btn.is(":hover")) {
+          $popup.hide();
+        }
+      }, 200); // 200ms 足够平滑过渡
+    });
+});
+
+// ============ 公共数据转换函数 ============
+function normalizeArticle(item) {
+  // 封装 getDataPublicDeal 调用
+  return getDataPublicDeal(
+    item.metadata,
+    item.relations,
+    item.source,
+    item.authors,
+    item.affiliations,
+    item.keywords,
+    item.funds,
+    item.metrics,
+    item.related,
+    item.issues,
+    null,
+    item.repository,
+  );
+}
+
+// 追踪关注json静态获取
+function getSubjectImages() {
+  return new Promise(function (resolve, reject) {
+    fetch(
+      "https://piccache.cnki.net/kdn/index/kns8s/nvsmjson/subject_images.json",
+    )
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("Network response not ok");
+        }
+        return response.json();
+      })
+      .then(function (subjectImages) {
+        resolve(subjectImages);
+      })
+      .catch(function (err) {
+        console.error("Failed to load subjectImages:", err);
+        reject(err);
+      });
+  });
+}
+
+// ============ 公共 AJAX 封装 ============
+async function requestApi(url, options = {}) {
+  const {
+    containerId, // 渲染目标容器 ID（如 "#new-list"）
+    transformData, // 数据转换函数（入参：data.data → 返回 normalized array）
+    renderItem, // 渲染单项的函数（入参：item, index → 返回 HTML 字符串 或 jQuery 对象）
+    isUseNormalizeArticle = true, // 是否默认使用 normalizeArticle 转换
+    onSuccess, // 可选：自定义成功后逻辑（如额外统计）
+    onError, // 可选：自定义错误处理
+    personContainerId, // 表头父级节点id
+    fallbackData, //兜底数据
+  } = options;
+  // 检查是否需要 clientId 并提前获取
+  await getClientIdIfNeeded(options.needClientId);
+  var transformed = [];
+
+  return $.ajax({
+    url,
+    type: "GET",
+    dataType: "json",
+    timeout: 10000,
+    xhrFields: { withCredentials: true },
+    crossDomain: true,
+    beforeSend: function () {
+      // console.log("🔄 请求发送中...", url);
+    },
+    success: function (data, textStatus, jqXHR) {
+      // console.log("✅ 请求成功:", url, data);
+      let editorNew = document.getElementById("editor-new");
+      let editoHot = document.getElementById("editor-hot");
+      try {
+        if (
+          data.code === 0 &&
+          Array.isArray(data.data) &&
+          data.data.length > 0
+        ) {
+          // 判断是否需要使用转换函数
+          var normalized = isUseNormalizeArticle
+            ? data.data.map(normalizeArticle)
+            : data.data; // 是否使用公共转换函数
+          transformed =
+            typeof transformData === "function"
+              ? transformData(normalized).slice(0, 25)
+              : normalized.slice(0, 25);
+          if (typeof onSuccess === "function") onSuccess(transformed);
+          // 处理专题模块是否展示1
+          if (options.renderItem.name === "renderSpecialTopicItem") {
+            $("#editor-theme").show();
+            editorNew.style.width = "510px";
+            editoHot.style.width = "510px";
+          }
+        } else {
+          // 处理专题模块是否展示2
+          if (options.renderItem.name === "renderSpecialTopicItem") {
+            $("#editor-theme").hide();
+            editorNew.style.width = "49.5%";
+            editoHot.style.width = "49.5%";
+          }
+          // 数据返回为空的时候兜底数据使用
+          if (
+            Array.isArray(transformed) &&
+            transformed.length === 0 &&
+            fallbackData
+          ) {
+            transformed = JSON.parse(JSON.stringify(fallbackData));
+            if (options.renderItem.name === "renderTrackItem") {
+              trackData = transformed;
+            }
+          }
+          console.warn(options.renderItem.name, "请求成功但无有效数据", data);
+        }
+
+        dealMethods(options, transformed);
+      } catch (err) {
+        console.error("❌ 渲染过程异常", err);
+      }
+    },
+    error: function (jqXHR, textStatus, errorThrown) {
+      if (
+        Array.isArray(transformed) &&
+        transformed.length === 0 &&
+        fallbackData
+      ) {
+        transformed = JSON.parse(JSON.stringify(fallbackData));
+        if (options.renderItem.name === "renderTrackItem") {
+          trackData = transformed;
+        }
+      }
+      dealMethods(options, transformed);
+      const msg =
+        textStatus === "timeout" ? "请求超时" : `${textStatus}: ${errorThrown}`;
+      console.error(`❌ 请求失败 [${url}]`, msg, "状态码:", jqXHR.status);
+      if (typeof onError === "function")
+        onError(jqXHR, textStatus, errorThrown);
+    },
+    complete: function (jqXHR, textStatus) {
+      // console.log("🔚 请求结束:", url);
+    },
+  });
+}
+
+// 封装处理函数
+function dealMethods(options, transformed) {
+  // 主编推荐：最新/热门/专题添加前端分页逻辑
+  if (
+    options.renderItem.name === "renderNewItem" ||
+    options.renderItem.name === "renderHotItem" ||
+    options.renderItem.name === "renderSpecialTopicItem"
+  ) {
+    let currentPage = 0; // 当前页码
+    let pageSize = 5; // 每页条数
+    if (options.renderItem.name === "renderSpecialTopicItem") {
+      pageSize = 3; // 每页条数
+    }
+    // 更新上一页/下一页按钮状态
+    function updataPageButton() {
+      const totalPages = Math.ceil(transformed.length / pageSize); // 总页数
+      const $prev = $(`${options.personContainerId} .prev-page`);
+      const $next = $(`${options.personContainerId} .next-page`);
+
+      $prev.toggleClass("noclick", currentPage === 0);
+      $next.toggleClass("noclick", currentPage >= totalPages - 1);
+    }
+    function renderCurrentPage() {
+      // console.log("当前页码：", currentPage, "总页数：", Math.ceil(transformed.length / pageSize));
+      const start = currentPage * pageSize;
+      const pageData = transformed.slice(start, start + pageSize);
+      // 清空容器
+      $(options.containerId).empty();
+      // 渲染每一项
+      $.each(pageData, function (i, item) {
+        const $el = options.renderItem(item, i, currentPage, pageSize);
+        if ($el) {
+          $(options.containerId).append($el);
+        } else {
+          console.warn("renderItem 未返回有效 DOM 元素", item);
+        }
+      });
+      // 调用曝光接口：获取当前页所有数据的 FN 字段
+      let fnValues = []; // 提取 FN 字段并过滤空值
+      if (!exposedPages[options.renderItem.name].has(currentPage)) {
+        // if (options.renderItem.name === "renderSpecialTopicItem") {
+        //   fnValues = pageData
+        //     .map((item) => item.recId)
+        //     .filter((recId) => recId);
+        // } else {
+        //   fnValues = pageData.map((item) => item.FN).filter((fn) => fn);
+        // }
+        if (options.renderItem.name === "renderSpecialTopicItem") {
+          fnValues = pageData
+            .map((item) => `${item.recId}:${item.code}`)
+            .filter((recId) => recId);
+        } else {
+          fnValues = pageData.map((item) => item.FN).filter((fn) => fn);
+          fnValues = pageData
+            .map((item) => `${item.RECID}:${item.FN}`)
+            .filter((value) => value);
+        }
+        // 将 FN 字段数组转换为分号分隔的字符串
+        const fnString = fnValues.join(";");
+        if (fnString.length > 0) {
+          sendExposureData(fnString, options.renderItem.name); // 调用曝光接口
+        }
+        exposedPages[options.renderItem.name].add(currentPage);
+      }
+      updataPageButton();
+    }
+    renderCurrentPage(); // 初始化
+    $(`${options.personContainerId} .prev-page`).on("click", () => {
+      if (currentPage > 0) {
+        currentPage--;
+        renderCurrentPage();
+      }
+    });
+
+    $(`${options.personContainerId} .next-page`).on("click", () => {
+      if (currentPage < Math.ceil(transformed.length / pageSize) - 1) {
+        currentPage++;
+        renderCurrentPage();
+      }
+    });
+  } else {
+    // 清空容器
+    $(options.containerId).empty();
+    console.log(
+      "转换后的数据：：：",
+      options.renderItem.name,
+      transformed,
+      transformed.length,
+    );
+    sortArr = []; // 一级学科存放数组
+    // 渲染每一项
+    $.each(transformed, function (i, item) {
+      const $el = options.renderItem(item, i);
+      if ($el) {
+        $(options.containerId).append($el);
+      } else {
+        console.warn("renderItem 未返回有效 DOM 元素", item);
+      }
+    });
+  }
+
+  // 处理追踪关注左侧轮播图
+  var subject_images_json = null;
+  if (options.renderItem.name === "renderTrackItem") {
+    let carousel = [];
+    const pointers = {};
+
+    // 使用 Promise 方式获取数据
+    getSubjectImages()
+      .then(function (subject_images_json) {
+        subject_images_json = subject_images_json;
+
+        // for (const subject of sortArr) {
+        //   if (!subject_images_json[subject]) {
+        //     console.warn(`警告：未找到一级学科 "${subject}"`);
+        //     continue;
+        //   }
+        //   const images = subject_images_json[subject];
+        //   if (!Array.isArray(images) || images.length === 0) {
+        //     console.warn(`警告：一级学科 "${subject}" 无可用图片`);
+        //     continue;
+        //   }
+        //   if (!(subject in pointers)) {
+        //     pointers[subject] = 0;
+        //   }
+        //   const idx = pointers[subject];
+        //   if (idx >= images.length) {
+        //     console.warn(
+        //       `警告：一级学科 "${subject}" 的图片已全部用完（共 ${images.length} 张）`,
+        //     );
+        //     continue;
+        //   }
+        //   const item = images[idx];
+        //   carousel.push(item);
+        //   pointers[subject] = idx + 1;
+        // }
+
+        const remainingImages = {}; // 替代原来的 pointers 对象
+
+        for (const subject of sortArr) {
+          if (!subject_images_json[subject]) {
+            console.warn(`警告：未找到一级学科 "${subject}"`);
+            continue;
+          }
+
+          // 首次访问该学科时，初始化剩余图片数组（深拷贝原数组）
+          if (!remainingImages[subject]) {
+            remainingImages[subject] = [...subject_images_json[subject]];
+          }
+
+          const remaining = remainingImages[subject];
+          if (!Array.isArray(remaining) || remaining.length === 0) {
+            console.warn(`警告：一级学科 "${subject}" 无可用图片`);
+            continue;
+          }
+
+          // 随机选择一个索引
+          const randomIdx = Math.floor(Math.random() * remaining.length);
+          const item = remaining[randomIdx];
+          // 从剩余数组中移除已选图片（保证不重复）
+          remaining.splice(randomIdx, 1);
+          carousel.push(item);
+        }
+
+        console.log("carousel：：：：：：：：", carousel);
+
+        $("#track-gallery").empty();
+
+        $.each(carousel, function (i, item) {
+          // 根据产品需求更改轮播图展示张数
+          if (i < 4) {
+            const $carouselContainer = $(
+              `<div class="rsContent">
+            <img class="rsImg" 
+            src="https://piccache.cnki.net/kdn/index/kns8s/nimages/subimages/${item.ID.toLowerCase()}.jpg"  
+            alt="${
+              item.图片标题
+            }" style="width: 100%; height: 100%; object-fit: cover;cursor: pointer;" />
+            <a class="rsABlock sampleBlock" href="${
+              item.URL
+            }" target="_blank"></a>
+          </div>
+          `,
+            );
+            $("#track-gallery").append($carouselContainer);
+          }
+        });
+
+        if ($("#track-gallery").length) {
+          $("#track-gallery").royalSlider({
+            arrowsNav: true, // 隐藏箭头导航
+            fadeinLoadedSlide: true, // 加载后淡入
+            controlNavigationSpacing: 0, // 导航点间距
+
+            // ===== 【关键修正1】引号使用 =====
+            controlNavigation: "bullets", // 启用小圆点导航（去掉多余引号） 'bullets', 'thumbnails', 'tabs', 'none'
+
+            // ===== 【关键修正2】缩略图配置 =====
+            // 如果不需要垂直缩略图，建议移除整个 thumbs 配置
+            // thumbs: {
+            //     appendSpan: true,
+            //     firstMargin: true,
+            //     autoCenter: true,
+            //     fitInViewport: true,
+            //     orientation: 'vertical',        // 垂直缩略图可能与小圆点冲突
+            //     spacing: 0,
+            //     paddingBottom: 0
+            // },
+
+            keyboardNavEnabled: true, // 启用键盘导航
+            imageScaleMode: "fill", // 图片填充模式
+            imageAlignCenter: true, // 图片居中
+            slidesSpacing: 0, // 幻灯片间距
+
+            // ===== 【关键修正3】循环逻辑 =====
+            loop: false, // 禁用常规循环
+            loopRewind: false, // 禁用循环回退（与loop:false保持一致）
+
+            numImagesToPreload: 1, // 预加载图片数量
+            autoScaleSlider: true, // 启用自动缩放
+            autoScaleSliderWidth: 680, // 基础宽度
+            autoScaleSliderHeight: 345, // 基础高度
+
+            // ===== 【新增】小圆点点击交互反馈 =====
+            beforeCreate: function () {
+              console.log("RoyalSlider 开始初始化...");
+            },
+            afterInit: function () {
+              console.log("RoyalSlider 初始化完成，小圆点已启用");
+              // 初始化后可以添加自定义类或事件
+              $(".rsBullets").addClass("custom-bullets");
+            },
+            onSlideChanged: function () {
+              // 幻灯片切换时的回调
+              console.log("切换到第 " + (this.currSlideId + 1) + " 张幻灯片");
+              // 可以在这里更新其他UI状态
+              $("#current-slide").text(
+                "当前：" + (this.currSlideId + 1) + "/" + this.numSlides,
+              );
+            },
+          });
+        }
+      })
+      .catch(function (err) {
+        console.error("Error:", err);
+      });
+  }
+}
+
+console.log(GetCookie("LID"));
+console.log(
+  "验证是否是个人用户登录:",
+  window.commonInstance.checkUploadLogin(),
+);
+
+// ============ 【最新】模块专属渲染 ============
+function renderNewItem(item, index) {
+  const PT = item.pushStartTime;
+  const date = PT ? new Date(PT) : new Date();
+  const dateMonth =
+    ("0" + (date.getMonth() + 1)).slice(-2) +
+    "-" +
+    ("0" + date.getDate()).slice(-2);
+  const dateYear = date.getFullYear();
+
+  let titleHTML = item.TI
+    ? item.ABSTRACTUrl
+      ? `<a href="${item.ABSTRACTUrl}" target="_blank" rel="noopener noreferrer" class="title-link" title=${item.TI.replace(/\s+/g, "").replace(/<[^>]*>/g, "")}>${item.TI}</a>`
+      : `<span class="title-text" title=${item.TI.replace(/<[^>]*>/g, "")}>${item.TI}</span>`
+    : "无标题";
+
+  const allAuthorNames = item.AUTHORS.map((author) => author.title).join(";");
+  let authorsHTML = "无作者";
+  if (Array.isArray(item.AUTHORS) && item.AUTHORS.length) {
+    authorsHTML = item.AUTHORS.map((author) => {
+      const name = author.title || "未知作者";
+      return author.ABSTRACTUrl
+        ? `<a href="${author.ABSTRACTUrl}" target="_blank" rel="noopener noreferrer" title="${allAuthorNames}">${name};</a>`
+        : `<span title="${allAuthorNames}">${name};</span>`;
+    }).join(" ");
+  }
+
+  let sourceHTML = "无来源";
+  if (item.SOURCE?.title) {
+    sourceHTML = item.SOURCE.PUBLICATIONUrl
+      ? `<a href="${item.SOURCE.PUBLICATIONUrl}" target="_blank" rel="noopener noreferrer" title="${item.SOURCE.title}">${item.SOURCE.title}</a>`
+      : `<span title="${item.SOURCE.title}">${item.SOURCE.title}</span>`;
+  }
+  const pubDate =
+    item.YE && item.QI
+      ? `${item.YE}-${item.QI}`
+      : item.PT
+        ? item.PT.split(" ")[0]
+        : "1970-01-01";
+  const downCount = item.DFR || 0;
+
+  const recommendPerson = item.recommendPerson;
+  const recommendPersonPosition = item.recommendPersonPosition;
+  const recommendReason = item.recommendReason;
+  return $(`
+    <div class="article-item">
+      <div class="date-badge">
+        <span class="date-month">${dateMonth}</span>
+        <span class="date-year">${dateYear}</span>
+      </div>
+      <div class="article-content">
+        <h2 class="article-title" data-item='${JSON.stringify(
+          item,
+        )}'>${titleHTML}</h2>
+        <div class="article-meta">
+          <span class="article-authors">${authorsHTML}</span>
+          <span class="article-source">${sourceHTML}</span>
+          <span class="meta-date">${pubDate}</span>
+          <span class="meta-down">下载&nbsp;${downCount}</span>
+        </div>
+      </div>
+      <div class="article-btn" data-target="recommend-${index}">
+        <span class="btn-icon"></span>
+        <span class="recommend-btn">荐语</span>
+      </div>
+      <div class="recommend-popup" id="recommend-${index}" style="display: none;">
+        <div class="popup-content">
+          <span class="recommend-icon"><i style="vertical-align: text-bottom;">主编荐语</i></span>
+          <span>${recommendPerson}</span>
+          <span>（${recommendPersonPosition}）: </span>
+          <span>${recommendReason}</span>
+        </div>
+      </div>
+    </div>
+  `)
+    .find(".article-title")
+    .html(titleHTML)
+    .end();
+}
+
+// ============ 【热门】模块专属渲染 ============
+function renderHotItem(item, index, currentPage, pageSize) {
+  let titleHTML = item.TI
+    ? item.ABSTRACTUrl
+      ? `<a href="${item.ABSTRACTUrl}" target="_blank" rel="noopener noreferrer" class="title-link" title=${item.TI.replace(/\s+/g, "").replace(/<[^>]*>/g, "")}>${item.TI}</a>`
+      : `<span class="title-text" title=${item.TI.replace(/<[^>]*>/g, "")}>${item.TI}</span>`
+    : "无标题";
+
+  const allAuthorNames = item.AUTHORS.map((author) => author.title).join(";");
+  let authorsHTML = "无作者";
+  if (Array.isArray(item.AUTHORS) && item.AUTHORS.length) {
+    authorsHTML = item.AUTHORS.map((author) =>
+      author.ABSTRACTUrl
+        ? `<a href="${
+            author.ABSTRACTUrl
+          }" target="_blank" rel="noopener noreferrer" title="${allAuthorNames}">${
+            author.title || "未知作者"
+          };</a>`
+        : `<span title="${allAuthorNames}">${
+            author.title || "未知作者"
+          };</span>`,
+    ).join("");
+  }
+
+  let sourceHTML = item.SOURCE?.title
+    ? item.SOURCE.PUBLICATIONUrl
+      ? `<a href="${item.SOURCE.PUBLICATIONUrl}" target="_blank" rel="noopener noreferrer" title="${item.SOURCE.title}">${item.SOURCE.title}</a>`
+      : `<span title="${item.SOURCE.title}">${item.SOURCE.title}</span>`
+    : "无来源";
+
+  const pubDate =
+    item.YE && item.QI
+      ? `${item.YE}-${item.QI}`
+      : item.PT
+        ? item.PT.split(" ")[0]
+        : "1970-01-01";
+  const downCount = item.DFR || 0;
+
+  const recommendPerson = item.recommendPerson;
+  const recommendPersonPosition = item.recommendPersonPosition;
+  const recommendReason = item.recommendReason;
+  return $(`
+    <div class="article-item">
+      <div class="date-badge">
+        <span class="date-number">${index + 1 + currentPage * pageSize}</span>
+      </div>
+      <div class="article-content">
+        <h2 class="article-title" data-item='${JSON.stringify(
+          item,
+        )}'>${titleHTML}</h2>
+        <div class="article-meta">
+          <span class="article-authors">${authorsHTML}</span>
+          <span class="article-source">${sourceHTML}</span>
+          <span class="meta-date">${pubDate}</span>
+          <span class="meta-down">下载&nbsp;${downCount}</span>
+        </div>
+      </div>
+      <div class="article-btn" data-target="recommend-${index}">
+        <span class="btn-icon"></span>
+        <span class="recommend-btn">荐语</span>
+      </div>
+      <div class="recommend-popup" id="recommend-${index}" style="display: none;">
+        <div class="popup-content">
+          <span class="recommend-icon"><i style="vertical-align: text-bottom;">主编荐语</i></span>
+          <span>${recommendPerson}</span>
+          <span>（${recommendPersonPosition}）: </span>
+          <span>${recommendReason}</span>
+        </div>
+      </div>
+    </div>
+  `)
+    .find(".article-title")
+    .html(titleHTML)
+    .end();
+}
+
+// ============ 【追踪关注】模块专属渲染 ============
+let sortArr = []; // 一级学科存放数组
+function renderTrackItem(item, index) {
+  sortArr.push(item.REPOSITORY.ccl1.split(";")[0]);
+  const type = item.DB || "无类别";
+
+  let titleHTML = item.TI
+    ? item.ABSTRACTUrl
+      ? `<a href="${item.ABSTRACTUrl}" target="_blank" rel="noopener noreferrer" class="title-link" title=${item.TI}>${item.TI}</a>`
+      : `<span class="title-text" title=${item.TI}>${item.TI}</span>`
+    : "无标题";
+
+  const allAuthorNames = item.AUTHORS.map((author) => author.title).join(" ");
+  const authorsHTML =
+    Array.isArray(item.AUTHORS) && item.AUTHORS.length
+      ? item.AUTHORS.map((author, index) =>
+          author.ABSTRACTUrl
+            ? `<a href="${author.ABSTRACTUrl}" target="_blank" rel="noopener noreferrer" title="${allAuthorNames}">${author.title}</a>`
+            : `<span title="${allAuthorNames}">${author.title}</span>`,
+        ).join(";")
+      : "无作者";
+
+  const sourceHTML = item.SOURCE?.title
+    ? item.SOURCE.PUBLICATIONUrl
+      ? `<a href="${item.SOURCE.PUBLICATIONUrl}" target="_blank" rel="noopener noreferrer" title="${item.SOURCE.title}">${item.SOURCE.title}</a>`
+      : `<span title="${item.SOURCE.title}">${item.SOURCE.title}</span>`
+    : "无来源";
+
+  const YE = item.YE || 0;
+  const QI = item.QI || 0;
+
+  return $(`
+    <div class="track-item">
+      <span class="item-number"> ${index + 1} </span>
+      <div class="item-content">
+        <div class="item-first-line">
+          <span class="item-type-btn">${type}</span>
+          <span class="item-title">${titleHTML}</span>
+        </div>
+        <div class="item-second-line">
+          <span class="item-author">${authorsHTML}</span>
+          <span class="item-source">${sourceHTML}</span>
+          <span class="item-date">${YE}(${QI})</span>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+// ============ 【专题】模块专属渲染 ============
+function renderSpecialTopicItem(item, index) {
+  const imgHTML = item.cover
+    ? item.detailUrl
+      ? `<a href="${item.detailUrl}" target="_blank" rel="noopener noreferrer">
+          <img src="${item.cover}" alt="" style="width: 100%; height: 100%; object-fit: cover;cursor: pointer;" />
+        </a>`
+      : `<img src="${item.cover}" alt="" style="width: 100%; height: 100%; object-fit: cover;cursor: pointer;" />`
+    : "无标题";
+
+  return $(`
+    <div class="img-item" data-item='${JSON.stringify(item)}'>${imgHTML}</div>
+  `);
+}
+
+// ============ 图书推荐轮播图片获取start ============
+function dealBookCarousel() {
+  // window.addEventListener("load", function () {
+  // 1. 定义画册兜底数据（接口失败/空数据时使用）
+  const fallbackBookGalleryData = [
+    {
+      id: 136,
+      image:
+        "https://book.cnki.net/bookstore-shop/file/view/bannerConfig/2026/01-12/00/00a471e8-4537-4547-94d4-f028a4f62e4d.jpg",
+      url: "https://book.cnki.net/award",
+      title: "为什么文津奖选中的书，值得一读再读？",
+      author: null,
+    },
+    {
+      id: "",
+      image:
+        "https://piccache.cnki.net/kdn/index/kns8s/nimages/images/book-theme.jpg",
+      // image: "./nimages/images/book-theme.jpg",
+      url: "https://kns.cnki.net/res/category/book/ai",
+      title: "",
+      author: null,
+    },
+  ];
+
+  const fixedExtraBookData = {
+    id: "",
+    image:
+      "https://piccache.cnki.net/kdn/index/kns8s/nimages/images/book-theme.jpg",
+    url: "https://kns.cnki.net/res/category/book/ai",
+    title: "",
+    author: null,
+  };
+
+  // 2. 接口请求函数
+  function getBookGalleryData() {
+    return fetch("https://book.cnki.net/bookstore-shop/xinke/banner-list", {
+      method: "GET",
+      credentials: "include",
+      // signal: AbortSignal.timeout(10000),
+      signal: getTimeoutSignal(10000),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          console.error(`画册接口返回错误状态码：${response.status}`);
+          throw new Error("画册数据请求失败");
+        }
+        return response.json();
+      })
+      .then((res) => {
+        // 接口返回数据但为空时，使用兜底数据
+        const apiData = (res.data || []).slice(0, 4);
+        return apiData.length > 0
+          ? [...apiData, fixedExtraBookData]
+          : fallbackBookGalleryData;
+      })
+      .catch((error) => {
+        // 所有异常（超时/网络错误/状态码错误）都使用兜底数据
+        console.error("获取画册数据失败，使用兜底数据：", error);
+        return fallbackBookGalleryData;
+      });
+  }
+
+  // 3. 渲染画册数据
+  function renderBookGallery(data) {
+    const bookGallery = document.getElementById("book-gallery");
+    if (!bookGallery) return;
+    // 清空旧节点
+    bookGallery.innerHTML = "";
+    data.forEach((item) => {
+      const rsContent = document.createElement("div");
+      rsContent.className = "rsContent";
+
+      const rsImg = document.createElement("a");
+      rsImg.className = "rsImg";
+      rsImg.href = item.image;
+      rsImg.setAttribute("src", item.image);
+
+      const rsABlock = document.createElement("a");
+      rsABlock.className = "rsABlock sampleBlock";
+      rsABlock.href = item.url || "javascript:;";
+      rsABlock.target = "_blank";
+
+      rsContent.appendChild(rsImg);
+      rsContent.appendChild(rsABlock);
+      bookGallery.appendChild(rsContent);
+    });
+
+    // 数据渲染完成后，初始化轮播图
+    initRoyalSlider();
+  }
+
+  function initRoyalSlider() {
+    if ($("#book-gallery").length) {
+      // 先销毁可能存在的旧实例（避免重复初始化）
+      const sliderInstance = $("#book-gallery").data("royalSlider");
+      if (sliderInstance) {
+        sliderInstance.destroy();
+      }
+      // 初始化轮播图（原有配置不变）
+      $("#book-gallery").royalSlider({
+        arrowsNav: false,
+        fadeinLoadedSlide: true,
+        controlNavigationSpacing: 0,
+        controlNavigation: "bullets",
+        keyboardNavEnabled: true,
+        imageScaleMode: "fill",
+        imageAlignCenter: true,
+        slidesSpacing: 0,
+        loop: false,
+        loopRewind: false,
+        numImagesToPreload: 1,
+        autoScaleSlider: true,
+        autoScaleSliderWidth: 680,
+        autoScaleSliderHeight: 345,
+        beforeCreate: function () {
+          console.log("RoyalSlider 开始初始化...");
+        },
+        afterInit: function () {
+          console.log("RoyalSlider 初始化完成，小圆点已启用");
+          $(".rsBullets").addClass("custom-bullets");
+        },
+        onSlideChanged: function () {
+          console.log("切换到第 " + (this.currSlideId + 1) + " 张幻灯片");
+          $("#current-slide").text(
+            "当前：" + (this.currSlideId + 1) + "/" + this.numSlides,
+          );
+        },
+      });
+    }
+  }
+
+  // 4. 执行流程：请求数据 → 渲染DOM → 初始化轮播
+  getBookGalleryData().then((galleryData) => {
+    renderBookGallery(galleryData);
+  });
+  // });
+}
+// ============ 图书推荐轮播图片获取end ============
+
+// ============ 图书推荐/纸质图书start ============
+function dealPaperBook() {
+  // window.addEventListener("load", function () {
+  // 1. 定义兜底数据（接口失败时使用）
+  const fallbackPaperBookData = [
+    {
+      id: 142297,
+      title: "无边界学习 打造个人知识体系",
+      author: "(美)本杰明·安亚乔(Benjamin Anyacho)著,王琰译",
+      publisher: "中国科学技术出版社",
+      coverImage:
+        "https://book.cnki.net/bookstore-shop/file/view/book-cover/2025/10-17/dd/ddc94f91-ae7b-47aa-a032-3fefac80a047.jpg",
+      url: "https://book.cnki.net/book?id=142297",
+    },
+    {
+      id: 327113,
+      title:
+        "万古江河：中国历史文化的转折与开展（2023版）史学大家许倬云经典之作、 19年清华校长赠送新生之书",
+      author: "许倬云，理想国 出品",
+      publisher: "北京日报出版社",
+      coverImage:
+        "https://book.cnki.net/bookstore-shop/file/view/book-cover/2025/10-18/46/4618ef24-56db-4855-a3a3-77cfe0c8ee1c.jpg",
+      url: "https://book.cnki.net/book?id=327113",
+    },
+    {
+      id: 460143,
+      title:
+        "芯片简史 第十九届文津图书奖 芯片是如何诞生并改变世界的 一本书读懂芯片战争的前世今生 马光远推荐",
+      author: "汪波 湛庐文化 出品",
+      publisher: "浙江教育出版社",
+      coverImage:
+        "https://book.cnki.net/bookstore-shop/file/view/book-cover/2025/10-18/8f/8faba23a-fd6b-4c47-8803-8a951babf955.jpg",
+      url: "https://book.cnki.net/book?id=460143",
+    },
+    {
+      id: 347651,
+      title: "研究生论文写作与时间管理",
+      author: "谢立斌著",
+      publisher: "北京大学出版社",
+      coverImage:
+        "https://book.cnki.net/bookstore-shop/file/view/book-cover/2025/10-18/91/91568f7d-ab0d-416a-8fca-be00bf301e3c.jpg",
+      url: "https://book.cnki.net/book?id=347651",
+    },
+    {
+      id: 130862,
+      title:
+        "唐朝诗人的朋友圈（如果唐朝就进入朋友圈时代，大诗人们都会发些什么？唐诗大咖云集，人物关系清晰，这是一场别开生面的朋友圈盛会。）",
+      author: "王一凡，鲤伴 出品，有容书邦 发行",
+      publisher: "贵州人民出版社",
+      coverImage:
+        "https://book.cnki.net/bookstore-shop/file/view/book-cover/2025/10-17/eb/eb87e827-fd16-4379-a530-e7bd8408e2cb.jpg",
+      url: "https://book.cnki.net/book?id=130862",
+    },
+    {
+      id: 2301,
+      title: "思考的框架",
+      author: "",
+      publisher: "中信出版集团",
+      coverImage:
+        "https://phoenix-mall.oss-cn-shanghai.aliyuncs.com/image/202304/01911bd0038c489ca9f9237c2cdccf8f.jpg?x-oss-process=image/format,webp",
+      url: "https://book.cnki.net/book?id=2301",
+    },
+  ];
+
+  // 2. 接口请求函数
+  function getPaperBookData() {
+    return fetch(
+      "https://book.cnki.net/bookstore-shop/xinke/book-recommend-list",
+      {
+        method: "GET",
+        credentials: "include",
+        // signal: AbortSignal.timeout(10000),
+        signal: getTimeoutSignal(10000),
+      },
+    )
+      .then((response) => {
+        if (!response.ok) throw new Error("接口请求失败");
+        return response.json();
+      })
+      .then((res) => {
+        // 接口返回数据但为空时，使用兜底数据
+        const apiData = (res.data || []).slice(0, 6);
+        bookData = apiData.length > 0 ? apiData : fallbackPaperBookData;
+        return apiData.length > 0 ? apiData : fallbackPaperBookData;
+      })
+      .catch((error) => {
+        console.error("获取纸质图书数据失败，使用兜底数据：", error);
+        // 任何异常（超时、报错、网络问题）都返回兜底数据
+        return fallbackPaperBookData;
+      });
+  }
+  // 动态渲染纸质图书数据
+  function renderPaperBookList(data) {
+    const paperBookTitle = document.querySelector(".book-type.paper-book");
+    const paperBookContainer = document.querySelector(".paper-book-container");
+    if (!paperBookTitle || !paperBookContainer) return;
+    paperBookContainer.innerHTML = "";
+    data.forEach((book) => {
+      const bookItem = document.createElement("div");
+      bookItem.className = "book-item";
+      bookItem.innerHTML = `
+          <a
+            class="item-title"
+            href="${book.url || "javascript:;"}"
+            target="_blank"
+            title="${book.title || "暂无书名"}"
+          >${book.title || "暂无书名"}</a
+          >
+          <a
+            class="item-source"
+            href="https://book.cnki.net/list?keyword=${book.publisher}"
+            target="_blank"
+            title="${book.publisher || "暂无出版社"}"
+          >${book.publisher || "暂无出版社"}</a
+          >
+        `;
+      paperBookContainer.appendChild(bookItem);
+    });
+  }
+  getPaperBookData().then((paperBookData) => {
+    renderPaperBookList(paperBookData);
+  });
+  // });
+}
+// ============ 图书推荐/纸质图书end ============
+
+// ============ 语音识别 ============
+// 插件逻辑引入start
+const jsRecorder = (cb) => {
+  var testSampleRate = 16000;
+  var testBitRate = 16;
+  var SendFrameSize = 1280;
+  //  去掉console
+  Recorder.CLog = () => {};
+
+  //重置环境，每次开始录音时必须先调用此方法，清理环境
+  var RealTimeSendTryReset = function () {
+    realTimeSendTryChunks = null;
+  };
+
+  var realTimeSendTryNumber;
+  var transferUploadNumberMax;
+  var realTimeSendTryChunk;
+  var realTimeSendTryChunks;
+
+  //=====实时处理核心函数==========
+  var RealTimeSendTry = function (buffers, bufferSampleRate, isClose) {
+    if (realTimeSendTryChunks == null) {
+      realTimeSendTryNumber = 0;
+      transferUploadNumberMax = 0;
+      realTimeSendTryChunk = null;
+      realTimeSendTryChunks = [];
+    }
+    //配置有效性检查
+    if (testBitRate == 16 && SendFrameSize % 2 == 1) {
+      return;
+    }
+
+    var pcm = [],
+      pcmSampleRate = 0;
+    if (buffers.length > 0) {
+      //借用SampleData函数进行数据的连续处理，采样率转换是顺带的，得到新的pcm数据
+      var chunk = Recorder.SampleData(
+        buffers,
+        bufferSampleRate,
+        testSampleRate,
+        realTimeSendTryChunk,
+      );
+
+      //清理已处理完的缓冲数据，释放内存以支持长时间录音，最后完成录音时不能调用stop，因为数据已经被清掉了
+      for (
+        var i = realTimeSendTryChunk ? realTimeSendTryChunk.index : 0;
+        i < chunk.index - 3;
+        i++
+      ) {
+        buffers[i] = null;
+      }
+      realTimeSendTryChunk = chunk; //此时的chunk.data就是原始的音频16位pcm数据（小端LE），直接保存即为16位pcm文件、加个wav头即为wav文件、丢给mp3编码器转一下码即为mp3文件
+
+      pcm = chunk.data;
+      pcmSampleRate = chunk.sampleRate;
+      if (pcmSampleRate != testSampleRate) {
+        //除非是onProcess给的bufferSampleRate低于testSampleRate
+        throw new Error(
+          "不应该出现pcm采样率" +
+            pcmSampleRate +
+            "和需要的采样率" +
+            testSampleRate +
+            "不一致",
+        );
+      }
+    }
+
+    //将pcm数据丢进缓冲，凑够一帧发送，缓冲内的数据可能有多帧，循环切分发送
+    if (pcm.length > 0) {
+      realTimeSendTryChunks.push({ pcm: pcm, pcmSampleRate: pcmSampleRate });
+    }
+
+    //从缓冲中切出一帧数据
+    var chunkSize = SendFrameSize / (testBitRate / 8); //8位时需要的采样数和帧大小一致，16位时采样数为帧大小的一半
+    pcm = new Int16Array(chunkSize);
+    pcmSampleRate = 0;
+    var pcmOK = false,
+      pcmLen = 0;
+    for1: for (var i1 = 0; i1 < realTimeSendTryChunks.length; i1++) {
+      chunk = realTimeSendTryChunks[i1];
+      pcmSampleRate = chunk.pcmSampleRate;
+
+      for (var i2 = chunk.offset || 0; i2 < chunk.pcm.length; i2++) {
+        pcm[pcmLen] = chunk.pcm[i2];
+        pcmLen++;
+
+        //满一帧了，清除已消费掉的缓冲
+        if (pcmLen == chunkSize) {
+          pcmOK = true;
+          chunk.offset = i2 + 1;
+          for (var i3 = 0; i3 < i1; i3++) {
+            realTimeSendTryChunks.splice(0, 1);
+          }
+          break for1;
+        }
+      }
+    }
+
+    //缓冲的数据不够一帧时，不发送 或者 是结束了
+    if (!pcmOK) {
+      if (isClose) {
+        var number = ++realTimeSendTryNumber;
+        TransferUpload(number, null, 0, null, isClose);
+      }
+      return;
+    }
+
+    //16位pcm格式可以不经过mock转码，直接发送new Blob([pcm.buffer],{type:"audio/pcm"}) 但8位的就必须转码，通用起见，均转码处理，pcm转码速度极快
+    number = ++realTimeSendTryNumber;
+    var encStartTime = Date.now();
+    var recMock = Recorder({
+      type: "pcm",
+      sampleRate: testSampleRate, //需要转换成的采样率
+      bitRate: testBitRate, //需要转换成的比特率
+    });
+    recMock.mock(pcm, pcmSampleRate);
+    recMock.stop(
+      function (blob, duration) {
+        blob.encTime = Date.now() - encStartTime;
+
+        //转码好就推入传输
+        TransferUpload(number, blob, duration, recMock, false);
+
+        //循环调用，继续切分缓冲中的数据帧，直到不够一帧
+        RealTimeSendTry([], 0, isClose);
+      },
+      function (msg) {
+        //转码错误？没想到什么时候会产生错误！
+      },
+    );
+  };
+
+  //=====数据传输函数==========
+  var TransferUpload = function (
+    number,
+    blobOrNull,
+    duration,
+    blobRec,
+    isClose,
+  ) {
+    // console.log(number, blobOrNull, duration, blobRec, isClose)
+    transferUploadNumberMax = Math.max(transferUploadNumberMax, number);
+    if (blobOrNull) {
+      var blob = blobOrNull;
+      var encTime = blob.encTime;
+      cb(blob, encTime);
+    }
+
+    if (isClose) {
+      // console.log('isClose')
+    }
+  };
+
+  //调用录音
+  var rec;
+  var wave;
+  function recStart() {
+    if (rec) {
+      rec.close();
+    }
+    rec = Recorder({
+      type: "unknown",
+      onProcess: function (
+        buffers,
+        powerLevel,
+        bufferDuration,
+        bufferSampleRate,
+      ) {
+        //推入实时处理，因为是unknown格式，buffers和rec.buffers是完全相同的，只需清理buffers就能释放内存。
+        RealTimeSendTry(buffers, bufferSampleRate, false);
+        //可视化图形绘制
+        // wave.input(buffers[buffers.length - 1], powerLevel, bufferSampleRate);
+      },
+    });
+
+    // var t = setTimeout(function () {
+    //   console.log('无法录音：权限请求被忽略（超时假装手动点击了确认对话框）', 1)
+    // }, 8000)
+
+    rec.open(
+      function () {
+        //打开麦克风授权获得相关资源
+        console.log("麦克风授权成功，开始录音"); // 新增日志
+        rec.start(); //开始录音
+        RealTimeSendTryReset(); //重置环境，开始录音时必须调用一次
+
+        //此处创建这些音频可视化图形绘制浏览器支持妥妥的
+        // wave = Recorder.WaveSurferView({
+        //   elem: ".speak-wave",
+        //   height: 30 //显示宽度
+        //   , scale: 2 //缩放系数，应为正整数，使用2(3? no!)倍宽高进行绘制，避免移动端绘制模糊
+        //   , fps: 50 //绘制帧率，不可过高，50-60fps运动性质动画明显会流畅舒适，实际显示帧率达不到这个值也并无太大影响
+        //   , duration: 2500 //当前视图窗口内最大绘制的波形的持续时间，此处决定了移动速率
+        //   , direction: 1 //波形前进方向，取值：1由左往右，-1由右往左
+        //   , position: 0 //绘制位置，取值-1到1，-1为最底下，0为中间，1为最顶上，小数为百分比
+        //   , centerHeight: 1 //中线基础粗细，如果为0不绘制中线，position=±1时应当设为0
+        //   //波形颜色配置：[位置，css颜色，...] 位置: 取值0.0-1.0之间
+        //   , linear: [0, "rgba(0,187,17,1)", 0.7, "rgba(255,215,0,1)", 1, "rgba(255,102,0,1)"]
+        //   , centerColor: "" //中线css颜色，留空取波形第一个渐变颜色 });
+        // }, function (msg, isUserNotAllow) {
+        //   clearTimeout(t);
+        //   console.log((isUserNotAllow ? "UserNotAllow，" : "") + "无法录音:" + msg, 1);
+        // });
+      },
+      function (msg, isUserNotAllow) {
+        // 授权失败的回调（之前被注释掉了！必须加上！）
+        console.error(
+          "麦克风授权失败：",
+          msg,
+          "，是否用户拒绝：",
+          isUserNotAllow,
+        );
+        alert(
+          isUserNotAllow
+            ? "请允许麦克风权限才能使用语音输入"
+            : "无法启动录音：" + msg,
+        );
+      },
+    );
+  }
+  // close
+  function recStop() {
+    console.log("关闭录音");
+    rec && rec.close(); //直接close掉即可，这个例子不需要获得最终的音频文件
+    RealTimeSendTry([], 0, true); //最后一次发送
+  }
+  return {
+    recStart: recStart,
+    recStop: recStop,
+  };
+};
+// end
+
+const state = {
+  isRecording: false,
+  text: "",
+  websocket: null,
+  recorder: null,
+  currentVoiceBtn: null, // 记录当前点击的是哪个语音按钮（用于更新对应图标）
+  isStarting: false,
+  mediaStream: null, // 记录麦克风媒体流
+};
+
+// DOM元素获取（扩展支持两个语音按钮）
+// const dom = {
+//   // 第一部分语音按钮
+//   voiceBtn1: document.getElementById("voiceBtn"),
+//   // 第二部分语音按钮（新增ID：voiceBtnAI）
+//   voiceBtn2: document.getElementById("voiceBtnAI"),
+//   // 输入框：优先用当前按钮所属区域的输入框，无则用默认
+//   searchInput: document.getElementById("txt_SearchText"),
+//   searchInputAI: document.getElementById("txt_SearchText_ai"),
+// };
+
+// 初始化录音实例
+function initProjectRecorder() {
+  // ========== 优化：如果已有实例，先销毁再重建 ==========
+  if (state.recorder) {
+    try {
+      state.recorder.recStop();
+    } catch (err) {}
+    state.recorder = null;
+  }
+  // 重新创建实例
+  state.recorder = jsRecorder((blob, encTime) => {
+    if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+      try {
+        state.websocket.send(blob);
+      } catch (err) {
+        console.error("音频数据发送失败：", err);
+        showError("语音数据发送失败，请重试");
+        stopRecording();
+      }
+    }
+  });
+}
+
+// 开始录音（新增：接收当前点击的按钮DOM）
+function startRecording(btnEl) {
+  if (state.isRecording || state.isStarting) return;
+  state.isStarting = true; // 标记“正在启动录音”，防止重复点击
+
+  // 记录当前点击的按钮（用于更新图标）
+  state.currentVoiceBtn = btnEl;
+  // 优先使用当前按钮所属区域的输入框
+  // const targetInput = btnEl.closest(".search-form-ai")
+  //   ? dom.searchInputAI
+  //   : dom.searchInput;
+  const targetInput = btnEl.closest(".search-form-ai")
+    ? document.getElementById("txt_SearchText_ai")
+    : document.getElementById("txt_SearchText");
+  state.text = targetInput ? targetInput.value || "" : "";
+
+  // 第一步：检测麦克风支持
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showError("当前浏览器不支持麦克风访问，请升级浏览器");
+    state.isStarting = false; // 解锁
+    return;
+  }
+
+  // 第二步：获取麦克风权限
+  navigator.mediaDevices
+    .getUserMedia({ audio: true })
+    .then((stream) => {
+      // 新增：保存媒体流到state
+      state.mediaStream = stream;
+      // 权限正常：标记状态+更新当前按钮图标
+      state.isRecording = true;
+      updateVoiceBtnState(btnEl);
+
+      // 连接WebSocket并启动录音
+      asrWebSocket();
+      initProjectRecorder();
+      state.recorder.recStart();
+      state.isStarting = false; // 解锁
+    })
+    .catch((err) => {
+      // 麦克风错误：仅提示，不修改状态/图标
+      let errorMsg = "无法启动录音：";
+      if (err.name === "NotAllowedError") {
+        errorMsg += "您拒绝了麦克风权限，请在浏览器设置中开启";
+      } else if (err.name === "NotFoundError") {
+        errorMsg += "无可用麦克风，请插入麦克风后重试";
+      } else {
+        errorMsg += err.message || "麦克风访问失败";
+      }
+      showError(errorMsg);
+      // 清理无效连接
+      if (state.websocket) {
+        state.websocket.close();
+        state.websocket = null;
+      }
+      state.isStarting = false; // 解锁
+    });
+}
+
+// 停止录音（原有逻辑+更新图标）
+function stopRecording() {
+  // ========== 新增：强制停止麦克风媒体流 ==========
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach((track) => {
+      track.stop(); // 停止媒体流的所有轨道
+    });
+    state.mediaStream = null; // 清空引用
+  }
+  // ========== 强制停止录音实例（兼容重复创建的情况） ==========
+  if (state.recorder) {
+    try {
+      state.recorder.recStop(); // 停止录音
+    } catch (err) {
+      console.error("强制停止录音失败：", err);
+    }
+    state.recorder = null; // 清空实例，强制释放
+  }
+
+  // 发送结束标记
+  if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+    try {
+      state.websocket.send(
+        JSON.stringify({
+          type: "audio_end",
+          is_speaking: false,
+          wav_name: "h5",
+        }),
+      );
+    } catch (err) {
+      console.error("发送结束标记失败：", err);
+    }
+    // ========== 强制关闭WebSocket（立即释放连接） ==========
+    state.websocket.close(1000, "manual stop"); // 正常关闭
+  }
+  state.websocket = null; // 清空WebSocket实例
+  // 恢复状态+更新当前按钮图标
+  state.isRecording = false;
+  state.isStarting = false; // 强制解锁
+  if (state.currentVoiceBtn) {
+    updateVoiceBtnState(state.currentVoiceBtn);
+  }
+  state.currentVoiceBtn = null;
+}
+
+// WebSocket连接（原有逻辑不变）
+function asrWebSocket() {
+  if (!window.WebSocket) {
+    showError("当前浏览器不支持语音输入，请升级浏览器");
+    return;
+  }
+
+  if (state.websocket) return;
+
+  const wsUrl = URL_CONFIG.wsUrl;
+  state.websocket = new WebSocket(wsUrl);
+
+  state.websocket.onopen = () => {
+    console.log("WebSocket 连接成功");
+    state.websocket.send(
+      JSON.stringify({
+        chunk_size: [5, 10, 5],
+        wav_name: "h5",
+        is_speaking: true,
+        chunk_interval: 10,
+        mode: "2pass",
+      }),
+    );
+  };
+
+  let inputUpdateTimer = null;
+  state.websocket.onmessage = (evt) => {
+    try {
+      const res = JSON.parse(evt.data);
+      let newText = "";
+      // 判断stamp_sents存在且长度>0 → 取同级的text
+      if (res.stamp_sents && res.stamp_sents.length > 0) {
+        newText = res.text || ""; // 取和stamp_sents同级的text
+      }
+      // ======================================
+
+      if (newText) {
+        // 只有newText有值时才更新
+        state.text += newText;
+        if (state.text.length > 100) {
+          state.text = state.text.slice(0, 100);
+          stopRecording();
+          showError("输入内容已达最大长度");
+        }
+        // 更新对应区域的输入框（原有逻辑不变）
+        clearTimeout(inputUpdateTimer);
+        inputUpdateTimer = setTimeout(() => {
+          // const targetInput = state.currentVoiceBtn.closest(".search-form-ai")
+          //   ? dom.searchInputAI
+          //   : dom.searchInput;
+          const targetInput = state.currentVoiceBtn.closest(".search-form-ai")
+            ? document.getElementById("txt_SearchText_ai")
+            : document.getElementById("txt_SearchText");
+          if (targetInput) {
+            targetInput.value = state.text;
+            targetInput.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }, 100);
+      }
+    } catch (err) {
+      console.error("解析识别结果失败：", err, "原始数据：", evt.data);
+    }
+  };
+
+  state.websocket.onerror = (error) => {
+    console.error("WebSocket错误：", error);
+    showError("语音识别服务连接异常，请检查网络");
+    stopRecording();
+  };
+
+  state.websocket.onclose = (event) => {
+    console.log("WebSocket关闭：", event.code, event.reason);
+    if (state.isRecording) {
+      state.isRecording = false;
+      if (state.currentVoiceBtn) {
+        updateVoiceBtnState(state.currentVoiceBtn);
+      }
+      state.currentVoiceBtn = null;
+    }
+  };
+}
+
+// 图标更新逻辑（支持指定按钮）
+function updateVoiceBtnState(btnEl) {
+  if (!btnEl) return;
+  const $voiceTooltip = $(".voice-tooltip");
+
+  if (state.isRecording) {
+    btnEl.classList.add("recording");
+    $voiceTooltip
+      .text("点击停止语音输入")
+      .removeClass("width-sm")
+      .addClass("width-lg");
+  } else {
+    btnEl.classList.remove("recording");
+    $voiceTooltip.text("语音输入").removeClass("width-lg").addClass("width-sm");
+  }
+  btnEl.style.display = "none";
+  void btnEl.offsetWidth;
+  btnEl.style.display = "";
+  btnEl.style.backgroundImage = "";
+}
+
+// 错误提示（原有逻辑不变）
+function showError(msg) {
+  if (window.Vue && Vue.prototype.$message) {
+    Vue.prototype.$message.error({ message: msg, duration: 3000 });
+  } else {
+    $message.error(msg);
+  }
+}
+
+// 事件绑定：批量绑定两个语音按钮
+// function bindVoiceBtnEvents() {
+//   // 按钮列表：包含两个语音按钮
+//   const voiceBtns = [dom.voiceBtn1, dom.voiceBtn2].filter((btn) => btn);
+//   voiceBtns.forEach((btn) => {
+//     // ========== 新增：点击防抖（500ms内仅响应一次） ==========
+//     let clickDebounce = false;
+//     btn.addEventListener("click", (e) => {
+//       if (clickDebounce) return; // 防抖锁
+//       clickDebounce = true;
+//       setTimeout(() => {
+//         clickDebounce = false;
+//       }, 500); // 500ms后解锁
+
+//       e.preventDefault(); // 阻止默认跳转（第二部分按钮原有href）
+//       if (state.isRecording) {
+//         stopRecording();
+//       } else {
+//         startRecording(btn); // 传入当前点击的按钮
+//       }
+//     });
+//   });
+
+//   // 原有回车拦截逻辑...
+//   document.addEventListener("keydown", (e) => {
+//     if (state.isRecording && e.keyCode === 13) {
+//       e.preventDefault();
+//       e.stopPropagation();
+//     }
+//   });
+// }
+
+function handleVoiceBtnClick(btnEl) {
+  if (!btnEl) return;
+  // 防抖逻辑（保留原500ms防抖）
+  let clickDebounce = false;
+  if (clickDebounce) return;
+  clickDebounce = true;
+  setTimeout(() => {
+    clickDebounce = false;
+  }, 500);
+  // 原核心业务逻辑
+  if (state.isRecording) {
+    stopRecording();
+  } else {
+    startRecording(btnEl);
+  }
+}
+
+document.addEventListener("click", function (e) {
+  const voiceBtn = e.target.closest("#voiceBtn, #voiceBtnAI");
+  if (voiceBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleVoiceBtnClick(voiceBtn);
+  }
+});
+
+window.addEventListener("load", () => {
+  const voiceBtn1 = document.getElementById("voiceBtn");
+  const voiceBtn2 = document.getElementById("voiceBtnAI");
+  if (voiceBtn1) updateVoiceBtnState(voiceBtn1);
+  if (voiceBtn2) updateVoiceBtnState(voiceBtn2);
+});
+
+// 页面初始化
+// window.addEventListener("load", () => {
+//   bindVoiceBtnEvents();
+//   // 初始化两个按钮的默认样式
+//   if (dom.voiceBtn1) updateVoiceBtnState(dom.voiceBtn1);
+//   if (dom.voiceBtn2) updateVoiceBtnState(dom.voiceBtn2);
+// });
+
+// 页面卸载清理
+window.addEventListener("beforeunload", () => {
+  if (state.isRecording) stopRecording();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (state.isRecording && e.keyCode === 13) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+});
+
+// =============================文件、图片上传实现 start=======================
+// 全局状态管理
+window.uploadState = {
+  // 拆分：两个区域的独立上传状态（避免互相覆盖）
+  ai: {
+    // AI区专属状态
+    uploadStatus: "notUpload", // notUpload/beforeUpload/uploading/uploaded/uploaderror
+    fileParams: {
+      mimetype: "",
+      fileSizeInKB: "",
+      doctitle: "",
+      docid: "",
+      uploadPercentage: 0,
+    },
+    fileList: [], // 选中的文件列表
+    timer: null, // 进度模拟定时器
+    uploadTip: "", // 弹窗提示文本
+    clickBtnType: "", // 点击的按钮类型（file/image）
+  },
+  search: {
+    // 检索区专属状态
+    uploadStatus: "notUpload",
+    fileParams: {
+      mimetype: "",
+      fileSizeInKB: "",
+      doctitle: "",
+      docid: "",
+      uploadPercentage: 0,
+    },
+    fileList: [],
+    timer: null,
+    uploadTip: "",
+    clickBtnType: "",
+  },
+  owner: "ai", // 标记当前上传归属的区域（ai=CNKI AI区，search=检索区）
+  // 配置项
+  config: {
+    fileSizeLimit: {
+      file: 50 * 1024 * 1024, // 文档50M
+      image: 3 * 1024 * 1024, // 图片3M
+    },
+    fileTypeReg: {
+      file: /\.((doc)|(docx)|(pdf)|(ppt)|(pptx)|(txt))$/i,
+      image: /\.((jpg)|(png)|(jpeg))$/i,
+    },
+  },
+  showExample: true, // 标记是否显示示例按钮
+};
+const exampleData = [
+  { id: "1", txt: "总结文档核心内容" },
+  { id: "2", txt: "生成一个简明摘要" },
+];
+const exampleImageData = [{ id: "1", txt: "请对图片内容进行解释分析" }];
+
+// ===== 动态调整textarea行数的核心函数 =====
+function setAiTextareaRows(rows) {
+  // 1. 找到textarea（先校验元素是否存在）
+  const textarea = document.getElementById("txt_SearchText_ai");
+  if (!textarea) {
+    return;
+  }
+  textarea.rows = Number(rows) || 3;
+  textarea.style.transition = "height 0.2s ease";
+}
+
+// 动态修改banner高度（适配拆分后的uploadState区域状态）
+window.updateBannerHeight = function () {
+  const banner = document.getElementById("mainBanner");
+  if (!banner) return;
+
+  // 读取全局uploadState，做兜底处理
+  const globalUploadState = window.uploadState || {
+    owner: "search",
+    search: { uploadStatus: "notUpload" },
+    ai: { uploadStatus: "notUpload" },
+  };
+
+  // 1. 判断当前是否是检索区 + 是否有上传成功的文件（读取search子区域状态）
+  const isSearchAreaHasFile =
+    globalUploadState.owner === "search" && // 保留区域归属判断
+    globalUploadState.search?.uploadStatus === "uploaded"; // 读取检索区的上传状态
+
+  // 2. 判断是否是AI区（无论是否有文件，高度都为567px）（读取ai子区域状态，兼容逻辑）
+  const isAiArea = globalUploadState.owner === "ai";
+
+  // 3. 设置高度（原有逻辑不变，仅修改判断条件的数据源）
+  if (isSearchAreaHasFile) {
+    banner.style.height = "646px"; // 检索区有文件：646px
+    // banner.style.height = "688px"; // 节日皮肤检索区有文件：688px
+  } else {
+    banner.style.height = "567px"; // 其他情况（检索区无文件/AI区）：567px
+    // banner.style.height = "675px"; // 节日皮肤其他情况（检索区无文件/AI区）：675px
+  }
+};
+
+// 关闭未登录弹窗
+// document.addEventListener(
+//   "click",
+//   function (e) {
+//     const modal = document.getElementById("noLoginModal");
+//     if (!modal) return;
+//     // 1. 点击关闭按钮
+//     if (e.target.closest(".noLoginModal .closeBtn")) {
+//       // e.stopPropagation();
+//       // e.preventDefault();
+//       modal.style.display = "none";
+//       return;
+//     }
+//     // 点击弹窗外部,检查点击的是否是弹窗本身或弹窗内的元素
+//     const isClickInsideModal = modal.contains(e.target) || modal === e.target;
+//     // 如果点击的是弹窗外部，且弹窗当前是显示状态
+//     if (!isClickInsideModal && modal.style.display !== "none") {
+//       modal.style.display = "none";
+//     }
+//   },
+//   true,
+// );
+
+// 事件委托绑定上传按钮事件（替代原有的事件绑定）（传递区域参数）
+document.addEventListener("click", function (e) {
+  // AI区上传按钮（传递ai区域）
+  if (e.target.closest(".upload-trigger")) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleAIAreaUpload(e.target.closest(".upload-trigger"));
+  }
+  // 检索区文档上传按钮（传递search区域）
+  else if (e.target.closest(".search-form .link-btn")) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSearchFileUpload(e);
+  }
+  // 检索区图片上传按钮（传递search区域）
+  else if (e.target.closest(".search-form .pic-btn")) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSearchImageUpload(e);
+  }
+  // AI区删除文件按钮（传递ai区域）
+  else if (e.target.closest("#deleteFileBtn")) {
+    e.preventDefault();
+    e.stopPropagation();
+    deleteFile("ai"); // 明确传递ai区域
+    const fileInput = document.getElementById("fileUploadInput");
+    if (fileInput) fileInput.value = "";
+  }
+  // 检索区删除文件按钮（传递search区域）
+  else if (e.target.closest("#searchDeleteFileBtn")) {
+    e.preventDefault();
+    e.stopPropagation();
+    deleteFile("search"); // 明确传递search区域
+    const fileInput = document.getElementById("fileUploadInput");
+    if (fileInput) fileInput.value = "";
+  }
+  // 重试上传按钮（读取data-area，传递对应区域）
+  else if (e.target.closest(".retry-upload")) {
+    e.preventDefault();
+    e.stopPropagation();
+    const retryBtn = e.target.closest(".retry-upload");
+    const area = retryBtn.dataset.area || "ai"; // 读取按钮上的区域标记
+    console.log(`[${area}] 重试按钮被点击！`);
+    retryUpload(area); // 传递对应区域参数
+  }
+});
+
+// AI区上传处理函数（标记当前区域，存储AI区的按钮类型）
+function handleAIAreaUpload(triggerBtn) {
+  if (!window.commonInstance.checkUploadLogin()) {
+    // $message.error("请登录有CNKI AI权益的个人账号使用");
+    // showNoLoginModal();
+    window.commonInstance.showUploadLoginTip();
+    return;
+  }
+
+  // 标记当前区域为ai，存储AI区的按钮类型
+  const currentArea = "ai";
+  window.uploadState.owner = currentArea;
+  const type = triggerBtn.dataset.type;
+  window.uploadState[currentArea].clickBtnType = type; // 存储到AI区的状态
+
+  const fileInput = document.getElementById("fileUploadInput");
+  fileInput.accept =
+    type === "file" ? ".doc,.docx,.pdf,.ppt,.pptx,.txt" : ".jpg,.png,.jpeg";
+  fileInput.value = "";
+  fileInput.click();
+}
+
+// 检索区文档上传处理函数（标记当前区域，存储检索区的按钮类型）
+function handleSearchFileUpload(e) {
+  if (!window.commonInstance.checkUploadLogin()) {
+    // $message.error("请登录有CNKI AI权益的个人账号使用");
+    // showNoLoginModal();
+    window.commonInstance.showUploadLoginTip();
+    return;
+  }
+
+  // 标记当前区域为search，存储检索区的按钮类型
+  const currentArea = "search";
+  window.uploadState.owner = currentArea;
+  window.uploadState[currentArea].clickBtnType = "file"; // 存储到检索区的状态
+
+  const fileInput = document.getElementById("fileUploadInput");
+  fileInput.accept = ".doc,.docx,.pdf,.ppt,.pptx,.txt";
+  fileInput.value = "";
+  fileInput.click();
+}
+
+// 检索区图片上传处理函数（标记当前区域，存储检索区的按钮类型）
+function handleSearchImageUpload(e) {
+  if (!window.commonInstance.checkUploadLogin()) {
+    // $message.error("请登录有CNKI AI权益的个人账号使用");
+    // showNoLoginModal();
+    window.commonInstance.showUploadLoginTip();
+    return;
+  }
+
+  // 标记当前区域为search，存储检索区的按钮类型
+  const currentArea = "search";
+  window.uploadState.owner = currentArea;
+  window.uploadState[currentArea].clickBtnType = "image"; // 存储到检索区的状态
+
+  const fileInput = document.getElementById("fileUploadInput");
+  fileInput.accept = ".jpg,.png,.jpeg";
+  fileInput.value = "";
+  fileInput.click();
+}
+
+// 监听文件选择事件（加兜底）（传递当前owner作为区域参数）
+const fileInput = document.getElementById("fileUploadInput");
+if (fileInput) {
+  fileInput.addEventListener("change", function (e) {
+    const file = e.target.files[0];
+    const currentArea = window.uploadState.owner; // 获取当前操作区域（ai/search）
+    if (!file) {
+      window.uploadState[currentArea].clickBtnType = ""; // 清空对应区域的按钮类型
+      // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+      if (currentArea === "search") {
+        updateSearchDomByFileState();
+      }
+      return;
+    }
+
+    // 清空对应区域的文件列表，添加当前文件（不影响另一区域）
+    window.uploadState[currentArea].fileList = [];
+    window.uploadState[currentArea].fileList.push(file);
+
+    setAiTextareaRows(2);
+    if (beforeUpload(file, currentArea)) {
+      // 传递区域参数
+      uploadFile(file, currentArea); // 传递区域参数
+      // ===== 仅校验通过时，才更新检索区DOM =====
+      if (currentArea === "search") {
+        updateSearchDomByFileState();
+      }
+    } else {
+      setAiTextareaRows(2);
+      window.uploadState[currentArea].clickBtnType = "";
+      // 校验失败后清空非法文件列表，避免残留影响后续状态判断
+      window.uploadState[currentArea].fileList = [];
+    }
+  });
+}
+// 前置校验（文件格式+大小）添加手动校验
+function beforeUpload(file, area = "ai") {
+  const fileType = file.name
+    .substring(file.name.lastIndexOf(".") + 1)
+    .toLowerCase();
+  const btnType = window.uploadState[area].clickBtnType; // 读取对应区域的按钮类型
+
+  // 1. 按按钮类型校验文件格式
+  if (btnType === "file") {
+    if (!window.uploadState.config.fileTypeReg.file.test(file.name)) {
+      window.uploadState[area].uploadTip =
+        "请上传Word、PDF、PPT、TXT格式的文档"; // 对应区域的提示
+      showModal(area);
+      return false;
+    }
+  } else if (btnType === "image") {
+    if (!window.uploadState.config.fileTypeReg.image.test(file.name)) {
+      window.uploadState[area].uploadTip = "请上传JPG、PNG、JPEG格式的图片"; // 对应区域的提示
+      showModal(area);
+      return false;
+    }
+  }
+
+  // 2. 校验文件大小（按按钮类型判断）
+  const sizeLimit =
+    btnType === "file"
+      ? window.uploadState.config.fileSizeLimit.file
+      : window.uploadState.config.fileSizeLimit.image;
+  const sizeTip = btnType === "file" ? "文件" : "图片";
+  const sizeMax = btnType === "file" ? "50 MB" : "3 MB";
+
+  if (file.size > sizeLimit) {
+    window.uploadState[area].uploadTip =
+      `${sizeTip}过大，单个${sizeTip}最大${sizeMax}`; // 对应区域的提示
+    showModal(area);
+    return false;
+  }
+
+  // 3. 设置对应区域的前置状态（核心修改：操作area对应的子状态）
+  window.uploadState[area].uploadStatus = "beforeUpload";
+  window.uploadState[area].fileParams = {
+    mimetype: fileType,
+    fileSizeInKB: (file.size / 1024).toFixed(2) + "KB",
+    doctitle: file.name,
+    uploadPercentage: 0,
+  };
+
+  // 初始化进度模拟（传入区域参数）
+  initProgressSimulation(file, area);
+
+  // 显示对应区域的上传框（原有逻辑不变）
+  if (area === "ai") {
+    document.getElementById("uploadFileBox").style.display = "flex";
+    setAiTextareaRows(2);
+  } else if (area === "search") {
+    document.getElementById("searchUploadFileBox").style.display = "flex";
+    // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+    updateSearchDomByFileState();
+  }
+  updateFileDisplay(area); // 传入区域参数
+  return true;
+}
+
+// 初始化上传进度模拟（兼容区域参数）
+function initProgressSimulation(file, area = "ai") {
+  // 新增area参数
+  // 清除对应区域的原有定时器（不再清除全局定时器）
+  if (window.uploadState[area].timer)
+    clearInterval(window.uploadState[area].timer);
+
+  // 计算预计上传时间（公共逻辑不变）
+  const fileSizeMB = file.size / 1024 / 1024;
+  const baseTime = 2;
+  const additionalTimePerMB = 2;
+  const uploadTime = baseTime + fileSizeMB * additionalTimePerMB;
+
+  // 初始化对应区域的进度
+  window.uploadState[area].fileParams.uploadPercentage = 0;
+  updateFileDisplay(area);
+
+  // 模拟进度条（每100ms更新，操作对应区域的状态）
+  window.uploadState[area].timer = setInterval(() => {
+    if (window.uploadState[area].uploadStatus !== "uploaded") {
+      // 对应区域的上传状态
+      if (window.uploadState[area].fileParams.uploadPercentage < 99) {
+        window.uploadState[area].fileParams.uploadPercentage +=
+          99 / (uploadTime * 10);
+        updateFileDisplay(area);
+      } else {
+        window.uploadState[area].fileParams.uploadPercentage = 99;
+        updateFileDisplay(area);
+        clearInterval(window.uploadState[area].timer);
+      }
+    } else {
+      window.uploadState[area].fileParams.uploadPercentage = 100;
+      updateFileDisplay(area);
+      clearInterval(window.uploadState[area].timer);
+    }
+  }, 100);
+}
+
+// 上传文件（兼容区域参数，存储对应区域的docid）
+function uploadFile(file, area = "ai") {
+  // 新增area参数
+  // 设置对应区域的上传中状态
+  window.uploadState[area].uploadStatus = "uploading";
+  updateFileDisplay(area);
+
+  // 构建FormData（公共逻辑不变）
+  const formData = new FormData();
+  formData.append("file", file);
+
+  // 调用上传接口（公共逻辑不变）
+  fetch(URL_CONFIG.uploadUrl + "/aipower/upload/custom/file", {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+    // signal: AbortSignal.timeout(100000),
+    signal: getTimeoutSignal(100000),
+  })
+    .then((response) => response.json())
+    .then((res) => {
+      // 清除对应区域的进度定时器
+      clearInterval(window.uploadState[area].timer);
+
+      if (res.code === 0 && res.data) {
+        // 上传成功：更新对应区域的状态和docid（核心：不覆盖另一区域）
+        window.uploadState[area].uploadStatus = "uploaded";
+        window.uploadState[area].fileParams.docid = res.data.docid; // 存储到对应区域的fileParams
+        window.uploadState[area].fileParams.uploadPercentage = 100;
+        updateFileDisplay(area);
+        updateBannerHeight();
+        // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+        if (area === "search") {
+          updateSearchDomByFileState();
+        }
+      } else if (res.code === 413002) {
+        // 存储空间已满：更新对应区域的错误状态
+        window.uploadState[area].uploadTip =
+          "您的上传存储空间已满(1G) ， 请删除其它文件，重新上传";
+        window.uploadState[area].uploadStatus = "uploaderror";
+        window.uploadState[area].fileParams.docid = res.data?.docid || "";
+        window.uploadState[area].fileParams.uploadPercentage = -1;
+        updateFileDisplay(area);
+        showModal(area);
+        updateBannerHeight();
+        // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+        if (area === "search") {
+          updateSearchDomByFileState();
+        }
+      } else {
+        // 其他失败情况：更新对应区域的错误状态
+        window.uploadState[area].uploadStatus = "uploaderror";
+        window.uploadState[area].fileParams.docid = res.data?.docid || "";
+        window.uploadState[area].fileParams.uploadPercentage = -1;
+        updateFileDisplay(area);
+        updateBannerHeight();
+        // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+        if (area === "search") {
+          updateSearchDomByFileState();
+        }
+      }
+    })
+    .catch((error) => {
+      // 网络错误等：更新对应区域的错误状态
+      clearInterval(window.uploadState[area].timer);
+      window.uploadState[area].uploadStatus = "uploaderror";
+      window.uploadState[area].fileParams.uploadPercentage = -1;
+      window.uploadState[area].uploadTip = "上传失败，请重试";
+      updateFileDisplay(area);
+      showModal(area);
+      updateBannerHeight();
+      // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+      if (area === "search") {
+        updateSearchDomByFileState();
+      }
+    });
+}
+
+// 更新文件展示区域（核心：根据状态渲染）（兼容区域参数）
+function updateFileDisplay(area = "ai") {
+  // 新增area参数
+  // 根据区域获取对应DOM元素（原有逻辑不变）
+  let fileBox, docIcon, fileTitle, progressBox, deleteBtn, txtBoxContainer;
+  document.getElementById("docIconAfter")
+    ? document.getElementById("docIconAfter").remove()
+    : "";
+  if (area === "ai") {
+    fileBox = document.getElementById("uploadFileBox");
+    docIcon = document.getElementById("docTypeIcon");
+    fileTitle = document.getElementById("fileTitle");
+    progressBox = document.getElementById("progressBox");
+    deleteBtn = document.getElementById("deleteFileBtn");
+    txtBoxContainer = document.getElementById("txtBoxContainer");
+  } else if (area === "search") {
+    fileBox = document.getElementById("searchUploadFileBox");
+    docIcon = document.getElementById("searchDocTypeIcon");
+    fileTitle = document.getElementById("searchFileTitle");
+    progressBox = document.getElementById("searchProgressBox");
+    deleteBtn = document.getElementById("searchDeleteFileBtn");
+    txtBoxContainer = document.getElementById("searchTxtBoxContainer");
+  }
+  docIcon.style.display = "inline-block";
+  // document.getElementById('docIconAfter') ? document.getElementById('docIconAfter').remove() : ''
+  if (!fileBox) return; // 兜底：DOM不存在则返回
+
+  // 读取对应区域的状态数据（核心修改：不再读取全局fileParams）
+  const areaState = window.uploadState[area];
+  const fileParams = areaState.fileParams;
+  const fileList = areaState.fileList;
+
+  // 基础信息渲染（原有逻辑不变，仅使用对应区域的数据）
+  fileTitle.textContent = fileParams.doctitle;
+  fileTitle.title = fileParams.doctitle;
+
+  // 图标渲染（原有逻辑不变，使用对应区域的数据）
+  const isImage = window.uploadState.config.fileTypeReg.image.test(
+    fileParams.doctitle,
+  );
+  if (isImage) {
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      docIcon.src = e.target.result;
+    };
+    reader.readAsDataURL(fileList[0]); // 对应区域的文件列表
+  } else {
+    const docType = handleDocType(fileParams.mimetype);
+    const iconSuffix = fileParams.uploadPercentage === 100 ? "" : "-gray";
+    // docIcon.src = `./nimages/images/upload-${docType}${iconSuffix}-icon.png`;
+    if (!document.getElementById("docIconAfter")) {
+      let _div = document.createElement("div");
+      _div.setAttribute("class", `upload-icons upload-${docType}${iconSuffix}`);
+      _div.setAttribute("id", `docIconAfter`);
+      docIcon.after(_div);
+      docIcon.style.display = "none";
+    }
+  }
+
+  // 进度/状态渲染（原有逻辑不变，使用对应区域的数据）
+  let progressHtml = "";
+  const percentage = fileParams.uploadPercentage;
+  if (percentage > 0 && percentage < 100) {
+    progressHtml = `<span>上传中${Math.min(
+      Math.floor(percentage),
+      99,
+    )}%</span>`;
+    deleteBtn.style.display = "none";
+    txtBoxContainer.style.display = "none";
+    fileBox.classList.remove("uploaded-file");
+    fileBox.classList.remove("uploaded-failed");
+    fileBox.onmouseenter = null;
+    fileBox.onmouseleave = null;
+  } else if (percentage === -1) {
+    progressHtml = `
+    <span class="error">上传失败</span>
+    <span class="retry retry-upload" data-area="${area}">重试</span> <!-- 新增data-area标记区域 -->
+  `;
+    deleteBtn.style.display = "none";
+    txtBoxContainer.style.display = "none";
+    fileBox.classList.remove("uploaded-file");
+    fileBox.classList.add("uploaded-failed");
+    fileBox.onmouseenter = null;
+    fileBox.onmouseleave = null;
+  } else if (percentage === 100) {
+    progressHtml = `
+      <span class="type">${
+        isImage ? fileParams.mimetype : handleDocType(fileParams.mimetype)
+      }</span>
+      <span>${fileParams.fileSizeInKB}</span>
+    `;
+    deleteBtn.style.display = "none";
+    fileBox.classList.add("uploaded-file");
+    fileBox.classList.remove("uploaded-failed");
+
+    /// 上传成功后渲染示例按钮（原有逻辑不变）
+    if (window.uploadState.showExample) {
+      txtBoxContainer.style.display = "flex";
+      txtBoxContainer.innerHTML = "";
+      const targetExampleData = isImage ? exampleImageData : exampleData;
+      targetExampleData.forEach((item) => {
+        const btn = document.createElement("div");
+        btn.className = "example-btn-item";
+        btn.dataset.docid = item.id;
+        btn.dataset.area = area; // 新增data-area标记区域，用于跳转
+        btn.innerHTML = `
+      <span>${item.txt}</span>
+      <span class="arrow-icon"></span>
+    `;
+        btn.addEventListener("click", function () {
+          const baseUrl = "https://ai.cnki.net/trans";
+          const allParamsStr = buildAIJumpParams(this.dataset.area); // 传入区域参数
+          const urlParams = new URLSearchParams(allParamsStr);
+          urlParams.set("question", item.txt);
+          const fullUrl = `${baseUrl}?${urlParams.toString()}`;
+          console.log("fullUrl", fullUrl);
+          window.open(fullUrl, "_blank");
+        });
+        txtBoxContainer.appendChild(btn);
+      });
+    } else {
+      txtBoxContainer.style.display = "none";
+    }
+    fileBox.onmouseenter = function () {
+      if (percentage === 100) {
+        deleteBtn.style.display = "block";
+      }
+    };
+    fileBox.onmouseleave = function () {
+      deleteBtn.style.display = "none";
+    };
+  }
+  progressBox.innerHTML = progressHtml;
+}
+
+// CNKI AI 跳转 （检索框三个按钮交互+文件上传）
+$(function () {
+  // 1. 标签按钮点击切换激活态 + 下拉框显示/隐藏
+  $(".tag-item").on("click", function (e) {
+    // 阻止事件冒泡（避免点击下拉项时关闭下拉）
+    e.stopPropagation();
+
+    // 清空所有标签的激活态
+    $(".tag-item").removeClass("active");
+    // 当前标签激活
+    $(this).addClass("active");
+
+    // 如果是无下拉的标签（联网搜索/深度思考），关闭所有下拉框
+    const target = $(this).data("target");
+    if (!target) {
+      $(".dropdown-panel").hide();
+    } else {
+      // 显示当前下拉框，隐藏其他
+      $(".dropdown-panel").hide();
+      $(`#${target}`).show();
+    }
+  });
+
+  // 2. 点击页面空白处关闭下拉框 + 取消激活态
+  $(document).on("click", function () {
+    $(".tag-item").removeClass("active");
+    $(".dropdown-panel").hide();
+  });
+
+  // 3. 下拉列表项点击事件（可选，根据业务扩展）
+  $(".dropdown-item").on("click", function (e) {
+    e.stopPropagation(); // 阻止冒泡关闭下拉
+    const itemText = $(this).find(".item-text").text();
+    console.log("点击了下拉项：", itemText);
+    // 可扩展：选中后修改标签文字/执行对应逻辑
+    // $('.tag-item.active .tag-text').text(itemText);
+    // 选中后关闭下拉
+    // $('.tag-item').removeClass('active');
+    // $('.dropdown-panel').hide();
+  });
+});
+
+// =============================检索框三个按钮交互实现 start=======================
+// 获取元素
+// === 全局变量定义 ===
+const dropdownBtn = document.getElementById("dropdownBtn");
+const dropdownMenu = document.getElementById("dropdownMenu");
+const searchBtn = document.getElementById("searchBtn");
+const thinkBtn = document.getElementById("thinkBtn");
+
+// 存储当前选中的值（用于高亮）
+let currentSelectedValue = "知网文献"; // 默认选中“知网文献”
+
+document.addEventListener("DOMContentLoaded", function () {
+  if (dropdownBtn) {
+    dropdownBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      const isHidden =
+        dropdownMenu.style.display === "none" || !dropdownMenu.style.display;
+
+      document.querySelectorAll(".dropdown-menu").forEach((menu) => {
+        if (menu !== dropdownMenu) menu.style.display = "none";
+      });
+
+      dropdownMenu.style.display = isHidden ? "block" : "none";
+      this.classList.toggle("open", isHidden);
+    });
+  }
+
+  if (dropdownMenu) {
+    dropdownMenu.querySelectorAll("li").forEach((item) => {
+      item.addEventListener("click", function () {
+        const value = this.dataset.value;
+        const iconClass = this.dataset.icon;
+
+        if (value === "全库问答") {
+          const iconEl = dropdownBtn.querySelector(".icon");
+          const textEl = dropdownBtn.querySelector("span:last-child");
+          iconEl.className = "icon icon_folder";
+          textEl.textContent = "知网文献";
+        } else {
+          const iconEl = dropdownBtn.querySelector(".icon");
+          const textEl = dropdownBtn.querySelector("span:last-child");
+          iconEl.className = "icon " + iconClass;
+          textEl.textContent = value;
+        }
+
+        currentSelectedValue = value;
+        dropdownMenu.style.display = "none";
+        dropdownBtn.classList.remove("open");
+
+        dropdownMenu
+          .querySelectorAll("li")
+          .forEach((li) => li.classList.remove("selected"));
+        this.classList.add("selected");
+      });
+    });
+  }
+
+  document.addEventListener("click", function (e) {
+    if (dropdownBtn && dropdownMenu) {
+      if (!dropdownBtn.contains(e.target) && !dropdownMenu.contains(e.target)) {
+        dropdownMenu.style.display = "none";
+        dropdownBtn.classList.remove("open");
+      }
+    }
+  });
+});
+
+// 辅助函数：高亮当前选中项（第二部分专属）
+function highlightSelectedItem() {
+  if (dropdownMenu) {
+    dropdownMenu.querySelectorAll("li").forEach((li) => {
+      li.classList.remove("selected");
+      if (li.dataset.value === currentSelectedValue) {
+        li.classList.add("selected");
+      }
+    });
+  }
+}
+
+// === 按钮状态切换逻辑（第二部分专属） ===
+if (searchBtn) {
+  searchBtn.addEventListener("click", function () {
+    this.classList.toggle("active");
+  });
+}
+
+if (thinkBtn) {
+  thinkBtn.addEventListener("click", function () {
+    this.classList.toggle("active");
+  });
+}
+
+// === 新增公共辅助函数：根据区域和文件类型获取默认检索词 ===
+window.getUploadDefaultQuestion = function (area = "ai") {
+  const areaState = window.uploadState[area];
+  // 1. 校验是否有上传成功的文件/图片
+  if (
+    !areaState ||
+    areaState.uploadStatus !== "uploaded" ||
+    areaState.fileList.length === 0
+  ) {
+    return ""; // 无上传文件，返回空
+  }
+  const fileTitle = areaState.fileParams.doctitle;
+  const config = window.uploadState.config;
+  // 2. 判断是文件还是图片，返回对应默认文案
+  if (config.fileTypeReg.image.test(fileTitle)) {
+    return "请对图片内容进行解释分析"; // 图片默认文案
+  } else {
+    return "总结文档核心内容"; // 文档默认文案
+  }
+};
+
+// === 新增公共辅助函数：判断对应区域是否处于文件上传中 ===
+window.isFileUploading = function (area = "ai") {
+  const areaState = window.uploadState[area] || {
+    fileParams: { uploadPercentage: 0 },
+  };
+  const uploadPercentage = areaState.fileParams.uploadPercentage || 0;
+  // 上传中状态：进度大于0且小于100（未上传完成）
+  return uploadPercentage > 0 && uploadPercentage < 100;
+};
+
+// === 判断指定区域是否上传失败（状态为uploaderror） ===
+window.isFileUploadFailed = function (area = "ai") {
+  const areaState = window.uploadState[area] || { uploadStatus: "notUpload" };
+  return areaState.uploadStatus === "uploaderror";
+};
+
+// === 新增：判断检索区是否有文件（无论上传状态：中/成功/失败） ===
+function isSearchHasFile() {
+  const searchState = window.uploadState?.search || { fileList: [] };
+  // 只要fileList非空，就认为有文件（无论上传状态）
+  return Array.isArray(searchState.fileList) && searchState.fileList.length > 0;
+}
+
+// === 新增：检索区DOM联动更新函数（隐藏DBFieldBox + 切换placeholder + 新增专属类名调整按钮样式) ===
+function updateSearchDomByFileState() {
+  const hasFile = isSearchHasFile();
+  const dbFieldBox = document.getElementById("DBFieldBox");
+  const searchTextarea = document.getElementById("txt_SearchText");
+  const searchBtn = document.querySelector(".search-form .search-btn");
+  const auxBtnGroup = document.querySelector(".search-aux-btn-group");
+
+  // 1. 隐藏/显示 DBFieldBox
+  if (dbFieldBox) {
+    dbFieldBox.style.display = hasFile ? "none" : "block";
+  }
+
+  // 2. 切换输入框 placeholder 文案
+  if (searchTextarea) {
+    const defaultPlaceholder = "中文文献、外文文献";
+    const fileExistPlaceholder = "请提出您的问题";
+    searchTextarea.placeholder = hasFile
+      ? fileExistPlaceholder
+      : defaultPlaceholder;
+  }
+  // 3. 新增/移除专属类名
+  if (searchBtn) {
+    if (hasFile) {
+      // 有合法文件：添加专属类名，启用AI风格样式
+      searchBtn.classList.add("search-btn-has-file");
+      // 同步调整按钮属性（隐藏value文字，添加title提示）
+      searchBtn.setAttribute("title", "检索"); // 鼠标悬浮提示
+      searchBtn.style.color = "transparent"; // 隐藏原有value的白色文字（避免和背景图重叠）
+    } else {
+      // 无文件：移除专属类名，还原默认样式
+      searchBtn.classList.remove("search-btn-has-file");
+      // 还原按钮属性
+      searchBtn.removeAttribute("title");
+      searchBtn.style.color = "#fff"; // 显示原有value文字
+    }
+  }
+  // 4. 切换辅助按钮父容器类名（整体调整位置）
+  if (auxBtnGroup) {
+    if (hasFile) {
+      auxBtnGroup.classList.add("btn-group-has-file");
+    } else {
+      auxBtnGroup.classList.remove("btn-group-has-file");
+    }
+  }
+}
+
+//  ===  显示未登录弹窗 ===
+// window.showNoLoginModal = function () {
+//   const noLoginModal = document.getElementById("noLoginModal");
+//   if (noLoginModal) {
+//     noLoginModal.style.display = "block";
+//   }
+// };
+
+// === 核心工具函数 ===
+/**
+ * 构建第二部分跳转所需的所有参数（包含range、net、ds、question、action等）
+ * @param {string} actionType - 动作类型：doc/img/空（检索）
+ * @param {string} area - 区域标识：ai/search（默认取当前owner）
+ * @returns {string} 拼接好的参数字符串
+ */
+window.buildAIJumpParams = function (
+  actionType = "",
+  area = window.uploadState.owner,
+  customQuestion = "", // 接收外部传入的默认文案
+) {
+  // 新增area参数
+  let _inputValue = "";
+  let urlParams = new URLSearchParams();
+  const areaState = window.uploadState[area]; // 读取对应区域的状态
+
+  // 1. 检索区（search）：读取检索区的docid
+  if (area === "search") {
+    // _inputValue = $.trim($("#txt_SearchText").val() || "");
+    _inputValue = customQuestion || $.trim($("#txt_SearchText").val() || "");
+    urlParams.append("path", "chat");
+    urlParams.append("question", _inputValue);
+    urlParams.append("type", "fulllib");
+    if (actionType) {
+      urlParams.append("action", actionType);
+    }
+    // 读取检索区的docid（核心：不读取ai区的docid）
+    if (areaState.fileParams.docid) {
+      urlParams.append("docid", areaState.fileParams.docid);
+    }
+  }
+  // 2. CNKI AI区（ai）：读取AI区的docid
+  else if (area === "ai") {
+    // _inputValue = $.trim($("#txt_SearchText_ai").val() || "");
+    _inputValue = customQuestion || $.trim($("#txt_SearchText_ai").val() || "");
+    urlParams.append("path", "chat");
+    urlParams.append("question", _inputValue);
+    urlParams.append("type", "fulllib");
+    // AI区专属参数（原有逻辑不变）
+    switch (currentSelectedValue) {
+      case "全库问答":
+        urlParams.append("range", "all");
+        break;
+      case "核心期刊":
+        urlParams.append("range", "hx");
+        break;
+      case "中英文献":
+        urlParams.append("range", "foreign");
+        break;
+      case "我的资料":
+        urlParams.append("range", "my");
+        break;
+    }
+    if (searchBtn) {
+      urlParams.append(
+        "net",
+        searchBtn.classList.contains("active") ? "true" : "false",
+      );
+    }
+    if (thinkBtn) {
+      urlParams.append(
+        "ds",
+        thinkBtn.classList.contains("active") ? "true" : "false",
+      );
+    }
+    if (actionType) {
+      urlParams.append("action", actionType);
+    }
+    // 读取AI区的docid（核心：不读取search区的docid）
+    if (areaState.fileParams.docid) {
+      urlParams.append("docid", areaState.fileParams.docid);
+    }
+  }
+
+  return urlParams.toString();
+};
+
+// === 按钮绑定逻辑 ===
+$(function () {
+  var hovertimer;
+  // 1. 仅鼠标悬浮/离开问号图标时 显示/隐藏提示模块
+  $(".download-icon, .download-tip").hover(
+    function () {
+      clearTimeout(hovertimer);
+      $(".download-tip").stop(true, true).fadeIn(100);
+    },
+    function () {
+      hovertimer = setTimeout(function () {
+        $(".download-tip").stop(true, true).fadeOut(100);
+      }, 300);
+    },
+  );
+
+  // 3. 第二部分：AI检索按钮点击事件（实现新逻辑，优化区域参数传递）
+  $(".search-btn-ai").click(function () {
+    const area = "ai"; // 锁定AI区
+    // ===== 判断是否上传中，禁止跳转并给出提示 =====
+    if (window.isFileUploading(area)) {
+      $message.error("文件上传中，请稍后");
+      return false;
+    }
+    // ===== 判断是否上传失败，禁止跳转并给出提示 =====
+    if (window.isFileUploadFailed(area)) {
+      $message.error("文件上传失败，请先完成文件上传");
+      return false;
+    }
+    const areaState = window.uploadState[area];
+    const inputDom = $("#txt_SearchText_ai");
+    // 1. 读取原始输入值
+    let _inputValue = $.trim(inputDom.val());
+    const _inputDefaultVal = inputDom.attr("placeholder");
+
+    // 2. 判断是否有上传成功的文件/图片
+    const hasUploadedFile =
+      areaState &&
+      areaState.uploadStatus === "uploaded" &&
+      areaState.fileList.length > 0;
+
+    // 3. 无上传文件场景：必须输入检索词，禁止空检
+    if (!hasUploadedFile) {
+      if (!!_inputValue === false || _inputValue === _inputDefaultVal) {
+        inputDom.val("");
+        setTimeout(function () {
+          alert("请输入问题！");
+        }, 1);
+        return false;
+      }
+    }
+
+    // 4. 有上传文件场景：无输入词则补充默认文案，有输入词则保留
+    if (
+      hasUploadedFile &&
+      (!!_inputValue === false || _inputValue === _inputDefaultVal)
+    ) {
+      _inputValue = window.getUploadDefaultQuestion(area); // 获取对应默认文案
+      // inputDom.val(_inputValue); // 回填到输入框
+    }
+
+    // 5. 拼接URL并跳转（明确传递区域参数）
+    const baseUrl = "https://ai.cnki.net/trans";
+    const fullUrl = `${baseUrl}?${buildAIJumpParams("", area, _inputValue)}`;
+    window.open(fullUrl, "aiSearch");
+  });
+
+  // 检索 - 问答检索跳转（对齐CNKI AI区按钮逻辑）
+  $(".ai-btn").click(function () {
+    const area = "search"; // 锁定检索区
+    // ===== 判断是否上传中，禁止跳转并给出提示 =====
+    if (window.isFileUploading(area)) {
+      $message.error("文件上传中，请稍后");
+      return false;
+    }
+    // ===== 判断是否上传失败，禁止跳转并给出提示 =====
+    if (window.isFileUploadFailed(area)) {
+      $message.error("文件上传失败，请先完成文件上传");
+      return false;
+    }
+    const areaState = window.uploadState[area];
+    const inputDom = $("#txt_SearchText");
+    // 1. 读取原始输入值
+    let _inputValue = $.trim(inputDom.val());
+    const _inputDefaultVal = inputDom.attr("placeholder");
+
+    // 2. 判断是否有上传成功的文件/图片
+    const hasUploadedFile =
+      areaState &&
+      areaState.uploadStatus === "uploaded" &&
+      areaState.fileList.length > 0;
+
+    // 3. 无上传文件场景：必须输入检索词，禁止空检
+    if (!hasUploadedFile) {
+      if (!!_inputValue === false || _inputValue === _inputDefaultVal) {
+        inputDom.val("");
+        setTimeout(function () {
+          alert("请输入问题！");
+        }, 1);
+        return false;
+      }
+    }
+
+    // 4. 有上传文件场景：无输入词则补充默认文案，有输入词则保留
+    if (
+      hasUploadedFile &&
+      (!!_inputValue === false || _inputValue === _inputDefaultVal)
+    ) {
+      _inputValue = window.getUploadDefaultQuestion(area); // 获取对应默认文案
+      // inputDom.val(_inputValue); // 回填到输入框
+    }
+
+    // 5. 拼接URL并跳转（明确传递区域参数）
+    const baseUrl = "https://ai.cnki.net/trans";
+    const fullUrl = `${baseUrl}?${buildAIJumpParams("", area, _inputValue)}`;
+    window.open(fullUrl, "aiSearch");
+  });
+});
+
+// === 过滤特殊字符函数 ===
+function strFilter(s) {
+  if (!s) return "";
+  var pattern = new RegExp(/[\\<>]/); // 不允许输入 \ < > 等字符
+  var rs = "";
+  for (var i = 0; i < s.length; i++) {
+    rs = rs + s.substr(i, 1).replace(pattern, "");
+  }
+  return rs.trim();
+}
+
+// === 页面初始化（第二部分专属） ===
+document.addEventListener("DOMContentLoaded", () => {
+  if (dropdownBtn) {
+    // 默认选中“全库问答”
+    currentSelectedValue = "全库问答";
+    highlightSelectedItem();
+
+    // 确保按钮初始状态为“知网文献 + icon_folder”
+    const iconEl = dropdownBtn.querySelector(".icon");
+    const textEl = dropdownBtn.querySelector("span:last-child");
+    iconEl.className = "icon icon_folder";
+    textEl.textContent = "知网文献";
+    // ===== 初始化检索区DOM（隐藏DBFieldBox/切换placeholder/切换按钮类名） =====
+    updateSearchDomByFileState();
+  }
+});
+// =============================检索框三个按钮交互实现 end=======================
+
+// 处理文档类型（对应Vue的handleDocType）
+function handleDocType(mimetype) {
+  const typeMap = {
+    doc: "word",
+    docx: "word",
+    pdf: "pdf",
+    ppt: "ppt",
+    pptx: "ppt",
+    txt: "txt",
+  };
+  return typeMap[mimetype.toLowerCase()] || mimetype;
+}
+
+// 重试上传（兼容区域参数）
+function retryUpload(area = "ai") {
+  // 新增area参数
+  const areaState = window.uploadState[area];
+  if (areaState.fileList.length === 0) return;
+
+  // 重置对应区域的上传状态
+  areaState.uploadStatus = "beforeUpload";
+  areaState.fileParams.uploadPercentage = 0;
+  areaState.uploadTip = "";
+
+  // 重新初始化进度模拟（对应区域）
+  const file = areaState.fileList[0];
+  initProgressSimulation(file, area);
+
+  // 重新调用上传接口（对应区域）
+  uploadFile(file, area);
+  // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+  if (area === "search") {
+    updateSearchDomByFileState();
+  }
+}
+
+// 删除文件（兼容区域参数，删除对应区域的docid）
+function deleteFile(area = "ai") {
+  // 新增area参数
+  // 读取对应区域的状态（先完整读取，方便判断场景）
+  const areaState = window.uploadState[area] || {
+    fileParams: { docid: "", uploadPercentage: 0 },
+    uploadStatus: "notUpload",
+  };
+  const docid = areaState.fileParams.docid;
+
+  // ===== 场景1：无 docid（上传失败）—— 仅前端清空，无需调用后端接口 =====
+  if (!docid) {
+    // 直接清空对应区域的DOM（和上传成功场景的DOM清空逻辑一致）
+    if (area === "ai") {
+      const txtBoxContainer = document.getElementById("txtBoxContainer");
+      if (txtBoxContainer) txtBoxContainer.style.display = "none";
+      const fileBox = document.getElementById("uploadFileBox");
+      if (fileBox) {
+        fileBox.style.display = "none";
+        // 额外：移除上传失败的样式类，避免残留
+        fileBox.classList.remove("uploaded-failed");
+      }
+      setAiTextareaRows(3);
+    } else if (area === "search") {
+      const txtBoxContainer = document.getElementById("searchTxtBoxContainer");
+      if (txtBoxContainer) txtBoxContainer.style.display = "none";
+      const fileBox = document.getElementById("searchUploadFileBox");
+      if (fileBox) {
+        fileBox.style.display = "none";
+        fileBox.classList.remove("uploaded-failed");
+      }
+    }
+
+    // 重置对应区域的状态（和上传成功场景的状态重置逻辑一致）
+    window.uploadState[area] = {
+      uploadStatus: "notUpload",
+      fileParams: {
+        mimetype: "",
+        fileSizeInKB: "",
+        doctitle: "",
+        docid: "",
+        uploadPercentage: 0,
+      },
+      fileList: [],
+      timer: null,
+      uploadTip: "",
+      clickBtnType: "",
+    };
+    // 清空对应区域输入框
+    const inputId = area === "ai" ? "txt_SearchText_ai" : "txt_SearchText";
+    const inputDom = document.getElementById(inputId);
+    if (inputDom) inputDom.value = "";
+
+    // 刷新显示、提示成功、更新banner高度
+    updateFileDisplay(area);
+    $message.success("删除成功");
+    updateBannerHeight();
+    // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+    if (area === "search") {
+      updateSearchDomByFileState();
+    }
+    // 聚焦到对应输入框（兼容DOM存在的情况）
+    if (inputDom) {
+      inputDom.focus(); // 光标聚焦
+    }
+    // 无docid场景执行完毕，直接返回（不执行后续后端接口逻辑）
+    return;
+  }
+
+  // ===== 场景2：有 docid（上传成功）—— 调用后端接口删除 =====
+  fetch(
+    URL_CONFIG.uploadUrl + `/aipower/upload/file/remove?docid=${docid}`, // 对应区域的docid
+    {
+      method: "GET",
+      credentials: "include",
+      // signal: AbortSignal.timeout(10000),
+      signal: getTimeoutSignal(10000),
+    },
+  )
+    .then((response) => response.json())
+    .then((res) => {
+      if (res.message === "success") {
+        // 清空对应区域的DOM（原有逻辑不变）
+        if (area === "ai") {
+          const txtBoxContainer = document.getElementById("txtBoxContainer");
+          txtBoxContainer.style.display = "none";
+          const fileBox = document.getElementById("uploadFileBox");
+          fileBox.style.display = "none";
+          setAiTextareaRows(3);
+        } else if (area === "search") {
+          const txtBoxContainer = document.getElementById(
+            "searchTxtBoxContainer",
+          );
+          txtBoxContainer.style.display = "none";
+          const fileBox = document.getElementById("searchUploadFileBox");
+          fileBox.style.display = "none";
+        }
+
+        // 重置对应区域的状态（核心：不重置另一区域）
+        window.uploadState[area] = {
+          uploadStatus: "notUpload",
+          fileParams: {
+            mimetype: "",
+            fileSizeInKB: "",
+            doctitle: "",
+            docid: "",
+            uploadPercentage: 0,
+          },
+          fileList: [],
+          timer: null,
+          uploadTip: "",
+          clickBtnType: "",
+        };
+        // 清空对应区域输入框
+        const inputId = area === "ai" ? "txt_SearchText_ai" : "txt_SearchText";
+        const inputDom = document.getElementById(inputId);
+        if (inputDom) inputDom.value = "";
+        // 刷新显示（对应区域）
+        updateFileDisplay(area);
+        $message.success("删除成功");
+        updateBannerHeight();
+        // ===== 更新检索区DOM（隐藏DBFieldBox/切换placeholder） =====
+        if (area === "search") {
+          updateSearchDomByFileState();
+        }
+        // 聚焦到对应输入框（兼容DOM存在的情况）
+        if (inputDom) {
+          inputDom.focus(); // 光标聚焦
+        }
+      } else {
+        $message.error("删除失败");
+      }
+    })
+    .catch((error) => {
+      $message.error("删除失败");
+    });
+}
+
+// 显示弹窗（支持传递区域参数，读取对应区域的提示文案）
+function showModal(area = "ai") {
+  // 新增area参数，默认ai
+  // 读取对应区域的uploadTip（核心修改）
+  const areaUploadTip =
+    window.uploadState[area]?.uploadTip || "操作失败，请重试";
+  // 给弹窗赋值提示文本
+  document.getElementById("uploadTipText").textContent = areaUploadTip;
+
+  document.getElementById("uploadTipModal").style.display = "block";
+  document.getElementById("modalMask").style.display = "block";
+
+  // 锁滚动：用 fixed 替代 overflow:hidden，彻底避免滚动条问题
+  document.body.style.position = "fixed";
+  document.body.style.width = "100%";
+  // 记录滚动位置，关闭后恢复（避免页面跳顶）
+  document.body.dataset.scrollTop = window.scrollY;
+}
+
+// 关闭弹窗（对应Vue的handleClose）
+window.handleModalClose = function () {
+  document.getElementById("uploadTipModal").style.display = "none";
+  document.getElementById("modalMask").style.display = "none";
+
+  // 恢复滚动：还原body样式 + 恢复滚动位置
+  document.body.style.position = "";
+  document.body.style.width = "";
+  // 恢复之前的滚动位置
+  const scrollTop = document.body.dataset.scrollTop || 0;
+  window.scrollTo(0, parseInt(scrollTop));
+
+  uploadState.uploadTip = "";
+  // 清空文件
+  // uploadState.fileList = [];
+  document.getElementById("fileUploadInput").value = "";
+};
+
+// =============================文件、图片上传实现 end=======================
+
+// =============================检索部分文件、图片上传功能逻辑 start=======================
+
+// ========================检索部分文件、图片上传功能逻辑 end===================
+
+// ======================== 仿$message 提示函数 start===================
+function showMessage(text, type = "error", autoClose = true) {
+  // 移除旧提示
+  const oldMessage = document.querySelector(".custom-message");
+  if (oldMessage) oldMessage.remove();
+
+  // 创建提示框
+  const messageEl = document.createElement("div");
+  messageEl.className = `custom-message ${type}`;
+
+  // 1. 图标（仅成功提示显示对勾）
+  if (type === "success") {
+    const iconEl = document.createElement("span");
+    iconEl.className = "icon";
+    messageEl.appendChild(iconEl);
+  }
+
+  // 2. 文字内容（移除关闭按钮）
+  const textEl = document.createElement("span");
+  textEl.textContent = text;
+  messageEl.appendChild(textEl);
+
+  document.body.appendChild(messageEl);
+
+  // 显示提示
+  setTimeout(() => messageEl.classList.add("show"), 10);
+
+  // 自动关闭（默认3秒，不可取消）
+  setTimeout(() => {
+    messageEl.classList.remove("show");
+    setTimeout(() => messageEl.remove(), 300);
+  }, 3000);
+}
+
+/*主编推荐记录日志部分start*/
+$(document).on("click", "#editor-new .article-title", function () {
+  const itemStr = $(this).data("item");
+  hitLog(itemStr, "tj", "NZKPT_JZTJ_HOMENEW", "paper");
+});
+$(document).on("click", "#editor-hot .article-title", function () {
+  const itemStr = $(this).data("item");
+  hitLog(itemStr, "tj", "NZKPT_JZTJ_HOMEHOT", "paper");
+});
+$(document).on("click", "#editor-theme .img-item", function () {
+  const itemStr = $(this).data("item");
+  hitLog(itemStr, "zt", "NZKPT_JZTJ_HOMESPECIAL", "virtualSpecial");
+});
+function hitLog(item, type, platformURL, resource) {
+  let params;
+  if (type === "tj") {
+    params = {
+      idenID: GetCookie("LID") || "",
+      clientID: GetCookie("Ecp_ClientId"),
+      userIP: GetCookie("Ecp_ClientIp") || "",
+      platformURL: platformURL,
+      recID: item.RECID,
+      resourceType: resource,
+      resourceID: item.FN,
+      resourceName: item.TI,
+      productID: item.DBCode || "",
+    };
+  } else {
+    params = {
+      idenID: GetCookie("LID") || "",
+      clientID: GetCookie("Ecp_ClientId"),
+      userIP: GetCookie("Ecp_ClientIp") || "",
+      platformURL: platformURL,
+      recID: item.recId,
+      resourceType: resource,
+      resourceID: item.code,
+      resourceName: item.name,
+      productID: "",
+    };
+  }
+  $.ajax({
+    url: URL_CONFIG.recsysapi + "/Log/UserHitLog", // 不同模块的接口URL
+    type: "POST",
+    dataType: "json",
+    timeout: 10000,
+    data: params,
+    xhrFields: { withCredentials: false },
+    crossDomain: true,
+    beforeSend: () => console.log(`数据请求中...`),
+    success: (data) => console.log(`日志记录成功`),
+    error: () => console.log(`日志记录失败`),
+  });
+}
+/*主编推荐记录日志部分end*/
+
+/*主编推荐曝光部分start*/
+// 曝光接口函数
+function sendExposureData(fnString, type) {
+  const exposureUrl = URL_CONFIG.recsysapi + "/Log/ExposureLog"; // 曝光接口地址
+  const platformURL =
+    type === "renderNewItem"
+      ? "NZKPT_JZTJ_HOMENEW"
+      : type === "renderHotItem"
+        ? "NZKPT_JZTJ_HOMEHOT"
+        : "NZKPT_JZTJ_HOMESPECIAL";
+  const exposureData = {
+    idenID: GetCookie("LID") || "",
+    clientID: GetCookie("Ecp_ClientId"),
+    userIP: GetCookie("Ecp_ClientIp") || "",
+    platformURL: platformURL,
+    detail: fnString,
+  };
+
+  $.ajax({
+    url: exposureUrl,
+    type: "POST",
+    dataType: "json",
+    timeout: 10000,
+    data: exposureData,
+    xhrFields: { withCredentials: false },
+    crossDomain: true,
+    beforeSend: () => console.log(`数据请求中...`),
+    success: (data) => console.log(`日志记录成功`),
+    error: () => console.log(`日志记录失败`),
+  });
+}
+/*主编推荐曝光部分end*/
+
+/* 获取 clientId 的通用方法（带缓存）start*/
+async function getClientIdIfNeeded(needClientId) {
+  if (!needClientId) return; // 不需要 clientId 则直接返回
+
+  // 如果 clientId 已经准备好了，直接返回
+  if (GetCookie("Ecp_ClientId")) return;
+
+  // 如果正在获取 clientId，则等待之前的 Promise 完成
+  if (clientIdPromise) {
+    await clientIdPromise;
+    return;
+  }
+
+  // 首次获取 clientId，创建 Promise 并缓存
+  clientIdPromise = (async () => {
+    try {
+      await $.ajax({
+        url: URL_CONFIG.recsysapi + "/UtilityOpenApi/GenerateClientID",
+        type: "GET",
+        dataType: "json",
+        timeout: 10000,
+        crossDomain: true,
+        beforeSend: () => console.log("开始获取 clientId..."),
+        success: (res) => {
+          console.log("clientId 获取成功");
+          // 写入cookie;
+          setCookie("Ecp_ClientId", res.Data, null, ".cnki.net");
+        },
+        error: () => console.error("clientId 获取失败"),
+      });
+
+      // 等待 cookie 写入完成（最多等待 1 秒）
+      // await waitForClientId();
+    } catch (err) {
+      console.error("获取 clientId 异常:", err);
+    }
+  })();
+
+  // 等待 clientId 获取完成
+  await clientIdPromise;
+}
+/*function waitForClientId(maxWaitTime = 1000, interval = 100) {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const checkCookie = () => {
+      const clientId = getCookie("Ecp_ClientId");
+      if (clientId) {
+        resolve(clientId);
+      } else if (Date.now() - startTime >= maxWaitTime) {
+        reject(new Error("等待 clientId 写入超时"));
+      } else {
+        setTimeout(checkCookie, interval);
+      }
+    };
+    checkCookie();
+  });
+}*/
+/* 获取 clientId 的通用方法（带缓存） end*/
+// 快捷方法
+window.$message = {
+  success: (text) => showMessage(text, "success"),
+  error: (text) => showMessage(text, "error"),
+};
+
+// 接口超时方法(兼容浏览器版本)
+function getTimeoutSignal(timeoutMs) {
+  if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
+    return AbortSignal.timeout(timeoutMs);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+}
+
+window.toggleHighlightxg = function (clickedSpan) {
+  $("#ciyunmyModal .tags span").removeClass("active");
+  $(clickedSpan).addClass("active");
+
+  if (hasRelatedWords) {
+    $(".ciyunimg").show();
+    $(".nociyunimg").hide();
+    $("#relatedwords").show();
+    $("#similarwords").hide();
+  } else {
+    $(".ciyunimg").hide();
+    $(".nociyunimg").show();
+  }
+  // 相关词词云渲染函数调用
+  renderRelatedwords();
+};
+
+let keyword = ""; // 点击词云请求的关键词
+let relatedWordsArr = []; //相关词词云容器
+let similarWordsArr = []; //相似词词云容器
+let hasRelatedWords = false; //是否有相关词
+let hasSimilarWords = false; //是否有相似词
+
+let wordCloudChart = null;
+window.toggleHighlightxs = function (clickedSpan) {
+  $("#ciyunmyModal .tags span").removeClass("active");
+  $(clickedSpan).addClass("active");
+
+  if (hasSimilarWords) {
+    $(".ciyunimg").show();
+    $(".nociyunimg").hide();
+    $("#similarwords").show();
+    $("#relatedwords").hide();
+  } else {
+    $(".ciyunimg").hide();
+    $(".nociyunimg").show();
+
+    if (wordCloudChart) {
+      wordCloudChart.clear();
+      $("#similarwords").hide();
+    }
+    return;
+  }
+  const container = document.getElementById("similarwords");
+  if (!wordCloudChart) {
+    wordCloudChart = echarts.init(container);
+    wordCloudChart.on("click", function (params) {
+      const keyword = params.name;
+      const url = `https://kns.cnki.net/kns8s/defaultresult/index?korder=SU&kw=${encodeURIComponent(
+        keyword,
+      )}`;
+      window.open(url, "_blank");
+    });
+  }
+  wordCloudChart.setOption(getWordCloudOption(similarWordsArr), true);
+};
+
+// 点击相关文献逻辑 1、判断当前展示的是相似词or相关词 2、确定关键词拼接 a + b + c 3、跳转
+window.jump2CNKI = function (clickedBtn) {
+  var keywords = "";
+  const activeTag = document.querySelector(".tags span.active");
+  const type = activeTag ? activeTag.dataset.type : null;
+  if (type === "related") {
+    console.log("// 相关词高亮", relatedWordsArr);
+    keywords = relatedWordsArr.join(" + ");
+  } else if (type === "similar") {
+    console.log("// 相似词高亮", similarWordsArr);
+    let tempArr = similarWordsArr.map((item) => {
+      return item.name;
+    });
+    keywords = tempArr.join(" + ");
+  }
+  console.log(keywords);
+  const url = `https://kns.cnki.net/kns8s/defaultresult/index?korder=SU&kw=${encodeURIComponent(
+    keywords,
+  )}`;
+  window.open(url, "_blank");
+};
+
+// 词云弹框展示
+window.showciyun = function (clickedSpan) {
+  var $titleLink = $(clickedSpan).closest("li").find(".title a");
+  keyword = $titleLink.text().trim();
+
+  hasRelatedWords = false;
+  hasSimilarWords = false;
+
+  // 先隐藏所有内容，等待数据加载完成再决定显示哪个
+  $(".ciyunimg").hide();
+  $(".nociyunimg").hide();
+
+  // 弹窗标题
+  $("#kwInModal").text(keyword);
+
+  // 设置相关词词云 active 初始化
+  $("#ciyunmyModal .tags span")
+    .removeClass("active")
+    .filter('[data-type="related"]')
+    .addClass("active");
+
+  // 隐藏词云容器
+  $("#relatedwords").hide();
+  $("#similarwords").hide();
+
+  // 调用数据请求
+  geRelatedWords(keyword);
+  getSimilarWords(keyword);
+
+  // $(".nociyunimg").show();
+  // $("#relatedwords").hide();
+  // $("#similarwords").hide();
+
+  // 显示模态框
+  const modal = document.getElementById("ciyunmyModal");
+  modal.style.display = "flex";
+};
+
+function updateCiyunDisplay() {
+  // 获取当前激活的标签类型
+  const activeType = $("#ciyunmyModal .tags span.active").data("type");
+  if (activeType === "related") {
+    if (hasRelatedWords) {
+      $(".ciyunimg").show();
+      $(".nociyunimg").hide();
+      $("#relatedwords").show();
+      $("#similarwords").hide();
+    } else {
+      $(".ciyunimg").hide();
+      $(".nociyunimg").show();
+    }
+  } else if (activeType === "similar") {
+    if (hasSimilarWords) {
+      $(".ciyunimg").show();
+      $(".nociyunimg").hide();
+      $("#similarwords").show();
+      $("#relatedwords").hide();
+    } else {
+      $(".ciyunimg").hide();
+      $(".nociyunimg").show();
+    }
+  }
+}
+
+// ==============【相关词】词云 start ==============
+function geRelatedWords(keyword) {
+  // $.ajax({
+  //   url: URL_CONFIG.baseUrl + "/sug/api/recommend/GetTheme",
+  //   type: "GET", // 显式指定 GET（默认也是 GET）
+  //   dataType: "json", // 期望返回的数据类型（json/xml/html/text/script）
+  //   data: {
+  //     // 查询参数（会自动拼接到 URL 后）
+  //     themeText: keyword,
+  //     pageSize: 100,
+  //   },
+  //   timeout: 10000, // 超时时间（毫秒）
+  //   xhrFields: { withCredentials: true },
+  //   crossDomain: true,
+  //   success: function (data, textStatus, xhr) {
+  //     console.log("【相关词】词云成功响应：", data);
+  //     if (Array.isArray(data.data) && data.data.length > 0) {
+  //       relatedWordsArr = (data.data || []).slice(0, 14).map((item) => {
+  //         return item.name;
+  //       });
+  //       renderRelatedwords();
+  //       hasRelatedWords = true;
+  //       // 如果当前激活的是相关词标签，显示相关词容器
+  //       if ($("#ciyunmyModal .tags span.active").data("type") === "related") {
+  //         $("#relatedwords").show();
+  //         $("#similarwords").hide();
+  //       }
+  //     } else {
+  //       console.log("获取相关词失败,接口未返回数据");
+  //       hasRelatedWords = false;
+  //     }
+  //     updateCiyunDisplay();
+  //   },
+  //   error: function (xhr, textStatus, errorThrown) {
+  //     if (textStatus === "timeout") {
+  //       $message.error("请求超时，请重试");
+  //       hasRelatedWords = false;
+  //       updateCiyunDisplay();
+  //     }
+  //   },
+  // });
+
+  // var activeTab = $('.hot-tag-box .time span.active').hasClass('week') ? 'week' : 'month'; //获取当前是月还是周
+  // var stateData = activeTab === 'week' ? ciyunData.week : ciyunData.month;
+  let found = false;
+  for (let i in ciyunData) {
+    if (ciyunData[i].keyWord === keyword) {
+      relatedWordsArr = ciyunData[i].relatedWords.split(";").slice(0, 14);
+      renderRelatedwords();
+      hasRelatedWords = true;
+      if ($("#ciyunmyModal .tags span.active").data("type") === "related") {
+        $("#relatedwords").show();
+        $("#similarwords").hide();
+      }
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    hasRelatedWords = false;
+  }
+  updateCiyunDisplay();
+}
+
+function renderRelatedwords() {
+  // 相关词每个块对应背景颜色、字体颜色、hover颜色
+  const colorsMap = [
+    { bgColor: "#2C68F5", fontColor: "#FFFFFF", hoverColor: "#2961E5" },
+    { bgColor: "#ED9200", fontColor: "#FFFFFF", hoverColor: "#DE8900" },
+    { bgColor: "#32A565", fontColor: "#FFFFFF", hoverColor: "#2E965C" },
+    { bgColor: "#DD7051", fontColor: "#FFFFFF", hoverColor: "#CF684B" },
+    { bgColor: "#038AF1", fontColor: "#FFFFFF", hoverColor: "#0381E0" },
+    { bgColor: "#DAE9FF", fontColor: "#1C4CDD", hoverColor: "#CDDBF0" },
+    { bgColor: "#FFEAD3", fontColor: "#964F00", hoverColor: "#F0DCC7" },
+    { bgColor: "#D2FDE5", fontColor: "#026B31", hoverColor: "#C5EDD7" },
+    { bgColor: "#FCEBE9", fontColor: "#B43714", hoverColor: "#EDDDDB" },
+    { bgColor: "#D8E9F6", fontColor: "#005595", hoverColor: "#CADAE5" },
+    { bgColor: "#DAE9FF", fontColor: "#1C4CDD", hoverColor: "#CDDBF0" },
+    { bgColor: "#FFEAD3", fontColor: "#964F00", hoverColor: "#F0DCC7" },
+    { bgColor: "#D2FDE5", fontColor: "#026B31", hoverColor: "#C5EDD7" },
+    { bgColor: "#FCEBE9", fontColor: "#B43714", hoverColor: "#EDDDDB" },
+  ];
+
+  // 相对位置坐标
+  const positions = [
+    {
+      top: "35%",
+      left: "40%",
+      minWidth: "140px",
+      maxWidth: "200px",
+      height: "55px",
+    }, //1
+    {
+      top: "20%",
+      left: "65%",
+      minWidth: "120px",
+      maxWidth: "200px",
+      height: "45px",
+    }, //2
+    {
+      top: "60%",
+      left: "15%",
+      minWidth: "100px",
+      maxWidth: "200px",
+      height: "40px",
+    }, //3
+    {
+      top: "25%",
+      left: "25%",
+      minWidth: "90px",
+      maxWidth: "200px",
+      height: "40px",
+    }, //4
+    {
+      top: "60%",
+      left: "75%",
+      minWidth: "100px",
+      maxWidth: "200px",
+      height: "35px",
+    }, //5
+    {
+      top: "20%",
+      left: "45%",
+      minWidth: "90px",
+      maxWidth: "200px",
+      height: "40px",
+    }, //6
+    {
+      top: "73%",
+      left: "25%",
+      minWidth: "120px",
+      maxWidth: "200px",
+      height: "40px",
+    }, //7
+    {
+      top: "48%",
+      left: "65%",
+      minWidth: "100px",
+      maxWidth: "200px",
+      height: "35px",
+    }, //8
+    {
+      top: "45%",
+      left: "20%",
+      minWidth: "100px",
+      maxWidth: "200px",
+      height: "35px",
+    }, //9
+    {
+      top: "55%",
+      left: "35%",
+      minWidth: "100px",
+      maxWidth: "200px",
+      height: "35px",
+    }, //10
+    {
+      top: "60%",
+      left: "55%",
+      minWidth: "100px",
+      maxWidth: "200px",
+      height: "35px",
+    }, //11
+    {
+      top: "80%",
+      left: "55%",
+      minWidth: "90px",
+      maxWidth: "200px",
+      height: "35px",
+    }, //12
+    {
+      top: "70%",
+      left: "45%",
+      minWidth: "80px",
+      maxWidth: "200px",
+      height: "30px",
+    }, //13
+    {
+      top: "35%",
+      left: "63%",
+      minWidth: "80px",
+      maxWidth: "200px",
+      height: "30px",
+    }, //14
+  ];
+
+  // 清空容器
+  $("#relatedwords").empty();
+  // 生成词云块
+  for (let i = 0; i < relatedWordsArr.length; i++) {
+    const colorIndex = i % colorsMap.length;
+    const color = colorsMap[colorIndex];
+    // const color = colorsMap[Math.floor(Math.random() * colorsMap.length)]; // 颜色随机
+
+    const wordBlock = $("<div>")
+      .addClass("word-block")
+      .data("keyword", relatedWordsArr[i])
+      .css({
+        position: "absolute",
+        top: positions[i].top,
+        left: positions[i].left,
+        "min-width": positions[i].minWidth,
+        "max-width": positions[i].maxWidth,
+        height: positions[i].height,
+        "background-color": color.bgColor,
+        "border-radius": "50px",
+        display: "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        color: color.fontColor,
+        "font-weight": "bold",
+        "font-size": "14px",
+        "text-align": "center",
+        padding: "10px",
+        "box-sizing": "border-box",
+        cursor: "pointer",
+        transition: "transform 0.3s ease",
+      })
+      .text(
+        relatedWordsArr[i].length > 6
+          ? relatedWordsArr[i].substring(0, 6) + "..."
+          : relatedWordsArr[i],
+      )
+      .hover(
+        function () {
+          $(this).css("transform", "scale(1.05)");
+          $(this).css("background-color", color.hoverColor);
+        },
+        function () {
+          $(this).css("transform", "scale(1)");
+          $(this).css("background-color", color.bgColor);
+        },
+      )
+      .click(function () {
+        const keyword = $(this).data("keyword");
+        const url = `https://kns.cnki.net/kns8s/defaultresult/index?korder=SU&kw=${encodeURIComponent(
+          keyword,
+        )}`;
+        window.open(url, "_blank");
+      });
+    $("#relatedwords").append(wordBlock);
+  }
+}
+// ==============【相关词】词云 end ==============
+
+// ==============【相似词】词云 start==============
+function getSimilarWords(keyword) {
+  // $.ajax({
+  //   url: URL_CONFIG.baseUrl + "/sug/v1/keywords/autocomplete",
+  //   type: "GET", // 显式指定 GET（默认也是 GET）
+  //   dataType: "json", // 期望返回的数据类型（json/xml/html/text/script）
+  //   data: {
+  //     q: keyword,
+  //   },
+  //   timeout: 10000, // 超时时间（毫秒）
+  //   xhrFields: { withCredentials: true },
+  //   crossDomain: true,
+  //   success: function (data, textStatus, xhr) {
+  //     console.log("【相似词】词云成功响应：", data);
+  //     if (
+  //       data.code === 0 &&
+  //       data.data !== null &&
+  //       typeof data.data === "object" &&
+  //       !Array.isArray(data.data) &&
+  //       Object.keys(data.data).length > 0 &&
+  //       (data.data.prefix.length > 0 || data.data.suffix.length > 0)
+  //     ) {
+  //       const prefixList = (data.data.prefix || []).slice(0, 7);
+  //       const suffixList = (data.data.suffix || []).slice(0, 7);
+  //       const prefixResult = mapToNameValue(prefixList);
+  //       const suffixResult = mapToNameValue(suffixList);
+
+  //       // 合并：prefix 在前，suffix 在后
+  //       similarWordsArr = [...prefixResult, ...suffixResult];
+  //       console.log("【相似词】词云合并结果：", similarWordsArr);
+  //       hasSimilarWords = true;
+  //       // 如果当前激活的是相似词标签，显示相似词容器
+  //       if ($("#ciyunmyModal .tags span.active").data("type") === "similar") {
+  //         $("#similarwords").show();
+  //         $("#relatedwords").hide();
+  //       }
+  //     } else {
+  //       console.log("获取相似词失败,接口未返回数据");
+  //       hasSimilarWords = false;
+  //     }
+  //     updateCiyunDisplay();
+  //   },
+  //   error: function (xhr, textStatus, errorThrown) {
+  //     if (textStatus === "timeout") {
+  //       $message.error("请求超时，请重试");
+  //     }
+  //     hasSimilarWords = false;
+  //     updateCiyunDisplay();
+  //   },
+  // });
+
+  let found = false;
+  for (let i in ciyunData) {
+    if (ciyunData[i].keyWord === keyword) {
+      similarWordsArr = mapToNameValue(
+        ciyunData[i].similarWords.split(";"),
+      ).slice(0, 14);
+      hasSimilarWords = true;
+      if ($("#ciyunmyModal .tags span.active").data("type") === "similar") {
+        $("#similarwords").show();
+        $("#relatedwords").hide();
+      }
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    hasSimilarWords = false;
+  }
+  updateCiyunDisplay();
+}
+
+// 处理echarts词云使用数据（手动设置value大小）
+function mapToNameValue(list, min = 1, max = 100) {
+  const colorsMap = [
+    { fontColor: "#2C68F5", hoverColor: "#2352C2" },
+    { fontColor: "#D28100", hoverColor: "#9E6200" },
+    { fontColor: "#24A05B", hoverColor: "#196E3E" },
+    { fontColor: "#D9461D", hoverColor: "#A63516" },
+  ];
+  if (!Array.isArray(list) || list.length === 0) {
+    return [];
+  }
+  // const items = list.map((entry) => entry.item);
+  const items = list;
+  const n = items.length;
+  const colorCount = colorsMap.length;
+
+  if (n === 1) {
+    const { fontColor, hoverColor } = colorsMap[0] || {};
+    return [{ name: items[0], value: max, fontColor, hoverColor }];
+  }
+
+  const step = (max - min) / (n - 1);
+  return items.map((name, index) => {
+    const value = max - step * index;
+    const colorEntry = colorsMap[index % colorCount] || {};
+    return {
+      name,
+      value: parseInt(value.toFixed(2)),
+      fontColor: colorEntry.fontColor,
+      hoverColor: colorEntry.hoverColor,
+    };
+  });
+}
+
+// ========== 词云配置项 ==========
+const getWordCloudOption = (words) => {
+  return {
+    // 背景色
+    backgroundColor: "#fff",
+    // 提示框
+    tooltip: {
+      show: false,
+      trigger: "item",
+      formatter: "{b} : {c}", // 显示“关键词 : 权重”
+    },
+    // 词云系列配置
+    series: [
+      {
+        type: "wordCloud",
+        // 词云的位置和大小
+        left: "center",
+        top: "center",
+        width: "80%",
+        height: "80%",
+        // 词的大小范围
+        sizeRange: [12, 40],
+        // 旋转角度范围
+        rotationRange: [0, 0],
+        // 旋转步长
+        rotationStep: 15,
+        // 词之间的间距
+        gridSize: 22,
+        // 可选 'circle' (圆形)、'cardioid' (心形)、'diamond' (菱形)、'pentagon' (五边形)、'triangle' (三角形)、'star' (星形)
+        shape: "circle",
+        // 文字旋转概率（0=不旋转，1=全部旋转）
+        rotateRatio: 0,
+        // 文字样式
+        textStyle: {
+          fontFamily: "微软雅黑, Arial",
+          fontWeight: "normal",
+          color: function (params) {
+            return params.data.fontColor;
+          },
+        },
+        emphasis: {
+          scale: true,
+          textStyle: {
+            color: "#3370FF",
+            shadowBlur: 10,
+            shadowColor: "#333",
+          },
+        },
+
+        // 词云数据
+        data: words,
+      },
+    ],
+  };
+};
+
+// ==============【相似词】词云 end==============
+
+window.closeshowciyun = function (clickedSpan) {
+  const modal = document.getElementById("ciyunmyModal");
+  modal.style.display = "none";
+};
+
+// 证书
+window.showcertificate = function (fileName) {
+  const iframe = document.getElementById("certificateIframe");
+  // 拼接iframe的URL，把fileName加密后d作为参数传递
+  const targetUrl =
+    URL_CONFIG.certificateUrl + `?d=${encodeURIComponent(fileName)}`;
+  iframe.src = targetUrl;
+  iframe.style.display = "block";
+};
+
+// 页面加载后监听message事件
+window.addEventListener("DOMContentLoaded", function () {
+  // 监听来自iframe的消息
+  window.addEventListener("message", receiveMessageFromIframePage, false);
+});
+
+// 处理iframe消息的回调函数
+function receiveMessageFromIframePage(event) {
+  // 安全校验：只处理指定来源的消息（替换成你的iframe页面域名，防止恶意消息）
+  const iframe = document.getElementById("certificateIframe");
+  // 判断消息类型（根据iframe传递的type判断是否关闭）
+  if (
+    event.data &&
+    (event.data.type === "CLOSE_DIALOG" || event.data === "CLOSE_DIALOG")
+  ) {
+    // 隐藏iframe
+    iframe.style.display = "none";
+    // 清空src，避免再次打开闪烁
+    iframe.src = "";
+  }
+}

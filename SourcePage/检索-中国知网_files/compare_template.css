@@ -1,0 +1,286 @@
+#fixed_right {
+	position: absolute;
+	right: 0;
+	top: 280px;
+	bottom: 0;
+	background: #fff;
+	width: 446px;
+	box-sizing: border-box;
+	padding: 20px 0 0 20px;
+	max-height: calc(100% - 155px);
+	z-index: 120;
+}
+
+#compare_box {
+	border: 1px solid #E1E1E1;
+	/* padding: 15px; */
+	box-shadow: 0 0 12px #ddd;
+	height: 100%;
+	/* padding-bottom: 140px; */
+	/* overflow-y: scroll; */
+	position: relative;
+	box-sizing: border-box;
+}
+#compare_box .compare_box_content{
+	height: calc(100% - 68px);
+	overflow-y: auto;
+	padding: 15px;
+	box-sizing: border-box;
+}
+
+#fixed_right>.open {
+	position: absolute;
+	left: 0;
+	top: 50%;
+	width: 20px;
+	height: 34px;
+	margin-top: -17px;
+	font-family: Source Sans Pro;
+	font-size: 20px;
+	font-weight: normal;
+	line-height: 34px;
+	letter-spacing: 0px;
+	font-feature-settings: "kern" on;
+	color: #3598DC;
+	cursor: pointer;
+}
+
+#fixed_right>.close {
+	transform: rotate(180deg);
+}
+
+.number_illustrate {
+	font-family: '思源黑体';
+	font-size: 14px;
+	line-height: 14px;
+	font-feature-settings: "kern" on;
+	color: #3D3D3D;
+	justify-content: space-between;
+	margin-bottom: 16px;
+}
+
+.number_illustrate .delete {
+	color: #3598DC;
+	cursor: pointer;
+}
+
+#compare_main .tab {
+	height: 40px;
+	border-bottom: 1px solid #E1E1E1;
+	margin-bottom: 20px;
+}
+
+#compare_main .tab span {
+	display: inline-block;
+	height: 40px;
+	line-height: 40px;
+	width: 126px;
+	font-family: '思源黑体';
+	font-size: 14px;
+	font-weight: normal;
+	letter-spacing: 0em;
+	color: #333333;
+	text-align: center;
+}
+
+#compare_main .tab span.active,
+#compare_main .tab span:hover {
+	background-color: #E1E1E1;
+	cursor: pointer;
+}
+
+.compare_content {
+	/*padding-left: 20px;*/
+	font-family: '思源黑体';
+	font-size: 14px;
+	font-weight: normal;
+	letter-spacing: 0em;
+}
+
+/**
+年鉴列表单独的按钮样式
+ */
+.result-table-list .yearbook-operat {
+	min-width: 102px;
+}
+.result-table-list .yearbook-operat a {
+	margin-right: 1px;
+}
+.result-table-list .yearbook-operat a.icon-compare{
+	padding-top: 3px;
+}
+.tip {
+	padding-left: 17px;
+	background: url('../../images/yearbook/menu.png') no-repeat left top;
+	background-size: 16px;
+	line-height: 16px;
+	margin-bottom: 20px;
+	cursor: pointer;
+}
+
+.menu-item {
+	margin-left: 10px;
+	display: none;
+}
+
+.openMenuItem {
+	padding-bottom: 10px;
+	border-bottom: 1px solid #D8D8D8;
+	margin-bottom: 25px;
+}
+
+.openMenuItem>.menu-item {
+	display: block;
+}
+
+
+/*.tab_content>ul {*/
+/*	margin-left: 18px;*/
+/*}*/
+
+.tab_content .tip {
+	margin-bottom: 15px;
+}
+
+.tab_content>ul li {
+	font-size: 14px;
+	color: #333333;
+	line-height: 20px;
+	margin-bottom: 15px;
+	position: relative;
+	text-indent: 17px;
+	/* cursor: pointer; */
+}
+
+.tab_content>ul li span {
+	cursor: pointer;
+}
+
+
+.tab_content>ul li span.fr {
+	font-size: 12px;
+	color: #999999;
+	cursor: default;
+}
+
+.tab_content>ul li span:first-of-type {
+	position: absolute;
+	left: 0;
+	top: 4px;
+	width: 15px;
+	height: 12px;
+	background: url('../../images/yearbook/check.png') no-repeat center center;
+	background-size: 11px;
+}
+
+.tab_content>ul li span:first-of-type.on {
+	background-image: url('../../images/yearbook/checked.png');
+	background-size: 15px;
+}
+.tab_content>ul li .title {
+	/*padding-left: 24px;*/
+}
+
+.tab_content>ul li.checked .title {
+	color: #EB250F
+}
+
+.tab_content ul li i {
+	font-style: normal;
+	cursor: pointer;
+}
+
+.compare_content .tab_content {
+	display: none;
+}
+
+.compare_content .tab_content:first-of-type {
+	display: block;
+}
+
+.button {
+	padding: 20px 0;
+	width: 100%;
+	background-color: #fff;
+	text-align: center;
+}
+
+.button button {
+	border: none;
+	outline: none;
+	width: 91px;
+	height: 28px;
+	border-radius: 5px;
+	background: #3598DC;
+	font-size: 12px;
+	font-feature-settings: "kern" on;
+	color: #FFFFFF;
+}
+
+.yearbook-operat a.icon-compare i{
+	background: url("../../images/cyfd-compare.png");
+	background-size: 15px 15px;
+	height: 15px;
+	width: 15px;
+}
+.yearbook-operat a.icon-compare.icon-hascompare i{
+	background: url("../../images/cyfd-hascompare.png");
+	background-size: 17px 17px;
+	height: 17px;
+	width: 17px;
+}
+.delete-ceng{
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0,0,0,0.2);
+	z-index: 11;
+}
+.is-delete-div{
+	position: absolute;
+	color:#333;
+	padding-top: 0px;
+	left: 50%;
+	top: 30%;
+	width: 260px;
+	background: #fff;
+	margin-left: -130px;
+	border-radius: 6px;
+	box-shadow: 0 1px 3px rgba(0,0,0,.3);
+	text-align: center;
+	font-size: 14px;
+	z-index: 12;
+	height: 144px;
+}
+.is-delete-div:hover{
+	color: #333;
+}
+.is-delete-content{
+	font-size: 14px !important;
+}
+.is-delete-tip{
+	padding: 18px 0 16px;
+	font-size: 17px;
+}
+.btn-delete-wrap{
+	padding: 17px 0;
+}
+.btn-delete-wrap .btn{
+	display: inline-block;
+	width: 55px;
+	height: 24px;
+	line-height: 24px;
+	border: 1px solid #ddd;
+	border-radius: 20px;
+	font-size: 12px;
+	cursor: pointer;
+	text-align: center;
+}
+.btn-delete-wrap .btn.commit{
+	margin-right: 27px;
+	border-color: #3598dc;
+	background: #3598dc;
+	color: #fff;
+}
