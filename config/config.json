@@ -1,0 +1,153 @@
+{
+  "delays": {
+    "description": "所有模拟操作延迟时间配置（单位：秒）",
+    "browser_slow_mo": 100,
+    "comment_browser_slow_mo": "Playwright 浏览器减速参数（毫秒），模拟真实用户操作速度",
+    
+    "random_delay_min": 0.5,
+    "random_delay_max": 2.0,
+    "comment_random_delay": "通用随机延迟范围（秒），用于大多数操作间隔",
+    
+    "page_load_wait": 2.0,
+    "comment_page_load_wait": "页面加载后的等待时间（秒）",
+    
+    "click_delay_min": 0.3,
+    "click_delay_max": 0.5,
+    "comment_click_delay": "点击操作前后的延迟（秒）",
+    
+    "input_delay": 50,
+    "comment_input_delay": "输入框输入时的字符间隔（毫秒）",
+    
+    "dropdown_delay_min": 0.5,
+    "dropdown_delay_max": 1.0,
+    "comment_dropdown_delay": "下拉菜单打开后的延迟（秒）",
+    
+    "option_click_delay_min": 1.0,
+    "option_click_delay_max": 2.0,
+    "comment_option_click_delay": "选择下拉菜单选项后的延迟（秒）",
+    
+    "page_size_change_delay_min": 1.0,
+    "page_size_change_delay_max": 2.0,
+    "comment_page_size_change_delay": "修改每页显示数量后的延迟（秒）",
+    
+    "search_result_wait_min": 1.0,
+    "search_result_wait_max": 2.0,
+    "comment_search_result_wait": "搜索结果加载检测间隔（秒）",
+    
+    "page_navigation_delay_min": 2.0,
+    "page_navigation_delay_max": 3.0,
+    "comment_page_navigation_delay": "翻页操作后的延迟（秒）",
+    
+    "detail_page_load_delay_min": 1.0,
+    "detail_page_load_delay_max": 1.5,
+    "comment_detail_page_load_delay": "详情页加载后的延迟（秒）",
+    
+    "citation_button_delay_min": 1.0,
+    "citation_button_delay_max": 1.5,
+    "comment_citation_button_delay": "点击引用按钮后的延迟（秒）",
+    
+    "download_button_delay_min": 1.0,
+    "download_button_delay_max": 2.0,
+    "comment_download_button_delay": "点击下载按钮后的延迟（秒）",
+    
+    "batch_operation_delay_min": 0.5,
+    "batch_operation_delay_max": 1.0,
+    "comment_batch_operation_delay": "批量操作中每个项目间的延迟（秒）",
+    
+    "captcha_check_interval": 1.0,
+    "comment_captcha_check_interval": "验证码检测间隔（秒）",
+    
+    "captcha_wait_after_complete_min": 2.0,
+    "captcha_wait_after_complete_max": 3.0,
+    "comment_captcha_wait_after_complete": "验证码完成后的延迟（秒）"
+  },
+  
+  "timeouts": {
+    "description": "各种操作的超时时间配置（单位：毫秒）",
+    "page_goto_timeout": 60000,
+    "comment_page_goto_timeout": "页面导航超时",
+    
+    "page_load_state_timeout": 5000,
+    "comment_page_load_state_timeout": "页面加载状态等待超时",
+    
+    "element_visible_timeout": 2000,
+    "comment_element_visible_timeout": "元素可见性检查超时",
+    
+    "element_click_timeout": 3000,
+    "comment_element_click_timeout": "元素点击超时",
+    
+    "page_loaded_timeout": 15000,
+    "comment_page_loaded_timeout": "页面完全加载超时",
+    
+    "search_result_timeout": 20000,
+    "comment_search_result_timeout": "搜索结果加载超时",
+    
+    "detail_page_timeout": 10000,
+    "comment_detail_page_timeout": "详情页加载超时",
+    
+    "download_timeout": 30000,
+    "comment_download_timeout": "文件下载超时"
+  },
+  
+  "optimization": {
+    "description": "性能优化配置",
+    "enable_cache": true,
+    "comment_enable_cache": "是否启用浏览器缓存",
+    
+    "clear_cache_on_init": false,
+    "comment_clear_cache_on_init": "初始化时是否清空缓存（解决搜索无结果问题）",
+    
+    "max_retry_attempts": 3,
+    "comment_max_retry_attempts": "操作失败时的最大重试次数",
+    
+    "enable_headless": false,
+    "comment_enable_headless": "是否使用无头模式（false=显示浏览器窗口）",
+    
+    "viewport_width": 1920,
+    "viewport_height": 1080,
+    "comment_viewport": "浏览器窗口大小"
+  },
+  
+  "detection": {
+    "description": "反爬虫检测相关配置",
+    "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "comment_user_agent": "浏览器 User-Agent",
+    
+    "disable_automation_detection": true,
+    "comment_disable_automation_detection": "是否禁用自动化检测标记",
+    
+    "disable_infobars": true,
+    "comment_disable_infobars": "是否禁用信息栏",
+    
+    "sandbox_disabled": true,
+    "comment_sandbox_disabled": "是否禁用沙箱"
+  },
+  
+  "captcha": {
+    "description": "验证码处理相关配置",
+    "auto_verify": true,
+    "comment_auto_verify": "是否启用自动验证码验证",
+    "max_retry": 10,
+    "comment_max_retry": "自动验证最大重试次数",
+    "drag_duration": 0.5,
+    "comment_drag_duration": "拖拽总时长（秒），模拟人类操作速度，建议1.0-1.5秒",
+    "verify_method": "iou",
+    "comment_verify_method": "验证码验证方法：iou, ssim, addition"
+  },
+  
+  "notes": {
+    "optimization_tips": [
+      "如果出现假死，尝试增加 random_delay_max 值",
+      "如果操作太慢，尝试减少 browser_slow_mo 值",
+      "如果搜索无结果，尝试设置 clear_cache_on_init 为 true",
+      "如果页面加载超时，增加相应的 timeout 值",
+      "所有延迟时间都支持动态调整，无需重启服务"
+    ],
+    "known_issues": [
+      "知网可能存在检测机制，长周期任务可能导致搜索无结果",
+      "清空浏览器缓存后通常可以恢复正常",
+      "某些操作间隔过短可能被识别为自动化操作"
+    ]
+  }
+}
+

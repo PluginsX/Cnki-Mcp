@@ -11,13 +11,33 @@ from threading import Lock
 from playwright.sync_api import sync_playwright, Browser, Page, TimeoutError, Playwright
 
 from .models import CNKIQueryRequest, CNKIQueryResult, CNKIPaper, SEARCH_TYPE_NAMES, SearchType, PageState, InitState
+from .config import ConfigManager, get_captcha
+
+# 尝试导入自动验证模块，失败时不影响主功能
+try:
+    from .AutomaticVerification import auto_verify_with_retry
+except ImportError:
+    auto_verify_with_retry = None
 
 
 def safe_print(msg: str):
     try:
-        print(msg)
+        print(msg, flush=True)  # 强制刷新缓冲区
+        sys.stderr.write(msg + '\n')  # 同时输出到 stderr
+        sys.stderr.flush()
     except UnicodeEncodeError:
-        print(msg.encode('utf-8', errors='replace').decode('utf-8'))
+        # 替换 Unicode 符号为 ASCII 等价物
+        msg_safe = msg.replace('✓', '[OK]').replace('✗', '[FAIL]').replace('•', '-').replace('→', '->').replace('⚠', '[!]')
+        try:
+            print(msg_safe, flush=True)
+            sys.stderr.write(msg_safe + '\n')
+            sys.stderr.flush()
+        except UnicodeEncodeError:
+            # 最后的手段：只保留 ASCII 字符
+            msg_ascii = msg_safe.encode('ascii', errors='replace').decode('ascii')
+            print(msg_ascii, flush=True)
+            sys.stderr.write(msg_ascii + '\n')
+            sys.stderr.flush()
 
 
 class CNKIBrowser:
@@ -33,6 +53,19 @@ class CNKIBrowser:
     """
 
     CAPTCHA_SELECTORS = [
+        # 腾讯云验证码选择器（知网新版）
+        ".tencent-captcha-dy__container",
+        # 旧版知网验证码选择器
+        ".verifybox",
+        ".verify-img-panel",
+        ".verify-sub-block",
+        ".verify-move-block",
+        # 拼图验证码选择器
+        ".security-verify",
+        "#verify-code",
+        ".puzzle-verify",
+        ".verify-dialog",
+        # 通用验证码选择器
         ".verify-wrap",
         ".slider-verify",
         ".geetest",
@@ -85,53 +118,152 @@ class CNKIBrowser:
             except Exception:
                 self._cleanup()
 
+        safe_print("    [DEBUG] 读取配置...")
+        # 从配置文件读取参数
+        config = ConfigManager.get_instance()
+        slow_mo = config.get_delay('browser_slow_mo', 100)
+        viewport_width = config.get_optimization('viewport_width', 1920)
+        viewport_height = config.get_optimization('viewport_height', 1080)
+        page_timeout = config.get_timeout('page_goto_timeout', 60000)
+        headless = config.get_optimization('enable_headless', False)
+
+        safe_print("    [DEBUG] 启动 Playwright...")
         self._playwright = sync_playwright().start()
+        
+        safe_print("    [DEBUG] 启动 Chromium...")
         self._browser = self._playwright.chromium.launch(
-            headless=False,
+            headless=headless,
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--no-sandbox",
                 "--disable-dev-shm-usage"
             ],
-            slow_mo=100
+            slow_mo=slow_mo
         )
+        
+        safe_print("    [DEBUG] 创建浏览器上下文...")
         context = self._browser.new_context(
             user_agent=self.USER_AGENT,
-            viewport={"width": 1920, "height": 1080}
+            viewport={"width": viewport_width, "height": viewport_height}
         )
+        
+        safe_print("    [DEBUG] 注入反检测脚本...")
         context.add_init_script(self.ANTI_DETECT_SCRIPT)
+        
+        safe_print("    [DEBUG] 创建新页面...")
         self._page = context.new_page()
-        self._page.set_default_timeout(60000)
+        self._page.set_default_timeout(page_timeout)
+        
+        safe_print("    [DEBUG] 浏览器初始化完成")
         return self._page
 
-    def _random_delay(self, min_sec: float = 0.5, max_sec: float = 2.0):
+    def _random_delay(self, min_sec: float = None, max_sec: float = None):
+        """随机延迟，支持从配置文件读取默认值"""
+        if min_sec is None:
+            config = ConfigManager.get_instance()
+            min_sec = config.get_delay('random_delay_min', 0.5)
+        if max_sec is None:
+            config = ConfigManager.get_instance()
+            max_sec = config.get_delay('random_delay_max', 2.0)
         time.sleep(random.uniform(min_sec, max_sec))
 
     def _check_captcha(self, page: Page) -> bool:
+        """检测页面是否出现验证码
+        
+        Returns:
+            bool: 是否检测到验证码
+        """
+        # 快速检查：先用 count() 判断元素是否存在（不等待）
         for selector in self.CAPTCHA_SELECTORS:
             try:
-                elem = page.locator(selector).first
-                if elem.is_visible(timeout=500):
-                    return True
-            except Exception:
-                continue
-        try:
-            page_content = page.content()
-            if "验证" in page_content or "安全" in page_content:
-                for selector in self.CAPTCHA_SELECTORS:
+                count = page.locator(selector).count()
+                if count > 0:
+                    # 元素存在，再检查是否可见
                     try:
-                        if page.locator(selector).count() > 0:
+                        elem = page.locator(selector).first
+                        if elem.is_visible(timeout=500):
+                            safe_print(f"[验证码检测] 发现验证码元素: {selector}")
                             return True
                     except Exception:
-                        continue
-        except Exception:
-            pass
+                        # 即使不可见，只要元素存在就认为有验证码
+                        safe_print(f"[验证码检测] 发现验证码元素（可能隐藏）: {selector}")
+                        return True
+            except Exception:
+                continue
+        
         return False
 
     def _wait_for_captcha(self, page: Page, max_wait: int = 0):
+        """等待并处理验证码
+        
+        Args:
+            page: Playwright 页面对象
+            max_wait: 最大等待时间（秒），0 表示无限等待
+            
+        Returns:
+            bool: 验证是否成功
+        """
+        # 检查是否启用自动验证
+        auto_verify_enabled = get_captcha('auto_verify', False)
+        safe_print(f"[验证码处理] auto_verify_enabled: {auto_verify_enabled}")
+        safe_print(f"[验证码处理] auto_verify_with_retry 可用: {auto_verify_with_retry is not None}")
+        
+        if auto_verify_enabled and auto_verify_with_retry:
+            safe_print("\n" + "=" * 60)
+            safe_print("[!] 检测到安全验证（拼图验证码）")
+            safe_print("[*] 启用自动验证模式")
+            safe_print("=" * 60)
+            
+            # 获取自动验证配置
+            max_retry = get_captcha('max_retry', 3)
+            drag_duration = get_captcha('drag_duration', 1.0)
+            verify_method = get_captcha('verify_method', 'iou')
+            
+            safe_print(f"\n    自动验证配置：")
+            safe_print(f"    - 最大重试次数: {max_retry}")
+            safe_print(f"    - 拖拽时长: {drag_duration}秒")
+            safe_print(f"    - 验证方法: {verify_method}")
+            safe_print("\n    正在进行自动验证...")
+            safe_print("=" * 60 + "\n")
+            
+            # 等待验证码完全加载
+            safe_print("[自动验证] 等待验证码元素完全加载...")
+            
+            # 执行自动验证
+            try:
+                success = auto_verify_with_retry(
+                    page=page,
+                    max_retry=max_retry,
+                    method=verify_method,
+                    drag_duration=drag_duration
+                )
+                
+                if success:
+                    safe_print("\n[OK] 自动验证成功！\n")
+                    return True
+                else:
+                    safe_print("\n[X] 自动验证失败，切换到手动验证模式\n")
+            except Exception as e:
+                safe_print(f"\n[X] 自动验证过程出错：{str(e)}")
+                safe_print("[*] 切换到手动验证模式\n")
+                import traceback
+                traceback.print_exc()
+        else:
+            if not auto_verify_enabled:
+                safe_print("[验证码处理] 自动验证未启用（配置文件 captcha.auto_verify = false）")
+            if auto_verify_with_retry is None:
+                safe_print("[验证码处理] 自动验证模块导入失败")
+        
+        # 手动验证模式
+        config = ConfigManager.get_instance()
+        check_interval = config.get_delay('captcha_check_interval', 1.0)
+        wait_after_complete_min = config.get_delay('captcha_wait_after_complete_min', 2.0)
+        wait_after_complete_max = config.get_delay('captcha_wait_after_complete_max', 3.0)
+        
         safe_print("\n" + "=" * 60)
         safe_print("[!] 检测到安全验证（拼图验证码）")
+        safe_print("[*] 手动验证模式")
         safe_print("=" * 60)
         safe_print("\n    请在浏览器窗口中完成以下操作：")
         safe_print("    1. 拖动滑块完成拼图验证")
@@ -143,12 +275,12 @@ class CNKIBrowser:
         while True:
             if not self._check_captcha(page):
                 safe_print("[OK] 验证完成！\n")
-                self._random_delay(2, 3)
+                self._random_delay(wait_after_complete_min, wait_after_complete_max)
                 return True
-            time.sleep(1)
+            time.sleep(check_interval)
             wait_count += 1
             if wait_count % 10 == 0:
-                safe_print(f"    等待验证中... 已等待 {wait_count} 秒")
+                safe_print(f"    等待验证中... 已等待 {wait_count * check_interval:.0f} 秒")
         
         return False
 
@@ -180,25 +312,71 @@ class CNKIBrowser:
                 safe_print("\n" + "=" * 60)
                 safe_print("[*] 初始化知网检索服务")
                 safe_print("=" * 60)
-                safe_print("\n    正在启动浏览器...")
-                
-                page = self._init_browser()
-                
-                safe_print("    正在打开知网首页...")
-                page.goto(self.BASE_URL, wait_until="networkidle", timeout=60000)
-                self._random_delay(2, 3)
+                safe_print("\n    [1/6] 正在启动浏览器...")
 
-                max_attempts = 5
-                for attempt in range(max_attempts):
+                page = self._init_browser()
+                safe_print("    [OK] 浏览器启动成功")
+
+                config = ConfigManager.get_instance()
+                page_goto_timeout = config.get_timeout('page_goto_timeout', 60000)
+                page_load_wait_min = config.get_delay('page_load_wait', 2.0)
+                page_load_wait_max = page_load_wait_min + 1.0
+
+                safe_print("    [2/6] 正在打开知网首页...")
+                safe_print(f"    URL: {self.BASE_URL}")
+                page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=page_goto_timeout)
+                safe_print("    [OK] 页面加载完成")
+                
+                # 等待 1 秒让页面渲染
+                safe_print("    [3/6] 等待页面渲染（1秒）...")
+                time.sleep(1)
+                safe_print("    [OK] 等待完成")
+                
+                # 立即开始寻找验证码
+                safe_print("    [4/6] 开始寻找验证码...")
+                captcha_found = False
+                for check_attempt in range(5):
+                    safe_print(f"    检查 {check_attempt + 1}/5...")
                     if self._check_captcha(page):
-                        safe_print("\n    [!] 检测到安全验证，请完成验证...")
+                        captcha_found = True
+                        safe_print("\n    [!] 发现验证码！立即启动自动验证...")
                         if not self._wait_for_captcha(page):
                             safe_print("    [X] 初始化失败：验证超时")
                             CNKIBrowser._init_state = InitState.FAILED
                             return False
-                        self._random_delay(2, 3)
+                        safe_print("    [OK] 验证完成，继续初始化...")
+                        time.sleep(2)
+                        break
+                    else:
+                        safe_print(f"    第 {check_attempt + 1} 次：未发现验证码")
+                        if check_attempt < 4:
+                            time.sleep(1)
+                
+                if not captcha_found:
+                    safe_print("    [OK] 未检测到验证码，继续初始化...")
+                
+                # 等待搜索框出现
+                safe_print("    [5/6] 等待搜索框出现...")
+                try:
+                    page.wait_for_selector("#txt_search, input.search-input, #txt_SearchText", state="visible", timeout=10000)
+                    safe_print("    [OK] 搜索框已出现")
+                except Exception as e:
+                    safe_print(f"    [!] 警告：搜索框未出现 ({e})")
+                    time.sleep(2)
+
+                max_attempts = 5
+                safe_print("    [6/6] 最后检查...")
+                for attempt in range(max_attempts):
+                    # 最后再检查一次验证码
+                    if self._check_captcha(page):
+                        safe_print("\n    [!] 再次检测到验证码...")
+                        if not self._wait_for_captcha(page):
+                            safe_print("    [X] 初始化失败：验证超时")
+                            CNKIBrowser._init_state = InitState.FAILED
+                            return False
+                        time.sleep(2)
                         continue
-                    
+
                     try:
                         search_input = page.locator("input[type='text'], input.search-input, #txt_SearchText, .search-input").first
                         if search_input and search_input.is_visible(timeout=3000):
@@ -206,17 +384,17 @@ class CNKIBrowser:
                             break
                     except Exception:
                         pass
-                    
+
                     if attempt < max_attempts - 1:
                         safe_print(f"    等待页面加载... ({attempt + 1}/{max_attempts})")
-                        self._random_delay(2, 3)
+                        time.sleep(2)
                         if self._check_captcha(page):
                             safe_print("\n    [!] 检测到安全验证，请完成验证...")
                             if not self._wait_for_captcha(page):
                                 safe_print("    [X] 初始化失败：验证超时")
                                 CNKIBrowser._init_state = InitState.FAILED
                                 return False
-                            self._random_delay(2, 3)
+                            time.sleep(2)
 
                 try:
                     page.wait_for_load_state("domcontentloaded", timeout=5000)
@@ -225,7 +403,7 @@ class CNKIBrowser:
 
                 self._ready = True
                 CNKIBrowser._init_state = InitState.COMPLETED
-                
+
                 safe_print("\n" + "=" * 60)
                 safe_print("[OK] 知网检索服务初始化完成！")
                 safe_print("    浏览器窗口将保持打开，后续查询将复用此会话")
@@ -234,11 +412,45 @@ class CNKIBrowser:
 
             except Exception as e:
                 safe_print(f"    [X] 初始化失败：{str(e)}")
+                import traceback
+                traceback.print_exc()
                 CNKIBrowser._init_state = InitState.FAILED
                 return False
 
     def is_ready(self) -> bool:
         return self._ready and self._page is not None
+
+    def _reset_on_timeout(self):
+        """超时后的浏览器状态恢复机制"""
+        safe_print("[RECOVERY] 尝试恢复浏览器状态...")
+        try:
+            if not self._page:
+                return
+            
+            # 1. 关闭所有可见的弹窗
+            try:
+                self._page.evaluate("""
+                    () => {
+                        document.querySelectorAll('[class*=close], [class*=Close], .layui-layer-close').forEach(el => {
+                            try { el.click(); } catch(e) {}
+                        });
+                    }
+                """)
+                safe_print("  已关闭弹窗")
+            except Exception:
+                pass
+            
+            # 2. 回到首页
+            try:
+                self._page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=10000)
+                self._random_delay(2, 3)
+                safe_print("  已回到首页")
+            except Exception as e:
+                safe_print(f"  回到首页失败：{e}")
+            
+            safe_print("[RECOVERY] 浏览器状态已重置")
+        except Exception as e:
+            safe_print(f"[RECOVERY_ERROR] 恢复过程异常：{e}")
 
     # ==================== 状态感知方法 ====================
     
@@ -298,20 +510,41 @@ class CNKIBrowser:
           - 万为单位：如 "24.98万"、"41.20万"
         同一 resource 会出现多次（父级 + 子级展开），
         只保留每个 resource 的第一条（即顶级分类）。
+        使用 evaluate() 在浏览器端一次性批量提取，避免串行 IPC 调用。
         
         Returns:
             dict: 分类名称 -> 结果数量的映射（去重后，按页面顺序）
         """
-        category_counts = {}
-        seen_resources = set()
+        try:
+            raw = self._page.evaluate("""
+                () => {
+                    const results = [];
+                    const seen = new Set();
+                    const links = document.querySelectorAll('a[resource][name="classify"]');
+                    for (const link of links) {
+                        const resource = link.getAttribute('resource') || '';
+                        if (!resource || seen.has(resource)) continue;
+                        seen.add(resource);
+                        const span = link.querySelector('span');
+                        const em = link.querySelector('em');
+                        if (!span || !em) continue;
+                        const name = span.textContent.trim();
+                        const emText = em.textContent.trim();
+                        if (!name || !emText) continue;
+                        results.push([name, emText]);
+                    }
+                    return results;
+                }
+            """)
+        except Exception as e:
+            safe_print(f"提取分类统计失败: {str(e)}")
+            return {}
 
         def parse_count(text: str) -> int:
-            """解析数字，支持 '万' 单位"""
             text = text.strip().replace(',', '')
             if not text:
-                return -1  # 空值（如专利），标记为 -1 跳过
+                return -1
             if '万' in text:
-                # "24.98万" -> 249800
                 num_str = text.replace('万', '').strip()
                 try:
                     return int(float(num_str) * 10000)
@@ -322,35 +555,12 @@ class CNKIBrowser:
             except ValueError:
                 return -1
 
-        try:
-            all_links = self._page.locator('a[resource][name="classify"]').all()
-            for link in all_links:
-                try:
-                    resource = link.get_attribute("resource") or ""
-                    if not resource or resource in seen_resources:
-                        continue
-                    seen_resources.add(resource)
-
-                    span = link.locator("span").first
-                    em = link.locator("em").first
-
-                    name = span.inner_text(timeout=500).strip() if span else ""
-                    em_text = em.inner_text(timeout=500).strip() if em else ""
-
-                    if not name or not em_text:
-                        continue
-
-                    count = parse_count(em_text)
-                    if count < 0:
-                        continue  # 空值跳过
-
-                    category_counts[name] = count
-                    safe_print(f"  {name}: {count}")
-                except Exception:
-                    continue
-
-        except Exception as e:
-            safe_print(f"提取分类统计失败: {str(e)}")
+        category_counts = {}
+        for name, em_text in (raw or []):
+            count = parse_count(em_text)
+            if count >= 0:
+                category_counts[name] = count
+                safe_print(f"  {name}: {count}")
 
         return category_counts
     
@@ -390,30 +600,66 @@ class CNKIBrowser:
         return 1, 1
     
     def _wait_for_page_loaded(self, timeout: int = 10000) -> bool:
-        """等待搜索结果页加载完成"""
+        """等待搜索结果页加载完成（区分「有结果」和「无结果」，不等超时）
+        
+        特别处理：
+        - 结果数为 '0' → 视为无结果
+        - 结果数为 'undefined' / 空字符串 → 视为已加载但无有效结果，按 0 条处理
+        """
+        # 同时等待"有结果"或"无结果提示"，任意一个出现即返回，避免傻等超时
+        RESULT_SELECTOR = "table.result-table-list tbody tr"
+        NO_RESULT_SELECTORS = [
+            "p.no-content",          # 知网真实无结果提示：<p class="no-content">抱歉，暂无数据...</p>
+            ".tips-nodata",
+            ".no-result",
+            ".kns-result-none",
+            "p.tips",
+            "span.pagerTitleCell em",  # 结果数为0时也会出现
+        ]
         try:
-            # 使用 Playwright 原生等待，避免轮询中的 greenlet 问题
+            # 先等待分页标题（几乎总会出现，有结果和无结果都会出现）
             self._page.wait_for_selector(
                 "span.pagerTitleCell",
                 state="visible",
                 timeout=timeout
             )
+            # 检查结果数是否为0（快速路径：无结果直接返回True，表示页面已加载完成）
+            try:
+                em = self._page.locator("span.pagerTitleCell em").first
+                if em.is_visible(timeout=500):
+                    count_text = em.inner_text(timeout=500).strip().replace(',', '')
+                    # '0' = 确认 0 条；空字符串 / 'undefined' 也按 0 条处理，避免长时间等待
+                    if count_text in ('0', '', 'undefined', 'null', '-'):
+                        safe_print(f"[无结果] 知网结果计数异常/为0（{count_text!r}），视为0条结果，页面已加载完成")
+                        return True
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # 等待结果行出现
+        try:
             self._page.wait_for_selector(
-                "table.result-table-list tbody tr",
+                RESULT_SELECTOR,
                 state="visible",
                 timeout=timeout
             )
             return True
         except Exception:
             pass
-        
-        # 备用：等待任意结果行出现
+
+        # 备用：检查是否有「无结果」提示元素（说明页面已加载完成，只是没有数据）
+        for sel in NO_RESULT_SELECTORS:
+            try:
+                if self._page.locator(sel).first.is_visible(timeout=500):
+                    safe_print(f"[无结果] 检测到无结果提示元素：{sel}")
+                    return True
+            except Exception:
+                continue
+
+        # 最后备用：等待任意结果行
         try:
-            self._page.wait_for_selector(
-                "tbody tr",
-                state="visible",
-                timeout=timeout
-            )
+            self._page.wait_for_selector("tbody tr", state="visible", timeout=3000)
             return True
         except Exception:
             return False
@@ -515,6 +761,14 @@ class CNKIBrowser:
             safe_print(f"当前已经是每页显示 {page_size} 条，无需修改")
             return True
         
+        config = ConfigManager.get_instance()
+        dropdown_delay_min = config.get_delay('dropdown_delay_min', 0.5)
+        dropdown_delay_max = config.get_delay('dropdown_delay_max', 1.0)
+        option_click_delay_min = config.get_delay('option_click_delay_min', 1.0)
+        option_click_delay_max = config.get_delay('option_click_delay_max', 2.0)
+        page_size_change_delay_min = config.get_delay('page_size_change_delay_min', 3.0)
+        page_size_change_delay_max = config.get_delay('page_size_change_delay_max', 5.0)
+        
         try:
             safe_print(f"正在设置每页显示数量：{current_size} → {page_size}...")
             
@@ -525,7 +779,7 @@ class CNKIBrowser:
                 return False
             
             dropdown.click()
-            self._random_delay(0.5, 1)
+            self._random_delay(dropdown_delay_min, dropdown_delay_max)
             safe_print("已打开下拉菜单")
             
             # 2. 选择对应数量
@@ -536,32 +790,34 @@ class CNKIBrowser:
             
             option.click()
             safe_print(f"已点击选项：{page_size}")
-            self._random_delay(3, 5)
             
-            # 3. 等待页面重新加载，多次尝试验证
-            if self._wait_for_page_loaded(timeout=15000):
-                # 额外等待确保下拉菜单数值已更新
-                self._random_delay(1, 2)
-                new_size = self.get_current_page_size()
-                if new_size == page_size:
-                    safe_print(f"成功设置每页显示 {page_size} 条")
-                    return True
-                # 再等一次重试
-                self._random_delay(2, 3)
-                new_size = self.get_current_page_size()
-                if new_size == page_size:
-                    safe_print(f"成功设置每页显示 {page_size} 条")
-                    return True
-                # 验证失败但页面已加载，检查实际结果行数作为辅助判断
+            # 3. 等待页面重新加载：优先用 wait_for_selector，而非固定睡眠
+            try:
+                self._page.wait_for_selector(
+                    "table.result-table-list tbody tr",
+                    state="visible",
+                    timeout=int(page_size_change_delay_max * 1000 * 3)
+                )
+            except Exception:
+                self._random_delay(page_size_change_delay_min, page_size_change_delay_max)
+            
+            # 4. 验证设置是否成功
+            new_size = self.get_current_page_size()
+            if new_size == page_size:
+                safe_print(f"成功设置每页显示 {page_size} 条")
+                return True
+            
+            # 备用验证：检查实际结果行数
+            try:
                 row_count = self._page.locator("tbody tr").count()
                 if row_count > 0:
-                    safe_print(f"页面已加载（{row_count} 行），视为设置成功（当前读取值 {new_size}）")
+                    safe_print(f"页面已加载（{row_count} 行），视为设置成功")
                     return True
-                safe_print(f"设置后验证失败：期望 {page_size}，实际 {new_size}")
-                return False
-            else:
-                safe_print("页面加载超时")
-                return False
+            except Exception:
+                pass
+            
+            safe_print(f"设置后验证失败：期望 {page_size}，实际 {new_size}")
+            return False
             
         except Exception as e:
             safe_print(f"设置每页显示数量失败：{str(e)}")
@@ -607,15 +863,9 @@ class CNKIBrowser:
             next_btn.click()
             safe_print("已点击下一页按钮")
             
-            # 等待页面开始加载
-            self._random_delay(2, 3)
-            
-            # 等待新页面加载完成（增加超时时间）
+            # 等待新页面加载完成（事件驱动，不固定睡眠）
             safe_print("等待页面加载...")
             if self._wait_for_page_loaded(timeout=20000):
-                # 再次等待确保页码更新
-                self._random_delay(1, 2)
-                
                 new_page, _ = self._extract_page_info()
                 safe_print(f"加载后页码: {new_page}/{total_pages}")
                 
@@ -623,8 +873,8 @@ class CNKIBrowser:
                     safe_print(f"成功跳转到第 {new_page} 页")
                     return True
                 elif new_page == current_page:
-                    # 页码未变化，再等一次重试读取
-                    self._random_delay(2, 3)
+                    # 页码未变化，短暂等待后重试读取
+                    self._random_delay(1, 2)
                     new_page, _ = self._extract_page_info()
                     if new_page == current_page + 1:
                         safe_print(f"成功跳转到第 {new_page} 页")
@@ -684,15 +934,9 @@ class CNKIBrowser:
             prev_btn.click()
             safe_print("已点击上一页按钮")
             
-            # 等待页面开始加载
-            self._random_delay(2, 3)
-            
-            # 等待新页面加载完成（增加超时时间）
+            # 等待新页面加载完成（事件驱动，不固定睡眠）
             safe_print("等待页面加载...")
             if self._wait_for_page_loaded(timeout=20000):
-                # 再次等待确保页码更新
-                self._random_delay(1, 2)
-                
                 new_page, _ = self._extract_page_info()
                 safe_print(f"加载后页码: {new_page}/{total_pages}")
                 
@@ -700,6 +944,12 @@ class CNKIBrowser:
                     safe_print(f"✓ 成功跳转到第 {new_page} 页")
                     return True
                 elif new_page == current_page:
+                    # 页码未变化，短暂等待后重试
+                    self._random_delay(1, 2)
+                    new_page, _ = self._extract_page_info()
+                    if new_page == current_page - 1:
+                        safe_print(f"✓ 成功跳转到第 {new_page} 页")
+                        return True
                     safe_print(f"警告：页码未变化，可能翻页失败")
                     return False
                 else:
@@ -799,16 +1049,32 @@ class CNKIBrowser:
             if not self.initialize():
                 raise Exception("服务未初始化，请先完成验证")
 
+        config = ConfigManager.get_instance()
+        page_goto_timeout = config.get_timeout('page_goto_timeout', 60000)
+        page_load_wait_min = config.get_delay('page_load_wait', 2.0)
+        page_load_wait_max = page_load_wait_min + 1.0
+        click_delay_min = config.get_delay('click_delay_min', 0.3)
+        click_delay_max = config.get_delay('click_delay_max', 0.5)
+        input_delay = config.get_delay('input_delay', 50)
+        search_result_wait_min = config.get_delay('search_result_wait_min', 1.0)
+        search_result_wait_max = config.get_delay('search_result_wait_max', 2.0)
+        filter_delay_min = config.get_delay('option_click_delay_min', 1.0)
+        filter_delay_max = config.get_delay('option_click_delay_max', 2.0)
+
         page = self._page
         
         try:
             safe_print(f"\n正在执行检索：{request.keyword}...")
             safe_print(f"搜索类型：{SEARCH_TYPE_NAMES.get(request.search_type, request.search_type.value)}")
             
-            # 先访问知网首页
+            # 访问知网首页，使用 domcontentloaded 而非 networkidle 避免长时间等待
             safe_print("正在访问知网首页...")
-            page.goto(self.BASE_URL, wait_until="networkidle", timeout=60000)
-            self._random_delay(2, 3)
+            page.goto(self.BASE_URL, wait_until="domcontentloaded", timeout=page_goto_timeout)
+            # 等待搜索框出现，而非固定延迟
+            try:
+                page.wait_for_selector("#txt_search", state="visible", timeout=10000)
+            except Exception:
+                self._random_delay(page_load_wait_min, page_load_wait_max)
             
             if self._check_captcha(page):
                 if not self._wait_for_captcha(page):
@@ -818,10 +1084,10 @@ class CNKIBrowser:
             safe_print("正在填写搜索框...")
             search_input = page.locator("#txt_search").first
             search_input.click()
-            self._random_delay(0.3, 0.5)
+            self._random_delay(click_delay_min, click_delay_max)
             search_input.fill("")
-            self._random_delay(0.3, 0.5)
-            search_input.type(request.keyword, delay=50)
+            self._random_delay(click_delay_min, click_delay_max)
+            search_input.type(request.keyword, delay=int(input_delay))
             self._random_delay(0.5, 1)
             
             # 如果需要切换搜索类型，在搜索前切换
@@ -833,70 +1099,83 @@ class CNKIBrowser:
             search_btn.click()
             safe_print("已点击搜索按钮")
             
-            max_wait = 30
-            waited = 0
+            # 等待搜索结果加载：「有结果」或「无结果提示」任意一个出现即返回，不串行等待
+            # 合并所有可能出现的元素为一个选择器，彻底避免多次超时叠加
+            RESULT_OR_EMPTY_SELECTOR = (
+                "span.pagerTitleCell, "       # 有结果时的分页标题（最可靠）
+                "p.no-content, "              # 知网真实无结果提示
+                "table.result-table-list, "   # 结果表格
+                "a[href*='kcms'], "           # 结果链接
+                ".tips-nodata, "              # 其他无结果提示
+                ".no-result"
+            )
             result_loaded = False
-            
-            while waited < max_wait:
-                self._random_delay(1, 2)
-                waited += 2
-                
-                if self._check_captcha(page):
-                    if not self._wait_for_captcha(page):
-                        raise Exception("验证超时，请重试")
-                
-                try:
-                    result_links = page.locator("a[href*='kcms'], a[href*='detail']").count()
-                    if result_links > 0:
-                        safe_print(f"检测到 {result_links} 个搜索结果链接")
-                        result_loaded = True
-                        break
-                except Exception:
-                    pass
-                
-                try:
-                    if page.locator("#ModuleSearchResult").count() > 0:
-                        content = page.locator("#ModuleSearchResult").inner_text(timeout=1000)
-                        if content and len(content) > 50:
-                            safe_print("检测到搜索结果内容")
-                            result_loaded = True
-                            break
-                except Exception:
-                    pass
+            try:
+                page.wait_for_selector(RESULT_OR_EMPTY_SELECTOR, state="visible", timeout=20000)
+                result_loaded = True
+                safe_print("检测到结果页元素（有结果或无结果提示）")
+            except Exception:
+                safe_print("警告：等待搜索结果超时，继续尝试解析")
+
+            # 快速判断是否为无结果，是则提前返回空结果，不再执行后续解析
+            try:
+                no_content = page.locator("p.no-content").first
+                if no_content.is_visible(timeout=500):
+                    msg = no_content.inner_text(timeout=500).strip()
+                    safe_print(f"[无结果] 知网返回空页面：{msg}")
+                    return CNKIQueryResult(
+                        total=0,
+                        page_num=request.page_num,
+                        page_size=request.page_size,
+                        category_counts={},
+                        results=[]
+                    )
+            except Exception:
+                pass
+
+            # 检查验证码（等待结果后再检查一次）
+            if self._check_captcha(page):
+                if not self._wait_for_captcha(page):
+                    raise Exception("验证超时，请重试")
             
             if not result_loaded:
                 safe_print("警告：搜索结果可能未完全加载")
             
-            self._random_delay(2, 3)
-            
             # 如果需要设置每页显示数量
             if request.page_size != self.get_current_page_size():
                 safe_print(f"需要调整每页显示数量为 {request.page_size} 条...")
-                if self.set_page_size(request.page_size):
-                    # 设置成功后，页面已重新加载
-                    self._random_delay(2, 3)
-                else:
+                if not self.set_page_size(request.page_size):
                     safe_print("警告：设置每页显示数量失败，将使用当前设置")
+                # set_page_size 内部已用 wait_for_selector 等待，无需额外延迟
             
             # 如果需要筛选资源类型
             if request.filter_resource:
                 if self.filter_by_resource(page, request.filter_resource):
-                    # 筛选后等待新结果加载
-                    self._random_delay(3, 5)
-                    result_loaded = False
-                    # 重新检测结果加载
-                    for _ in range(10):
-                        self._random_delay(1, 2)
-                        try:
-                            result_links = page.locator("a[href*='kcms'], a[href*='detail']").count()
-                            if result_links > 0:
-                                safe_print(f"筛选后检测到 {result_links} 个搜索结果链接")
-                                result_loaded = True
-                                break
-                        except Exception:
-                            pass
-                    if not result_loaded:
+                    # 筛选后：用合并选择器同时等待「有结果」或「无结果提示」，任意一个出现即返回
+                    try:
+                        page.wait_for_selector(
+                            RESULT_OR_EMPTY_SELECTOR,
+                            state="visible",
+                            timeout=15000
+                        )
+                        safe_print("筛选后检测到结果页元素")
+                    except Exception:
                         safe_print("警告：筛选后结果可能未完全加载")
+                    # 检查筛选后是否无结果，提前返回
+                    try:
+                        no_content = page.locator("p.no-content").first
+                        if no_content.is_visible(timeout=500):
+                            msg = no_content.inner_text(timeout=500).strip()
+                            safe_print(f"[无结果] 筛选后知网返回空页面：{msg}")
+                            return CNKIQueryResult(
+                                total=0,
+                                page_num=request.page_num,
+                                page_size=request.page_size,
+                                category_counts={},
+                                results=[]
+                            )
+                    except Exception:
+                        pass
 
             safe_print("正在解析检索结果...")
             # 获取实际的每页显示数量
@@ -962,11 +1241,8 @@ class CNKIBrowser:
     def _try_alternative_parse(self, page: Page, page_size: int) -> list[CNKIPaper]:
         results = []
         
-        try:
-            page.wait_for_load_state("networkidle", timeout=5000)
-        except Exception:
-            pass
-
+        # 注意：这里不使用 networkidle 等待，避免无结果时不必要的等待
+        # 如果走到此备用解析说明标准解析已失败，直接尝试链接方式
         try:
             all_links = page.locator("a[href*='kcms'], a[href*='detail']").all()
             seen_titles = set()
@@ -1115,24 +1391,33 @@ class CNKIBrowser:
             if not self.initialize():
                 raise Exception("服务未初始化，请先完成验证")
 
+        config = ConfigManager.get_instance()
+        page_goto_timeout = config.get_timeout('page_goto_timeout', 60000)
+        detail_page_load_delay_min = config.get_delay('detail_page_load_delay_min', 3.0)
+        detail_page_load_delay_max = config.get_delay('detail_page_load_delay_max', 5.0)
+        page_load_state_timeout = config.get_timeout('page_load_state_timeout', 5000)
+        page_load_wait_min = config.get_delay('page_load_wait', 2.0)
+        page_load_wait_max = page_load_wait_min + 1.0
+
         page = self._page
         paper = CNKIPaper(link=paper_url)
         
         try:
             safe_print(f"\n正在获取文章详情：{paper_url}")
-            page.goto(paper_url, wait_until="networkidle", timeout=60000)
-            self._random_delay(3, 5)
+            # 使用 domcontentloaded 代替 networkidle，避免等待所有资源加载完毕
+            page.goto(paper_url, wait_until="domcontentloaded", timeout=page_goto_timeout)
+            
+            # 等待关键内容出现，而非固定延迟
+            try:
+                page.wait_for_selector(".wx-tit h1, div.doc h1, h1", timeout=8000)
+            except Exception:
+                pass
             
             if self._check_captcha(page):
                 if not self._wait_for_captcha(page):
                     raise Exception("验证超时，请重试")
             
-            try:
-                page.wait_for_load_state("domcontentloaded", timeout=10000)
-            except Exception:
-                pass
-            
-            self._random_delay(2, 3)
+            self._random_delay(1.0, 1.5)
             
             paper = self._parse_paper_detail(page, paper_url)
             
@@ -1344,6 +1629,12 @@ class CNKIBrowser:
 
     def _get_citation_formats(self, page: Page, paper: CNKIPaper) -> CNKIPaper:
         """获取引用格式"""
+        config = ConfigManager.get_instance()
+        citation_button_delay_min = config.get_delay('citation_button_delay_min', 2.0)
+        citation_button_delay_max = config.get_delay('citation_button_delay_max', 3.0)
+        page_load_wait_min = config.get_delay('page_load_wait', 2.0)
+        page_load_wait_max = page_load_wait_min + 1.0
+        
         try:
             citation_button = page.locator('a[onclick="getQuotes()"]').first
             if not citation_button.is_visible(timeout=2000):
@@ -1351,10 +1642,12 @@ class CNKIBrowser:
             
             if citation_button and citation_button.is_visible(timeout=2000):
                 citation_button.click()
-                self._random_delay(2, 3)
                 safe_print("已点击引用按钮")
-                
-                self._random_delay(1, 2)
+                # 等待引用弹窗出现，而非固定延迟
+                try:
+                    page.wait_for_selector(".quote-pop", state="visible", timeout=4000)
+                except Exception:
+                    self._random_delay(0.5, 1.0)
                 
                 try:
                     quote_dialog = page.locator(".quote-pop").first
@@ -1445,6 +1738,14 @@ class CNKIBrowser:
             if not self.initialize():
                 return CNKIDownloadResult(success=False, message="服务未初始化")
 
+        config = ConfigManager.get_instance()
+        page_goto_timeout = config.get_timeout('page_goto_timeout', 60000)
+        detail_page_load_delay_min = config.get_delay('detail_page_load_delay_min', 3.0)
+        detail_page_load_delay_max = config.get_delay('detail_page_load_delay_max', 5.0)
+        download_button_delay_min = config.get_delay('download_button_delay_min', 1.0)
+        download_button_delay_max = config.get_delay('download_button_delay_max', 2.0)
+        download_timeout = config.get_timeout('download_timeout', 30000)
+
         fmt = fmt.lower().strip()
         if fmt not in ("pdf", "caj"):
             fmt = "pdf"
@@ -1461,8 +1762,12 @@ class CNKIBrowser:
 
         try:
             # 1. 访问详情页
-            page.goto(paper_url, wait_until="networkidle", timeout=60000)
-            self._random_delay(2, 3)
+            page.goto(paper_url, wait_until="domcontentloaded", timeout=page_goto_timeout)
+            # 等待下载按钮出现，而非固定延迟
+            try:
+                page.wait_for_selector("#pdfDown, #cajDown, .download-btns", state="visible", timeout=8000)
+            except Exception:
+                self._random_delay(detail_page_load_delay_min, detail_page_load_delay_max)
 
             if self._check_captcha(page):
                 if not self._wait_for_captcha(page):
@@ -1506,7 +1811,7 @@ class CNKIBrowser:
             os.makedirs(save_dir, exist_ok=True)
 
             try:
-                with page.expect_download(timeout=30000) as dl_info:
+                with page.expect_download(timeout=download_timeout) as dl_info:
                     btn.click()
 
                 download = dl_info.value
@@ -1571,6 +1876,10 @@ class CNKIBrowser:
         Returns:
             list[CNKIPaper]: 论文详情列表
         """
+        config = ConfigManager.get_instance()
+        batch_operation_delay_min = config.get_delay('batch_operation_delay_min', 3.0)
+        batch_operation_delay_max = config.get_delay('batch_operation_delay_max', 5.0)
+        
         if self._get_current_page_type() != PageState.SEARCH_RESULT:
             safe_print("错误：当前不在搜索结果页")
             return []
@@ -1599,7 +1908,7 @@ class CNKIBrowser:
                     detail = self.get_paper_detail(paper.link)
                     if detail:
                         all_papers.append(detail)
-                    self._random_delay(3, 5)  # 避免请求过快
+                    self._random_delay(batch_operation_delay_min, batch_operation_delay_max)
             
             # 检查是否需要翻页
             if len(all_papers) >= max_count:

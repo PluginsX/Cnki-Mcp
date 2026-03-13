@@ -1,10 +1,19 @@
 """CNKI MCP Server - 知网检索 MCP 服务主入口"""
 
+# 强制禁用输出缓冲，确保日志实时输出到 MCP
+import os
+os.environ['PYTHONUNBUFFERED'] = '1'
+
 import json
 import asyncio
 import sys
 from typing import Any
 from concurrent.futures import ThreadPoolExecutor
+
+# 强制 stdout 和 stderr 无缓冲
+import io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, line_buffering=True, write_through=True)
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, line_buffering=True, write_through=True)
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -18,6 +27,17 @@ APP_VERSION = "0.1.0"
 
 server = Server(APP_NAME)
 
+# 工具执行超时配置（秒）
+TOOL_TIMEOUTS = {
+    "cnki_search": 120,
+    "cnki_get_paper_detail": 90,
+    "cnki_get_status": 30,
+    "cnki_navigate_page": 60,
+    "cnki_batch_get_details": 180,
+    "cnki_set_page_size": 60,
+    "cnki_download_paper": 300,
+}
+
 # Playwright 必须固定在同一个线程中运行，使用单线程池
 _browser_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="playwright")
 
@@ -26,24 +46,57 @@ _init_async_lock = asyncio.Lock()
 _init_complete_event = asyncio.Event()
 
 
-async def run_in_browser_thread(func, *args):
-    """在固定的 Playwright 专用线程中执行函数，避免 greenlet 跨线程错误"""
+async def run_in_browser_thread(func, *args, timeout_sec=120):
+    """在固定的 Playwright 专用线程中执行函数，避免 greenlet 跨线程错误
+    
+    Args:
+        func: 要执行的函数
+        *args: 函数参数
+        timeout_sec: 超时时间（秒），默认 120s
+    
+    Returns:
+        函数执行结果
+    
+    Raises:
+        TimeoutError: 若操作超时
+    """
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_browser_executor, func, *args)
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(_browser_executor, func, *args),
+            timeout=timeout_sec
+        )
+    except asyncio.TimeoutError:
+        safe_print(f"[TIMEOUT] {func.__name__} 超过 {timeout_sec}s，尝试恢复浏览器状态", file=sys.stderr)
+        try:
+            browser = get_browser()
+            if hasattr(browser, '_reset_on_timeout'):
+                browser._reset_on_timeout()
+        except Exception as e:
+            safe_print(f"[RECOVERY_ERROR] 恢复失败: {e}", file=sys.stderr)
+        raise TimeoutError(f"操作超时：{func.__name__}（{timeout_sec}s）")
 
 
 def safe_print(msg: str, file=None):
+    """安全打印函数，确保输出到 stderr 并刷新缓冲区"""
     try:
         if file:
-            print(msg, file=file)
+            print(msg, file=file, flush=True)
         else:
-            print(msg)
+            print(msg, flush=True)
+        # 同时输出到 stderr 确保 MCP 能捕获
+        if file != sys.stderr:
+            sys.stderr.write(msg + '\n')
+            sys.stderr.flush()
     except UnicodeEncodeError:
         encoded = msg.encode('utf-8', errors='replace').decode('utf-8')
         if file:
-            print(encoded, file=file)
+            print(encoded, file=file, flush=True)
         else:
-            print(encoded)
+            print(encoded, flush=True)
+        if file != sys.stderr:
+            sys.stderr.write(encoded + '\n')
+            sys.stderr.flush()
 
 
 async def ensure_browser_ready() -> bool:
@@ -52,7 +105,7 @@ async def ensure_browser_ready() -> bool:
 
     if browser.is_ready():
         return True
-
+    
     init_state = browser._init_state
 
     if init_state == InitState.IN_PROGRESS:
@@ -258,13 +311,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器初始化失败或超时，请重试")]
             
             browser = get_browser()
-            result = await run_in_browser_thread(browser.search, request)
+            timeout = TOOL_TIMEOUTS.get(name, 120)
+            result = await run_in_browser_thread(browser.search, request, timeout_sec=timeout)
             
             result_dict = result.model_dump()
             result_text = json.dumps(result_dict, ensure_ascii=False, indent=2)
             
             return [TextContent(type="text", text=result_text)]
             
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"搜索超时（{TOOL_TIMEOUTS[name]}s）。浏览器已重置，请重试。\n错误：{str(e)}")]
         except Exception as e:
             return [TextContent(type="text", text=f"检索失败: {str(e)}")]
     
@@ -279,7 +335,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器初始化失败或超时，请重试")]
             
             browser = get_browser()
-            paper = await run_in_browser_thread(browser.get_paper_detail, paper_url)
+            timeout = TOOL_TIMEOUTS.get(name, 90)
+            paper = await run_in_browser_thread(browser.get_paper_detail, paper_url, timeout_sec=timeout)
             
             if paper:
                 paper_dict = paper.model_dump()
@@ -288,6 +345,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 return [TextContent(type="text", text="获取文章详情失败")]
             
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"获取详情超时（{TOOL_TIMEOUTS[name]}s）。浏览器已重置，请重试。\n错误：{str(e)}")]
         except Exception as e:
             import traceback
             error_msg = f"获取文章详情失败: {str(e)}\n{traceback.format_exc()}"
@@ -299,10 +358,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器未初始化")]
 
             browser = get_browser()
-            status = await run_in_browser_thread(browser.get_page_status)
+            timeout = TOOL_TIMEOUTS.get(name, 30)
+            status = await run_in_browser_thread(browser.get_page_status, timeout_sec=timeout)
             result_text = json.dumps(status, ensure_ascii=False, indent=2)
             return [TextContent(type="text", text=result_text)]
 
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"获取状态超时（{TOOL_TIMEOUTS[name]}s）。\n错误：{str(e)}")]
         except Exception as e:
             return [TextContent(type="text", text=f"获取状态失败: {str(e)}")]
     
@@ -317,16 +379,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器未初始化")]
             
             browser = get_browser()
+            timeout = TOOL_TIMEOUTS.get(name, 60)
             
             if action == "next":
-                success = await run_in_browser_thread(browser.next_page)
+                success = await run_in_browser_thread(browser.next_page, timeout_sec=timeout)
             elif action == "prev":
-                success = await run_in_browser_thread(browser.prev_page)
+                success = await run_in_browser_thread(browser.prev_page, timeout_sec=timeout)
             else:
                 return [TextContent(type="text", text=f"错误：未知操作 {action}")]
             
             if success:
-                status = await run_in_browser_thread(browser.get_page_status)
+                status = await run_in_browser_thread(browser.get_page_status, timeout_sec=30)
                 return [TextContent(
                     type="text",
                     text=f"翻页成功！当前第 {status.get('current_page')} 页，共 {status.get('total_pages')} 页"
@@ -334,6 +397,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 return [TextContent(type="text", text="翻页失败，请查看日志")]
             
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"翻页超时（{TOOL_TIMEOUTS[name]}s）。浏览器已重置，请重试。\n错误：{str(e)}")]
         except Exception as e:
             return [TextContent(type="text", text=f"翻页失败: {str(e)}")]
     
@@ -347,10 +412,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器未初始化")]
             
             browser = get_browser()
+            timeout = TOOL_TIMEOUTS.get(name, 180)
             papers = await run_in_browser_thread(
                 browser.batch_get_details_across_pages,
                 max_count,
-                max_pages
+                max_pages,
+                timeout_sec=timeout
             )
             
             if papers:
@@ -363,6 +430,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result_text = json.dumps(result, ensure_ascii=False, indent=2)
             return [TextContent(type="text", text=result_text)]
             
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"批量获取超时（{TOOL_TIMEOUTS[name]}s）。浏览器已重置，请重试。\n错误：{str(e)}")]
         except Exception as e:
             import traceback
             error_msg = f"批量获取失败: {str(e)}\n{traceback.format_exc()}"
@@ -382,10 +451,11 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器未初始化")]
             
             browser = get_browser()
-            success = await run_in_browser_thread(browser.set_page_size, page_size)
+            timeout = TOOL_TIMEOUTS.get(name, 60)
+            success = await run_in_browser_thread(browser.set_page_size, page_size, timeout_sec=timeout)
             
             if success:
-                status = await run_in_browser_thread(browser.get_page_status)
+                status = await run_in_browser_thread(browser.get_page_status, timeout_sec=30)
                 return [TextContent(
                     type="text",
                     text=f"成功设置每页显示 {page_size} 条！当前第 {status.get('current_page', 1)} 页，共 {status.get('total_pages', 1)} 页"
@@ -393,6 +463,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             else:
                 return [TextContent(type="text", text="设置每页显示数量失败，请查看日志")]
             
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"设置超时（{TOOL_TIMEOUTS[name]}s）。浏览器已重置，请重试。\n错误：{str(e)}")]
         except Exception as e:
             return [TextContent(type="text", text=f"设置失败: {str(e)}")]
     
@@ -427,8 +499,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text="浏览器初始化失败或超时，请重试")]
             
             browser = get_browser()
+            timeout = TOOL_TIMEOUTS.get(name, 300)
             result = await run_in_browser_thread(
-                browser.download_paper, paper_url, fmt, save_dir_abs
+                browser.download_paper, paper_url, fmt, save_dir_abs, timeout_sec=timeout
             )
             
             result_dict = result.model_dump()
@@ -450,6 +523,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             result_dict["summary"] = summary
             return [TextContent(type="text", text=json.dumps(result_dict, ensure_ascii=False, indent=2))]
             
+        except TimeoutError as e:
+            return [TextContent(type="text", text=f"下载超时（{TOOL_TIMEOUTS[name]}s）。浏览器已重置，请重试。\n错误：{str(e)}")]
         except Exception as e:
             import traceback
             error_msg = f"下载失败: {str(e)}\n{traceback.format_exc()}"
